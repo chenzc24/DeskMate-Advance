@@ -1,0 +1,81 @@
+{
+  "schema_version": "1.0",
+  "status": "development_defaults_not_acceptance_thresholds",
+  "maximum_evidence_gap_ms": 500,
+  "luminance_stale_after_ms": 1000,
+  "audio_stale_after_ms": 500,
+  "calibration": {
+    "duration_ms": 5000,
+    "maximum_snapshot_gap_ms": 500,
+    "minimum_pose_samples": 20,
+    "minimum_face_samples": 20,
+    "minimum_luminance_samples": 5
+  },
+  "static_too_long": {
+    "motion_threshold_body_per_second": 0.08,
+    "exit_motion_threshold_body_per_second": 0.12,
+    "enter_duration_ms": 10000,
+    "exit_duration_ms": 1000,
+    "cooldown_ms": 3000
+  },
+  "bad_posture": {
+    "shoulder_delta_deg": 10.0,
+    "torso_delta_deg": 12.0,
+    "exit_shoulder_delta_deg": 7.0,
+    "exit_torso_delta_deg": 9.0,
+    "enter_duration_ms": 2000,
+    "exit_duration_ms": 1500,
+    "cooldown_ms": 3000
+  },
+  "screen_too_close": {
+    "face_area_ratio_to_baseline": 1.45,
+    "exit_face_area_ratio_to_baseline": 1.30,
+    "enter_duration_ms": 1500,
+    "exit_duration_ms": 1000,
+    "cooldown_ms": 3000
+  },
+  "head_off_center": {
+    "raw_x_delta_deg": 18.0,
+    "raw_y_delta_deg": 20.0,
+    "exit_raw_x_delta_deg": 12.0,
+    "exit_raw_y_delta_deg": 14.0,
+    "enter_duration_ms": 1500,
+    "exit_duration_ms": 750,
+    "cooldown_ms": 1500
+  },
+  "low_blink_rate": {
+    "closed_score": 0.55,
+    "open_score": 0.35,
+    "window_ms": 60000,
+    "minimum_valid_ms": 30000,
+    "minimum_blinks_per_minute": 8.0,
+    "recovery_blinks_per_minute": 10.0,
+    "minimum_closed_ms": 50,
+    "maximum_closed_ms": 800,
+    "maximum_valid_gap_ms": 500,
+    "enter_duration_ms": 1000,
+    "exit_duration_ms": 1000,
+    "cooldown_ms": 5000
+  },
+  "environment_too_dark": {
+    "mean_luminance": 45.0,
+    "exit_mean_luminance": 50.0,
+    "enter_duration_ms": 2000,
+    "exit_duration_ms": 1000,
+    "cooldown_ms": 3000
+  },
+  "environment_too_bright": {
+    "p90_luminance": 245.0,
+    "exit_p90_luminance": 235.0,
+    "enter_duration_ms": 2000,
+    "exit_duration_ms": 1000,
+    "cooldown_ms": 3000
+  },
+  "noise_too_high": {
+    "dbfs": -20.0,
+    "exit_dbfs": -23.0,
+    "enter_duration_ms": 2000,
+    "exit_duration_ms": 1000,
+    "cooldown_ms": 3000
+  }
+}

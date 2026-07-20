@@ -13,7 +13,12 @@ from deskmate_advance.perception.ergonomics import (
 )
 
 
-def _frame(*, sequence_id: int = 0, captured_at_ns: int = 1_000_000) -> FramePacket:
+def _frame(
+    *,
+    sequence_id: int = 0,
+    captured_at_ns: int = 1_000_000,
+    dropped_before: int = 0,
+) -> FramePacket:
     image = np.zeros((2, 3, 3), dtype=np.uint8)
     image[0, 0] = [1, 2, 3]  # BGR -> RGB should become [3, 2, 1].
     return FramePacket(
@@ -25,7 +30,7 @@ def _frame(*, sequence_id: int = 0, captured_at_ns: int = 1_000_000) -> FramePac
         height=2,
         color_space=ColorSpace.BGR,
         nominal_fps=30.0,
-        dropped_before=0,
+        dropped_before=dropped_before,
         image=image,
     )
 
@@ -39,6 +44,13 @@ def _landmark(index: int, *, pose: bool) -> SimpleNamespace:
     if pose:
         values.update(visibility=0.9, presence=0.8)
     return SimpleNamespace(**values)
+
+
+def _face_landmark_with_optional_fields(index: int) -> SimpleNamespace:
+    point = _landmark(index, pose=False)
+    point.visibility = None
+    point.presence = None
+    return point
 
 
 class FakeTask:
@@ -67,11 +79,18 @@ def test_pose_adapter_converts_framework_result_and_color_order() -> None:
         )
     )
     adapter = PoseLandmarkerAdapter(
-        PoseLandmarkerConfig(asset_path=Path("unused.task")),
+        PoseLandmarkerConfig(
+            asset_path=Path("unused.task"),
+            model_version="pose-version",
+            asset_sha256="a" * 64,
+            config_sha256="b" * 64,
+        ),
         task=task,
     )
 
-    observation = adapter.observe(_frame(captured_at_ns=2_500_000))
+    observation = adapter.observe(
+        _frame(captured_at_ns=2_500_000, dropped_before=2)
+    )
 
     assert observation.state is ObservationState.VALID
     assert len(observation.landmarks) == 33
@@ -81,6 +100,10 @@ def test_pose_adapter_converts_framework_result_and_color_order() -> None:
     assert task.first_pixel == [3, 2, 1]
     assert observation.context.source_id == "fixture"
     assert observation.context.inference_ms >= 0
+    assert observation.context.dropped_before == 2
+    assert observation.context.model_version == "pose-version"
+    assert observation.context.asset_sha256 == "a" * 64
+    assert observation.context.config_sha256 == "b" * 64
 
 
 def test_pose_adapter_marks_missing_and_rejects_repeated_millisecond() -> None:
@@ -108,7 +131,7 @@ def test_face_adapter_converts_landmarks_blendshapes_and_matrix() -> None:
     task = FakeTask(
         SimpleNamespace(
             face_landmarks=[
-                [_landmark(index, pose=False) for index in range(478)]
+                [_face_landmark_with_optional_fields(index) for index in range(478)]
             ],
             face_blendshapes=[
                 [SimpleNamespace(category_name="eyeBlinkLeft", score=0.75)]

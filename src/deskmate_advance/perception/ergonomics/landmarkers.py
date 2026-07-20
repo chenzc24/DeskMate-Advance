@@ -31,6 +31,9 @@ from .observations import (
 class PoseLandmarkerConfig:
     asset_path: Path
     model_id: str = "mediapipe_pose_landmarker_full"
+    model_version: str = "unversioned"
+    asset_sha256: str | None = None
+    config_sha256: str | None = None
     num_poses: int = 1
     min_pose_detection_confidence: float = 0.5
     min_pose_presence_confidence: float = 0.5
@@ -41,6 +44,9 @@ class PoseLandmarkerConfig:
 class FaceLandmarkerConfig:
     asset_path: Path
     model_id: str = "mediapipe_face_landmarker"
+    model_version: str = "unversioned"
+    asset_sha256: str | None = None
+    config_sha256: str | None = None
     num_faces: int = 1
     output_face_blendshapes: bool = True
     output_facial_transformation_matrixes: bool = True
@@ -63,14 +69,14 @@ def _image_from_frame(frame: FramePacket) -> mp.Image:
 
 
 def _landmark(record: Any) -> Landmark3D:
+    visibility = getattr(record, "visibility", None)
+    presence = getattr(record, "presence", None)
     return Landmark3D(
         x=float(record.x),
         y=float(record.y),
         z=float(record.z),
-        visibility=(
-            float(record.visibility) if hasattr(record, "visibility") else None
-        ),
-        presence=float(record.presence) if hasattr(record, "presence") else None,
+        visibility=float(visibility) if visibility is not None else None,
+        presence=float(presence) if presence is not None else None,
     )
 
 
@@ -157,6 +163,10 @@ class PoseLandmarkerAdapter(_TimestampedAdapter):
             captured_at_ns=frame.captured_at_ns,
             model_id=self.config.model_id,
             inference_ms=(time.perf_counter_ns() - started_ns) / 1_000_000,
+            dropped_before=frame.dropped_before,
+            model_version=self.config.model_version,
+            asset_sha256=self.config.asset_sha256,
+            config_sha256=self.config.config_sha256,
         )
 
     def close(self) -> None:
@@ -260,6 +270,10 @@ class FaceLandmarkerAdapter(_TimestampedAdapter):
             captured_at_ns=frame.captured_at_ns,
             model_id=self.config.model_id,
             inference_ms=(time.perf_counter_ns() - started_ns) / 1_000_000,
+            dropped_before=frame.dropped_before,
+            model_version=self.config.model_version,
+            asset_sha256=self.config.asset_sha256,
+            config_sha256=self.config.config_sha256,
         )
 
     def close(self) -> None:

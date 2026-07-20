@@ -4,7 +4,13 @@
   "runtime_mode": "video",
   "pose": {
     "primary_asset": "models/assets/pose_landmarker_full.task",
+    "primary_model_id": "mediapipe_pose_landmarker_full",
+    "primary_model_version": "mediapipe-full-float16-latest-20260720",
+    "primary_asset_sha256": "4eaa5eb7a98365221087693fcc286334cf0858e2eb6e15b506aa4a7ecdcec4ad",
     "fallback_asset": "models/assets/pose_landmarker_lite.task",
+    "fallback_model_id": "mediapipe_pose_landmarker_lite",
+    "fallback_model_version": "mediapipe-lite-float16-latest-20260720",
+    "fallback_asset_sha256": "59929e1d1ee95287735ddd833b19cf4ac46d29bc7afddbbf6753c459690d574a",
     "num_poses": 1,
     "min_pose_detection_confidence": 0.5,
     "min_pose_presence_confidence": 0.5,
@@ -12,12 +18,38 @@
   },
   "face": {
     "asset": "models/assets/face_landmarker.task",
+    "model_id": "mediapipe_face_landmarker",
+    "model_version": "mediapipe-float16-latest-20260720",
+    "asset_sha256": "64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff",
     "num_faces": 1,
     "output_face_blendshapes": true,
     "output_facial_transformation_matrixes": true,
     "min_face_detection_confidence": 0.5,
     "min_face_presence_confidence": 0.5,
     "min_tracking_confidence": 0.5
+  },
+  "features": {
+    "pose": {
+      "min_visibility": 0.5,
+      "min_presence": 0.5,
+      "max_motion_gap_ms": 500
+    },
+    "face": {
+      "rotation_axes_status": "raw_matrix_xyz_requires_target_calibration",
+      "screen_distance_feature": "face_bbox_area_ratio_not_absolute_distance",
+      "blink_features": [
+        "eyeBlinkLeft",
+        "eyeBlinkRight"
+      ]
+    }
+  },
+  "live_probe": {
+    "pose_hz": 10.0,
+    "face_hz": 10.0,
+    "luminance_hz": 2.0,
+    "stale_after_ms": 500,
+    "metric_reservoir_size": 2000,
+    "records_media": false
   },
   "luminance": {
     "dark_threshold": null,

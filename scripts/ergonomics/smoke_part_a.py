@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import asdict
+import hashlib
 import json
 from pathlib import Path
 
@@ -31,6 +32,7 @@ def main() -> int:
     config_path = args.config.resolve()
     project_root = config_path.parents[2]
     config = json.loads(config_path.read_text(encoding="utf-8"))
+    config_sha256 = hashlib.sha256(config_path.read_bytes()).hexdigest()
 
     image = np.zeros((480, 640, 3), dtype=np.uint8)
     frame = FramePacket(
@@ -51,6 +53,10 @@ def main() -> int:
     with PoseLandmarkerAdapter(
         PoseLandmarkerConfig(
             asset_path=project_root / pose_config["primary_asset"],
+            model_id=pose_config["primary_model_id"],
+            model_version=pose_config["primary_model_version"],
+            asset_sha256=pose_config["primary_asset_sha256"],
+            config_sha256=config_sha256,
             num_poses=pose_config["num_poses"],
             min_pose_detection_confidence=pose_config[
                 "min_pose_detection_confidence"
@@ -63,6 +69,10 @@ def main() -> int:
     ) as pose, FaceLandmarkerAdapter(
         FaceLandmarkerConfig(
             asset_path=project_root / face_config["asset"],
+            model_id=face_config["model_id"],
+            model_version=face_config["model_version"],
+            asset_sha256=face_config["asset_sha256"],
+            config_sha256=config_sha256,
             num_faces=face_config["num_faces"],
             output_face_blendshapes=face_config["output_face_blendshapes"],
             output_facial_transformation_matrixes=face_config[

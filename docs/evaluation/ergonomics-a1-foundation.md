@@ -50,7 +50,7 @@ latency benchmarks and cannot choose Pose Full versus Lite.
 - Product thresholds, temporal rules, false-trigger limits and event latency.
 - Recorded replay determinism on a frozen participant/session manifest.
 
-No model is promoted by this evidence. Gate A1 remains open until recorded
-target-input evidence is available; A2 feature design may proceed against
-explicitly exploratory local recordings without treating them as selection
-evidence.
+No model is promoted by this evidence. The A1 foundation gate is complete;
+recorded target-input selection belongs to Gate A2, which remains open.
+Exploratory local recordings may exercise A2 tooling but are not release
+selection evidence.
