@@ -98,6 +98,30 @@ active valid duration、active 中 unknown pause、并行 active 数、cooldown
 - 合成 fixture 的结果必须标记为 `synthetic_contract_test`，只证明 parser、
   状态机、candidate 和公式可复现，不证明真实准确率或产品性能。
 
+### 4.1 标注 artifact 与 CLI
+
+正式标注使用独立的 `deskmate.ergonomics.annotations/1.0` JSON artifact。它必须：
+
+- 由调用方提供精确 lowercase SHA-256；
+- 绑定被评估 scalar replay 的精确 SHA-256 和 camera source；
+- 声明 `monotonic/session_relative/ns` 时钟；
+- 使用逐 lane、不重叠的半开时间区间；
+- `positive` 同时提供 `onset_ns`、`eligible_at_ns` 和 `offset_ns`；
+- 不携带图像、landmark、音频采样或直接身份字段。
+
+严格读取器限制文件大小、标注条数和 JSON 深度，并拒绝重复 key、非有限数字、重复 event ID、错误 schema、错误 hash、source/replay 漂移及 lane 内区间重叠。`labeled_evidence` replay 缺少标注或标注 hash 时 fail closed；unlabeled/synthetic replay 不接受标注，避免把同一输入静默改变为正式效果证据。
+
+```powershell
+.\.venv\Scripts\python.exe scripts/ergonomics/replay_part_a.py run `
+  artifacts/<session>/scalar-replay.jsonl `
+  --sha256 <replay-sha256> `
+  --data-status labeled_evidence `
+  --annotations artifacts/<session>/annotations.json `
+  --annotations-sha256 <annotation-sha256>
+```
+
+摘要回写 annotation schema、set ID、artifact/replay SHA、source 和记录数。只有标注 negative known-time 分母存在时才报告正式 FPH；只有 positive 标注存在时才报告正式 latency。整体资格仍要求八个 lane 同时满足两类指标。
+
 ## 5. 仍未冻结或仍需真实证据的项目
 
 - robotics 最终摄像头、传输、分辨率、帧率、色彩空间和时间戳契约；
@@ -107,6 +131,8 @@ active valid duration、active 中 unknown pause、并行 active 数、cooldown
 - acknowledgement、condition clear、controller ack 与 UnifiedEvent lifecycle
   的映射；
 - 有标注目标场景正例及长负样本结果。
+
+标注 artifact parser、replay/source 绑定和 CLI 已完成；本项剩余的是人审真实标注及其效果结果，而不是软件入口。
 
 因此，即使本轮所有合成契约测试通过，A3 Gate 仍保持 open。
 

@@ -14,6 +14,14 @@ from .calibration import (
     CalibrationSampleCounts,
     CalibrationState,
 )
+from .annotations import (
+    ANNOTATION_SCHEMA_NAME,
+    ANNOTATION_SCHEMA_VERSION,
+    AnnotationJsonFile,
+    AnnotationLimits,
+    AnnotationSet,
+    AnnotationValidationError,
+)
 from .candidates import (
     CANDIDATE_SCHEMA_VERSION,
     PART_A_EVENT_NAMES,
@@ -47,6 +55,12 @@ from .rules import (
 )
 
 __all__ = [
+    "ANNOTATION_SCHEMA_NAME",
+    "ANNOTATION_SCHEMA_VERSION",
+    "AnnotationJsonFile",
+    "AnnotationLimits",
+    "AnnotationSet",
+    "AnnotationValidationError",
     "BlinkRateSnapshot",
     "BlinkRateTracker",
     "BlinkTrackerConfig",

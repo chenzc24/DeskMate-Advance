@@ -17,6 +17,13 @@ import sys
 import tempfile
 from typing import Any, Sequence
 
+from deskmate_advance.temporal.ergonomics.annotations import (
+    ANNOTATION_SCHEMA_NAME,
+    ANNOTATION_SCHEMA_VERSION,
+    AnnotationJsonFile,
+    AnnotationLimits,
+    AnnotationSet,
+)
 from deskmate_advance.temporal.ergonomics.candidates import (
     CANDIDATE_SCHEMA_VERSION,
     CandidateComponentContext,
@@ -115,11 +122,31 @@ def _parser() -> argparse.ArgumentParser:
     run_parser.add_argument(
         "--data-status",
         choices=(
+            EvaluationDataStatus.LABELED_EVIDENCE.value,
             EvaluationDataStatus.UNLABELED_SCREENING.value,
             EvaluationDataStatus.SYNTHETIC_CONTRACT_TEST.value,
         ),
         default=None,
         help="optional assertion; must match the replay header",
+    )
+    run_parser.add_argument(
+        "--annotations",
+        type=Path,
+        help="required replay-bound annotation JSON for labeled_evidence",
+    )
+    run_parser.add_argument(
+        "--annotations-sha256",
+        help="expected lowercase SHA-256 for --annotations",
+    )
+    run_parser.add_argument(
+        "--max-annotation-bytes",
+        type=int,
+        default=4 * 1024 * 1024,
+    )
+    run_parser.add_argument(
+        "--max-annotations",
+        type=int,
+        default=10_000,
     )
     run_parser.add_argument(
         "--overwrite",
@@ -567,6 +594,7 @@ def _run_payload(
     producer_sha256: str,
     provenance_verified: bool,
     assets_verified: bool,
+    annotation_set: AnnotationSet | None,
 ) -> dict[str, Any]:
     # Complete contract validation before temporal state can be advanced.
     validated = replay.validate()
@@ -585,6 +613,9 @@ def _run_payload(
     evaluator = ContinuousRuleEvaluator(
         maximum_evidence_gap_ms=config.maximum_evidence_gap_ms,
         data_status=data_status,
+        annotations=(
+            annotation_set.annotations if annotation_set is not None else ()
+        ),
     )
     candidate_counts: Counter[str] = Counter()
     candidate_event_counts: dict[str, Counter[str]] = {
@@ -654,12 +685,30 @@ def _run_payload(
             "provenance_verified": provenance_verified,
             "assets_verified": assets_verified,
         },
+        "annotations": (
+            {
+                "schema": ANNOTATION_SCHEMA_NAME,
+                "schema_version": ANNOTATION_SCHEMA_VERSION,
+                "annotation_set_id": annotation_set.annotation_set_id,
+                "artifact_sha256": annotation_set.artifact_sha256,
+                "replay_sha256": annotation_set.replay_sha256,
+                "source_id": annotation_set.source_id,
+                "records": len(annotation_set.annotations),
+            }
+            if annotation_set is not None
+            else None
+        ),
         "privacy": {
             "structural_scalar_schema_verified": True,
             "declared_contains_images": False,
             "declared_contains_landmarks": False,
             "declared_contains_audio_samples": False,
             "direct_identifier_absence": "declared_not_verified",
+            "annotation_direct_identifier_absence": (
+                "declared_not_verified"
+                if annotation_set is not None
+                else "not_applicable"
+            ),
         },
         "continuous_evaluation": asdict(evaluation_summary),
         "last_snapshot": {
@@ -720,21 +769,56 @@ def main(argv: Sequence[str] | None = None) -> int:
                 raise ReplayValidationError(
                     "--data-status does not match replay header"
                 )
-            if replay.header.data_status == EvaluationDataStatus.LABELED_EVIDENCE.value:
+            annotations_supplied = args.annotations is not None
+            annotations_sha_supplied = args.annotations_sha256 is not None
+            if annotations_supplied != annotations_sha_supplied:
                 raise ReplayValidationError(
-                    "labeled replay requires the annotation-aware evaluation API"
+                    "--annotations and --annotations-sha256 must be supplied together"
                 )
+            annotation_path = (
+                _under_root(project_root, args.annotations)
+                if args.annotations is not None
+                else None
+            )
+            if replay.header.data_status == EvaluationDataStatus.LABELED_EVIDENCE.value:
+                if annotation_path is None or args.annotations_sha256 is None:
+                    raise ReplayValidationError(
+                        "labeled_evidence requires --annotations and "
+                        "--annotations-sha256"
+                    )
+                annotation_set = AnnotationJsonFile(
+                    annotation_path,
+                    expected_sha256=args.annotations_sha256,
+                    limits=AnnotationLimits(
+                        max_file_bytes=args.max_annotation_bytes,
+                        max_annotations=args.max_annotations,
+                    ),
+                ).load(
+                    replay_sha256=replay.artifact_sha256,
+                    source_id=replay.header.camera.source_id,
+                )
+            else:
+                if annotation_path is not None:
+                    raise ReplayValidationError(
+                        "annotations are only accepted for labeled_evidence"
+                    )
+                annotation_set = None
             transaction = _OutputTransaction(
                 project_root=project_root,
                 requested={
                     "candidates": args.candidates,
                     "summary": args.summary,
                 },
-                protected_paths=(
-                    replay.path,
-                    event_config_path,
-                    perception_config_path,
-                    model_manifest_path,
+                protected_paths=tuple(
+                    path
+                    for path in (
+                        replay.path,
+                        annotation_path,
+                        event_config_path,
+                        perception_config_path,
+                        model_manifest_path,
+                    )
+                    if path is not None
                 ),
                 overwrite=args.overwrite,
             )
@@ -754,6 +838,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     producer_sha256=producer_bundle_sha256(project_root),
                     provenance_verified=provenance_verified,
                     assets_verified=assets_verified,
+                    annotation_set=annotation_set,
                 )
                 payload["run_context"] = _run_context(project_root)
                 payload["candidate_artifact_sha256"] = transaction.sha256(

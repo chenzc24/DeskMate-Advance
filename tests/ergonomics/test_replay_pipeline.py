@@ -233,6 +233,157 @@ def _candidate_rows(path: Path) -> list[dict[str, Any]]:
     ]
 
 
+def _write_annotation_artifact(
+    path: Path,
+    *,
+    replay_sha256: str,
+) -> None:
+    payload = {
+        "schema": "deskmate.ergonomics.annotations",
+        "schema_version": "1.0",
+        "annotation_set_id": "labeled-static-session-v1",
+        "replay_sha256": replay_sha256,
+        "source_id": "fixture-camera-a",
+        "clock": {
+            "kind": "monotonic",
+            "origin": "session_relative",
+            "unit": "ns",
+        },
+        "privacy": {"contains_direct_identifiers": False},
+        "annotations": [
+            {
+                "event_id": "static-positive-1",
+                "event_name": "static_too_long",
+                "label": "positive",
+                "onset_ns": 1_000_000_000,
+                "offset_ns": 36_000_000_000,
+                "eligible_at_ns": 31_000_000_000,
+            },
+            {
+                "event_id": "static-negative-1",
+                "event_name": "static_too_long",
+                "label": "negative",
+                "onset_ns": 38_000_000_000,
+                "offset_ns": 43_000_000_000,
+                "eligible_at_ns": None,
+            },
+        ],
+    }
+    path.write_text(
+        json.dumps(
+            payload,
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        ),
+        encoding="utf-8",
+    )
+
+
+def test_labeled_replay_cli_consumes_bound_annotations_and_reports_formal_metrics(
+    tmp_path: Path,
+) -> None:
+    replay = tmp_path / "labeled-static.jsonl"
+    _write_contract_replay(replay, target_events=("static_too_long",))
+    lines = replay.read_text(encoding="utf-8").splitlines()
+    header = json.loads(lines[0])
+    header["replay_id"] = "labeled-a3-static-v1"
+    header["data_status"] = "labeled_evidence"
+    replay.write_text(
+        json.dumps(
+            header,
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        )
+        + "\n"
+        + "\n".join(lines[1:])
+        + "\n",
+        encoding="utf-8",
+    )
+    annotations = tmp_path / "annotations.json"
+    replay_sha256 = sha256_file(replay)
+    _write_annotation_artifact(annotations, replay_sha256=replay_sha256)
+    command = [
+        sys.executable,
+        "scripts/ergonomics/replay_part_a.py",
+        "run",
+        str(replay),
+        "--sha256",
+        replay_sha256,
+        "--data-status",
+        "labeled_evidence",
+        "--annotations",
+        str(annotations),
+        "--annotations-sha256",
+        sha256_file(annotations),
+    ]
+
+    result = subprocess.run(
+        command,
+        cwd=PROJECT_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["annotations"]["records"] == 2
+    assert payload["annotations"]["replay_sha256"] == replay_sha256
+    evaluation = payload["continuous_evaluation"]
+    assert evaluation["data_status"] == "labeled_evidence"
+    assert evaluation["contract_only"] is False
+    assert evaluation["annotated_lane_count"] == 1
+    assert evaluation["formal_metric_eligible_lane_count"] == 1
+    assert evaluation["formal_effect_metric_eligible"] is False
+    lane = next(
+        item
+        for item in evaluation["lanes"]
+        if item["event_name"] == "static_too_long"
+    )
+    assert lane["formal_false_trigger_metric_eligible"] is True
+    assert lane["formal_detection_latency_metric_eligible"] is True
+    assert lane["false_trigger_count"] == 0
+    assert lane["positive_annotation_count"] == 1
+    assert lane["positive_detection_count"] == 1
+    assert lane["positive_miss_count"] == 0
+
+
+def test_labeled_replay_cli_requires_annotations(tmp_path: Path) -> None:
+    replay = tmp_path / "labeled.jsonl"
+    _write_contract_replay(replay, target_events=())
+    lines = replay.read_text(encoding="utf-8").splitlines()
+    header = json.loads(lines[0])
+    header["replay_id"] = "labeled-a3-required-v1"
+    header["data_status"] = "labeled_evidence"
+    replay.write_text(
+        json.dumps(header, sort_keys=True, separators=(",", ":"))
+        + "\n"
+        + "\n".join(lines[1:])
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "scripts/ergonomics/replay_part_a.py",
+            "run",
+            str(replay),
+            "--sha256",
+            sha256_file(replay),
+        ],
+        cwd=PROJECT_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 2
+    assert "requires --annotations" in result.stderr
+
+
 @pytest.mark.parametrize("target_event", ErgonomicsRuleEngine.EVENT_NAMES)
 def test_each_event_lane_activates_without_cross_wiring(
     tmp_path: Path,
