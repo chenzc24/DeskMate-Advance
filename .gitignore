@@ -29,6 +29,7 @@ outputs/
 logs/
 
 # Model weights and exported binaries; keep manifests/configs tracked
+models/assets/
 models/**/*.pt
 models/**/*.pth
 models/**/*.ckpt
@@ -36,6 +37,7 @@ models/**/*.onnx
 models/**/*.tflite
 models/**/*.safetensors
 models/**/*.bin
+models/**/*.task
 
 # Notebook and editor state
 .ipynb_checkpoints/

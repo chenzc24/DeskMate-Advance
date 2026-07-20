@@ -1,12 +1,15 @@
 {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "stage": "stage1_pretrained_selection",
-  "status": "active",
+  "status": "initial_selection_complete_target_validation_pending",
   "started_on": "2026-07-20",
   "runtime_target": {
     "primary": "laptop",
     "benchmark_device": "cpu",
-    "gpu_optional": true
+    "gpu_optional": true,
+    "python": ">=3.11,<3.14",
+    "mediapipe": "0.10.35",
+    "opencv_distribution": "opencv-contrib-python==5.0.0.93"
   },
   "inputs": {
     "camera": {
@@ -24,74 +27,145 @@
     "phone": "active_phone_use_not_presence",
     "parallel_events": true,
     "event_priority": "none_at_model_layer",
-    "durations_configurable": true
+    "durations_configurable": true,
+    "gesture_action_mapping": "deferred"
+  },
+  "parallel_workstreams": {
+    "shared_paths_policy": "read_only_until_single_owner_integration",
+    "shared_contracts": [
+      "FramePacket",
+      "observation_envelope",
+      "event_candidate_fixture"
+    ],
+    "final_integration_owner_count": 1,
+    "ergonomics": {
+      "workstream_id": "A",
+      "owned_components": [
+        "pose_landmarker",
+        "face_landmarker",
+        "audio_level",
+        "brightness_statistics",
+        "identity",
+        "audio_classification"
+      ],
+      "owned_path_prefixes": [
+        "src/deskmate_advance/perception/ergonomics/",
+        "src/deskmate_advance/features/ergonomics/",
+        "src/deskmate_advance/temporal/ergonomics/",
+        "configs/ergonomics/",
+        "scripts/ergonomics/",
+        "tests/ergonomics/"
+      ]
+    },
+    "interaction": {
+      "workstream_id": "B",
+      "owned_components": [
+        "hand_landmarker",
+        "phone_detector",
+        "off_task_fusion"
+      ],
+      "owned_path_prefixes": [
+        "src/deskmate_advance/perception/interaction/",
+        "src/deskmate_advance/features/interaction/",
+        "src/deskmate_advance/temporal/interaction/",
+        "configs/interaction/",
+        "scripts/interaction/",
+        "tests/interaction/"
+      ]
+    }
+  },
+  "initial_scheduler": {
+    "mode": "independent_bounded_latest_frame_lanes",
+    "shared_rgb_conversion": true,
+    "cadence_hz": {
+      "hand_landmarker": 15,
+      "pose_landmarker": 10,
+      "face_landmarker": 10,
+      "phone_detector": 5
+    },
+    "cadence_status": "benchmark_starting_point_not_frozen"
   },
   "components": [
     {
       "id": "pose_landmarker",
-      "candidate": "mediapipe_pose_landmarker",
-      "status": "shortlisted",
+      "workstream": "A",
+      "candidate": "mediapipe_pose_landmarker_full",
+      "status": "selected_initial",
       "functions": ["static_too_long", "bad_posture"],
       "required_outputs": ["normalized_landmarks", "world_landmarks", "visibility", "presence"],
-      "model_asset_status": "not_downloaded",
+      "model_asset": "models/assets/pose_landmarker_full.task",
+      "fallback_candidate": "models/assets/pose_landmarker_lite.task",
+      "selection_pending": ["target_camera_validity", "cpu_latency_p95", "partial_body_stability"],
       "official_guide": "https://developers.google.com/edge/mediapipe/solutions/vision/pose_landmarker/python"
     },
     {
       "id": "face_landmarker",
+      "workstream": "A",
       "candidate": "mediapipe_face_landmarker",
-      "status": "shortlisted",
+      "status": "selected_initial",
       "functions": ["screen_too_close", "low_blink_rate", "head_direction_evidence"],
-      "required_outputs": ["face_landmarks", "optional_blendshapes", "optional_transformation_matrix"],
-      "model_asset_status": "not_downloaded",
+      "required_outputs": ["face_landmarks", "blendshapes", "transformation_matrix"],
+      "model_asset": "models/assets/face_landmarker.task",
+      "selection_pending": ["target_camera_validity", "distance_calibration", "optional_output_cost"],
       "official_guide": "https://developers.google.com/edge/mediapipe/solutions/vision/face_landmarker/python"
     },
     {
       "id": "hand_landmarker",
-      "candidate": "mediapipe_hand_landmarker",
-      "status": "shortlisted_priority",
+      "workstream": "B",
+      "candidate": "mediapipe_hand_landmarker_full",
+      "status": "selected_initial_feature_extractor_priority",
       "functions": ["gesture_detected", "phone_use_hand_evidence"],
-      "required_outputs": ["handedness", "normalized_21x3_landmarks", "world_21x3_landmarks"],
-      "model_asset_status": "not_downloaded",
+      "required_outputs": ["handedness", "normalized_21x3_landmarks", "world_21x3_landmarks", "missing_mask", "timestamp"],
+      "model_asset": "models/assets/hand_landmarker.task",
+      "selection_pending": ["target_camera_validity", "fast_motion_gap_rate", "one_vs_two_hand_requirement"],
       "official_guide": "https://developers.google.com/edge/mediapipe/solutions/vision/hand_landmarker/python"
     },
     {
       "id": "phone_detector",
-      "candidate": "mediapipe_object_detector_efficientdet_lite0",
-      "status": "shortlisted_unverified",
+      "workstream": "B",
+      "candidate": "mediapipe_object_detector_efficientdet_lite0_int8",
+      "status": "selected_initial_unvalidated",
       "functions": ["phone_usage_detected"],
-      "required_outputs": ["class", "box", "confidence"],
-      "model_asset_status": "not_downloaded",
-      "blocking_checks": ["phone_category_metadata", "small_target_recall", "partial_occlusion", "target_camera"],
+      "required_outputs": ["cell_phone_box", "confidence", "timestamp"],
+      "model_asset": "models/assets/efficientdet_lite0_int8.tflite",
+      "category_allowlist": ["cell phone"],
+      "category_metadata_verified": true,
+      "selection_pending": ["small_target_recall", "partial_occlusion", "unused_phone_false_positive", "target_camera"],
       "official_guide": "https://developers.google.com/edge/mediapipe/solutions/vision/object_detector/python"
     },
     {
       "id": "audio_level",
+      "workstream": "A",
       "candidate": "rms_relative_spl",
-      "status": "required_non_model",
+      "status": "selected_non_model",
       "functions": ["noise_too_high"],
       "required_outputs": ["timestamped_level", "validity"]
     },
     {
       "id": "brightness_statistics",
+      "workstream": "A",
       "candidate": "frame_luminance_statistics",
-      "status": "required_non_model",
+      "status": "selected_non_model",
       "functions": ["environment_too_bright", "environment_too_dark"],
       "required_outputs": ["timestamped_luminance", "validity"]
     },
     {
       "id": "identity",
+      "workstream": "A",
       "candidate": "yunet_sface",
       "status": "deferred_p2",
       "functions": ["user_recognized", "unknown_user"]
     },
     {
       "id": "audio_classification",
+      "workstream": "A",
       "candidate": "yamnet",
       "status": "deferred_p2",
       "functions": ["audio_classification_extension"]
     },
     {
       "id": "off_task_fusion",
+      "workstream": "B",
       "candidate": "rule_fusion_then_conditional_mlp",
       "status": "deferred_p2",
       "functions": ["off_task_behaviour"],

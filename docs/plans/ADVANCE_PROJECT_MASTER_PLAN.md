@@ -267,6 +267,76 @@ scripts/evaluation/benchmark_perception.py
 - Phone 只有在真实场景召回不足且具备足够框标注数据时进入微调；
 - 不因一个 P1 模块失败阻塞 P0 闭环。
 
+## 6A. 双人并行执行计划
+
+从 Stage 1 的模型选择开始，项目分为两条纵向轨道。两人各自负责一个“模型/方法 → 数据 → 特征 → 时序判断 → 事件候选 → 独立验收”的完整闭环，不采用一人只训练、另一人只集成的横向分工。
+
+### 轨道定义
+
+| 轨道 | 模型与方法所有权 | 功能所有权 | 必要训练 | 条件训练 |
+| --- | --- | --- | --- | --- |
+| A：Ergonomics | Pose、Face、亮度统计、RMS/相对 SPL | 静坐、姿态、屏幕距离、头向、眨眼、亮度、噪声 | 无 | 规则失效后才训练 Pose MLP/TCN；Identity/YAMNet 属于 P2 |
+| B：Interaction | Hand、Phone detector | 动态手势、手机存在证据、手机使用融合 | Hand landmarks 上的手势 TCN | detector 召回不足才微调；融合规则失败才训练 MLP/TCN；off-task 属于 P2 |
+
+轨道 A 的 head direction 只作为轨道 B 的可选证据。轨道 B 在该证据缺失、过期或低置信时必须安全降级，P0 手机闭环不得直接依赖 A 的实现或交付时间。
+
+焦点计时器本身是程序状态，不属于任一模型轨道：轨道 B 只输出手势语义事件，手势到计时器命令的映射、统一调度、`UnifiedEvent` 转换、controller adapter 和机器人动作全部归最终集成人。这样 wave/swipe/circle 的控制含义可以稍后冻结，而不影响手势模型开发。
+
+### 文件所有权
+
+| 轨道 A 独占前缀 | 轨道 B 独占前缀 |
+| --- | --- |
+| `src/deskmate_advance/perception/ergonomics/` | `src/deskmate_advance/perception/interaction/` |
+| `src/deskmate_advance/features/ergonomics/` | `src/deskmate_advance/features/interaction/` |
+| `src/deskmate_advance/temporal/ergonomics/` | `src/deskmate_advance/temporal/interaction/` |
+| `configs/ergonomics/` | `configs/interaction/` |
+| `scripts/ergonomics/` | `scripts/interaction/` |
+| `tests/ergonomics/` | `tests/interaction/` |
+| `docs/evaluation/ergonomics-*.md` | `docs/evaluation/interaction-*.md` |
+| `data/manifests/ergonomics-*.jsonl` | `data/manifests/interaction-*.jsonl` |
+
+并行期间以下共享路径为只读：`domain/`、`perception/camera/`、`events/`、`runtime/`、`integration/`、`configs/integration/`、`models/manifest.yaml` 和 `pyproject.toml`。开始并行前由单一负责人冻结 `FramePacket`、observation envelope、事件候选 fixture 和依赖版本。任何共享边界变更只记录请求，不由两条轨道同时修改。
+
+候选实验可以使用忽略目录中的本地资产，但并行阶段不分别修改 `models/manifest.yaml`。只有轨道 gate 通过的候选，才由最终集成人一次性登记为 candidate/release/fallback。
+
+### 两条轨道的阶段计划
+
+| 并行阶段 | 轨道 A：Ergonomics | 轨道 B：Interaction | 同步门 |
+| --- | --- | --- | --- |
+| P0：边界冻结 | 用 fixture 验证可读取 `FramePacket` 并生成 A observation | 用同一 fixture 验证可读取 `FramePacket` 并生成 B observation | 输入/输出 schema、依赖和测试命令固定；共享路径进入只读状态 |
+| P1：预训练模型选择 | 比较 Pose Full/Lite；验证 Face landmarks、blendshapes、matrix；记录有效率和 P95 | 冻结 Hand extractor；比较 phone detector 的小目标、遮挡和 idle-phone 行为 | 每个组件有主候选、fallback、资产 hash 和目标摄像头待验证项 |
+| P2：独立特征管线 | Pose/Face 归一化、缺失掩码、校准、亮度和音量 observation | Hand 序列归一化、phone box/hand 空间特征、缺失掩码 | 录像回放确定性；框架对象不越过轨道 adapter |
+| P3：功能闭环 | 静坐、姿态、距离、头向、眨眼、亮度、噪声的规则与状态机 | 手势数据、TCN训练/评估；手机使用规则融合 | 每个事件均有 unknown/stale、进入/退出、duration 和 cooldown 测试 |
+| P4：条件优化 | 仅依据跨用户失败证据决定 Pose 模型 | 仅依据 phone 召回/事件误触发证据决定 detector 或融合模型训练 | 新训练必须有失败基线、独立数据 split 和相同 held-out 对照 |
+| P5：轨道交付 | 冻结 A 配置、回放 fixture、评估摘要、候选资产 hash | 冻结 B 配置、回放 fixture、手势 checkpoint、评估摘要、候选资产 hash | 两个 handoff bundle 可在没有对方源码的情况下独立回放并通过契约测试 |
+
+两条轨道可以按各自速度推进 P1–P4，不要求同日完成；但进入单人集成前必须同时通过 P5。任何轨道尚未通过 P5 时，另一轨道可以完善本轨道测试和文档，但不得进入共享运行时提前集成。
+
+### Handoff bundle 最低内容
+
+每条轨道向集成人提供且只提供以下稳定表面：
+
+1. 固定版本配置及其 SHA-256；
+2. 候选模型/提取器版本、资产 SHA-256、许可证和离线加载说明；
+3. observation 和事件候选 JSONL fixture，包含 timestamp、valid/stale、confidence、duration 和 supporting evidence；
+4. 可重复的录像回放命令和预期摘要；
+5. 单元测试、长负样本结果、P50/P95、有效率、漏检和误触发摘要；
+6. 明确的 fallback、已知失败条件和未冻结参数；
+7. 对 `models/manifest.yaml` 的建议条目，由集成人审核后统一写入。
+
+### 单人最终集成
+
+P5 后指定一名集成人独占共享路径，按以下顺序工作：
+
+1. 先以两条轨道的 JSONL fixture 做纯契约测试，不运行摄像头或模型；
+2. 分别接入 A/B adapter，保持独立频率、容量有界队列和失败隔离；
+3. 转换为统一 `UnifiedEvent`，验证静坐、手机和手势事件可以并行 active；
+4. 合并配置与模型 manifest，验证全部资产离线加载；
+5. 在 laptop 上运行完整性能测试并按证据调整频率，不修改模型语义；
+6. 通过录像回放和事件模拟器后，才进行 controller dry-run 与物理机器人安全联调。
+
+集成期原则上不再新增类别、重采数据或更换预训练模型。若契约不兼容，退回原轨道修复；若只是调度、配置路径或 schema adapter 问题，由集成人修复。
+
 ## 7. Stage 2：统一输入、预处理与特征流水线
 
 ### 目标

@@ -1,0 +1,33 @@
+{
+  "schema_version": "1.0",
+  "workstream": "A",
+  "runtime_mode": "video",
+  "pose": {
+    "primary_asset": "models/assets/pose_landmarker_full.task",
+    "fallback_asset": "models/assets/pose_landmarker_lite.task",
+    "num_poses": 1,
+    "min_pose_detection_confidence": 0.5,
+    "min_pose_presence_confidence": 0.5,
+    "min_tracking_confidence": 0.5
+  },
+  "face": {
+    "asset": "models/assets/face_landmarker.task",
+    "num_faces": 1,
+    "output_face_blendshapes": true,
+    "output_facial_transformation_matrixes": true,
+    "min_face_detection_confidence": 0.5,
+    "min_face_presence_confidence": 0.5,
+    "min_tracking_confidence": 0.5
+  },
+  "luminance": {
+    "dark_threshold": null,
+    "bright_threshold": null,
+    "threshold_status": "pending_target_camera_evidence"
+  },
+  "audio_level": {
+    "reference": "dbfs",
+    "spl_calibration_offset_db": null,
+    "high_threshold": null,
+    "threshold_status": "pending_microphone_evidence"
+  }
+}
