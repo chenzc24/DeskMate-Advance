@@ -1,0 +1,49 @@
+# Python environments and caches
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+
+# Raw/private and derived datasets
+data/raw/
+data/downloads/
+data/work/
+
+# Runs, runtime evidence, and local outputs
+runs/
+artifacts/
+outputs/
+logs/
+
+# Model weights and exported binaries; keep manifests/configs tracked
+models/**/*.pt
+models/**/*.pth
+models/**/*.ckpt
+models/**/*.onnx
+models/**/*.tflite
+models/**/*.safetensors
+models/**/*.bin
+
+# Notebook and editor state
+.ipynb_checkpoints/
+.vscode/
+.idea/
+*.swp
+
+# OS-generated files
+.DS_Store
+Thumbs.db
+desktop.ini

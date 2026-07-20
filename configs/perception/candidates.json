@@ -1,0 +1,113 @@
+{
+  "schema_version": "1.0",
+  "stage": "stage1_pretrained_selection",
+  "status": "active",
+  "started_on": "2026-07-20",
+  "runtime_target": {
+    "primary": "laptop",
+    "benchmark_device": "cpu",
+    "gpu_optional": true
+  },
+  "inputs": {
+    "camera": {
+      "final_status": "pending_robotics",
+      "exploratory_source_id": "laptop_camera",
+      "exploratory_device": "HP True Vision FHD Camera",
+      "must_not_be_treated_as_final": true
+    },
+    "microphone": {
+      "availability": "confirmed",
+      "device_selection": "runtime_config_pending"
+    }
+  },
+  "event_semantics": {
+    "phone": "active_phone_use_not_presence",
+    "parallel_events": true,
+    "event_priority": "none_at_model_layer",
+    "durations_configurable": true
+  },
+  "components": [
+    {
+      "id": "pose_landmarker",
+      "candidate": "mediapipe_pose_landmarker",
+      "status": "shortlisted",
+      "functions": ["static_too_long", "bad_posture"],
+      "required_outputs": ["normalized_landmarks", "world_landmarks", "visibility", "presence"],
+      "model_asset_status": "not_downloaded",
+      "official_guide": "https://developers.google.com/edge/mediapipe/solutions/vision/pose_landmarker/python"
+    },
+    {
+      "id": "face_landmarker",
+      "candidate": "mediapipe_face_landmarker",
+      "status": "shortlisted",
+      "functions": ["screen_too_close", "low_blink_rate", "head_direction_evidence"],
+      "required_outputs": ["face_landmarks", "optional_blendshapes", "optional_transformation_matrix"],
+      "model_asset_status": "not_downloaded",
+      "official_guide": "https://developers.google.com/edge/mediapipe/solutions/vision/face_landmarker/python"
+    },
+    {
+      "id": "hand_landmarker",
+      "candidate": "mediapipe_hand_landmarker",
+      "status": "shortlisted_priority",
+      "functions": ["gesture_detected", "phone_use_hand_evidence"],
+      "required_outputs": ["handedness", "normalized_21x3_landmarks", "world_21x3_landmarks"],
+      "model_asset_status": "not_downloaded",
+      "official_guide": "https://developers.google.com/edge/mediapipe/solutions/vision/hand_landmarker/python"
+    },
+    {
+      "id": "phone_detector",
+      "candidate": "mediapipe_object_detector_efficientdet_lite0",
+      "status": "shortlisted_unverified",
+      "functions": ["phone_usage_detected"],
+      "required_outputs": ["class", "box", "confidence"],
+      "model_asset_status": "not_downloaded",
+      "blocking_checks": ["phone_category_metadata", "small_target_recall", "partial_occlusion", "target_camera"],
+      "official_guide": "https://developers.google.com/edge/mediapipe/solutions/vision/object_detector/python"
+    },
+    {
+      "id": "audio_level",
+      "candidate": "rms_relative_spl",
+      "status": "required_non_model",
+      "functions": ["noise_too_high"],
+      "required_outputs": ["timestamped_level", "validity"]
+    },
+    {
+      "id": "brightness_statistics",
+      "candidate": "frame_luminance_statistics",
+      "status": "required_non_model",
+      "functions": ["environment_too_bright", "environment_too_dark"],
+      "required_outputs": ["timestamped_luminance", "validity"]
+    },
+    {
+      "id": "identity",
+      "candidate": "yunet_sface",
+      "status": "deferred_p2",
+      "functions": ["user_recognized", "unknown_user"]
+    },
+    {
+      "id": "audio_classification",
+      "candidate": "yamnet",
+      "status": "deferred_p2",
+      "functions": ["audio_classification_extension"]
+    },
+    {
+      "id": "off_task_fusion",
+      "candidate": "rule_fusion_then_conditional_mlp",
+      "status": "deferred_p2",
+      "functions": ["off_task_behaviour"],
+      "required_outputs": ["state_probability", "supporting_evidence"]
+    }
+  ],
+  "benchmark_metrics": [
+    "initialization_ms",
+    "latency_p50_ms",
+    "latency_p95_ms",
+    "full_loop_fps",
+    "cpu_percent",
+    "memory_mb",
+    "valid_output_rate",
+    "missing_output_rate",
+    "stale_output_rate",
+    "dropped_input_rate"
+  ]
+}
