@@ -12,6 +12,7 @@ class FaceIdentityState(StrEnum):
     NO_FACE = "no_face"
     MULTIPLE_FACES = "multiple_faces"
     ENROLLMENT_REQUIRED = "enrollment_required"
+    EXPECTED_SEAT_UNENROLLED = "expected_seat_unenrolled"
     IDENTITY_START = "identity_start"
     MATCHED = "matched"
     UNKNOWN = "unknown"

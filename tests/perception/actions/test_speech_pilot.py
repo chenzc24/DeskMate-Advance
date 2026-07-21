@@ -70,6 +70,7 @@ def test_vosk_asset_hash_load_and_silence_decode() -> None:
     assert config.verify_model_asset() == config.model.tree_sha256
     recognizer = VoskSpeechRecognizer(config)
     assert recognizer.accept_audio(bytes(8000), 1_000_000_000) is None
+    recognizer.reset_window()
     assert recognizer.flush(1_250_000_000) is None
 
 

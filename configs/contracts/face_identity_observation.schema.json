@@ -20,7 +20,8 @@
     "focus_seat": {"enum": ["seat_a", "seat_b", "seat_c", "seat_d"]},
     "identity_state": {
       "enum": [
-        "no_face", "multiple_faces", "enrollment_required", "identity_start",
+        "no_face", "multiple_faces", "enrollment_required",
+        "expected_seat_unenrolled", "identity_start",
         "matched", "unknown", "ambiguous", "low_quality", "seat_mismatch"
       ]
     },
