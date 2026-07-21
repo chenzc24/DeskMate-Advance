@@ -137,6 +137,18 @@ class SessionFaceGallery:
             second_best_similarity=second_score,
         )
 
+    def match_expected_seat(
+        self, frame: FaceFrameEvidence, expected_seat: Seat
+    ) -> FaceMatchResult:
+        """Refuse identity matching when the state-owned seat is unregistered."""
+
+        if not any(record.seat is expected_seat for record in self._records.values()):
+            return FaceMatchResult(
+                FaceIdentityState.EXPECTED_SEAT_UNENROLLED,
+                quality_flags=("state_owned_focus_seat_has_no_session_registration",),
+            )
+        return self.match_frame(frame)
+
     def metadata(self) -> tuple[dict[str, object], ...]:
         return tuple(
             {

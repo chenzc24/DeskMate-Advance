@@ -82,5 +82,24 @@ Use keys `1`–`4` to select the simulated focus seat, `E` to enroll its default
 player ID, `X` to clear the session gallery, and `Q`/`Esc` to exit. The pilot
 has no liveness protection and its thresholds are not release-calibrated.
 
+The sequential Part A pilot integrates simulated rotation acknowledgement,
+session identity, gesture/English speech fusion, game legality and automatic
+advance to the next acting seat:
+
+```powershell
+$env:PYTHONPATH = "src"
+.\.venv\Scripts\python.exe scripts\perception\live_sequential_part_a.py --index 0 --backend dshow --speech-device 1 --consent-confirmed --max-seconds 900
+```
+
+During setup, use `1`–`4` and `E` to enroll all four players, then `S` to start.
+The default `four_player_core` mode refuses an incomplete roster. During the
+hand the state machine owns focus; identity must remain current for new action
+evidence to enter. Matching gesture/speech agrees immediately, conflict is
+rejected, gesture alone waits 500 ms, and speech alone requires `C` UI
+confirmation. The separate two-player fixture requires the explicit
+`--player-mode two_player_pilot` option. Rotation is simulated and the pilot
+stops at the Part A betting-round boundary rather than inventing card or
+physical-dealing acknowledgements.
+
 No physical mechanism may move from software until Stage 3 safety and hardware
 gates are signed off by an operator and the robotics owner.

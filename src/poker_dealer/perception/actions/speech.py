@@ -228,6 +228,16 @@ class VoskSpeechRecognizer:
             return None
         return self._consume_result(self._recognizer.FinalResult(), observed_at_ns)
 
+    def reset_window(self) -> None:
+        """Discard decoder history when state opens a new listening window."""
+
+        try:
+            self._recognizer.Reset()
+        except (RuntimeError, ValueError) as exc:
+            raise SpeechModelError(f"failed to reset Vosk listening window: {exc}") from exc
+        self._window_started_at_ns = None
+        self._window_blocks = 0
+
     def _consume_result(
         self, raw_result: str, observed_at_ns: int
     ) -> SpeechUtteranceEvidence | None:

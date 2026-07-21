@@ -104,6 +104,12 @@ def test_matching_accepts_clear_match_and_rejects_unknown_and_ambiguous() -> Non
     assert ambiguous.state is FaceIdentityState.AMBIGUOUS
     assert ambiguous.player_id is None
 
+    missing_seat = gallery.match_expected_seat(
+        frame_with(feature((1, 0, 0))), Seat.C
+    )
+    assert missing_seat.state is FaceIdentityState.EXPECTED_SEAT_UNENROLLED
+    assert missing_seat.player_id is None
+
 
 def test_no_face_multiple_faces_low_quality_and_empty_gallery_are_safe() -> None:
     gallery = SessionFaceGallery(load_config(), "session")
