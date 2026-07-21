@@ -3,7 +3,7 @@
   "updated_on": "2026-07-21",
   "asset_root": "models/assets",
   "runtime_downloads_allowed": false,
-  "notes": "No Poker Dealer model is admitted for release. MediaPipe gesture, Vosk English, YuNet face detection and SFace embedding assets are development-only Stage 2A feasibility evidence.",
+  "notes": "No Poker Dealer model is admitted for release. MediaPipe gesture, Vosk English, YuNet face detection, SFace embedding and LGD card recognition assets are development-only Stage 2 feasibility evidence.",
   "models": [
     {
       "model_id": "player-action-mediapipe-canned-gesture",
@@ -177,6 +177,70 @@
         "no held-out participant/session split",
         "no liveness or presentation-attack protection",
         "explicit consent and guaranteed process-exit cleanup require operator validation"
+      ]
+    },
+    {
+      "model_id": "card-identity-lgd-yolo11s-52class",
+      "version": "gen3-hf-b2e9e89cc0138a70",
+      "state": "development",
+      "task": "fixed-ROI face-up 52-class playing-card identity feasibility baseline",
+      "source": {
+        "provider": "Hugging Face / sroot",
+        "repository_url": "https://huggingface.co/sroot/lgd-cards-gen3",
+        "revision": "b2e9e89cc0138a70fc3ac5661922f99b4e3ae135",
+        "download_url": "https://huggingface.co/sroot/lgd-cards-gen3/resolve/b2e9e89cc0138a70fc3ac5661922f99b4e3ae135/model.onnx",
+        "model_card_url": "https://huggingface.co/sroot/lgd-cards-gen3/blob/b2e9e89cc0138a70fc3ac5661922f99b4e3ae135/README.md",
+        "retrieved_on": "2026-07-21"
+      },
+      "license": {
+        "identifier": "AGPL-3.0",
+        "evidence_url": "https://huggingface.co/sroot/lgd-cards-gen3/blob/b2e9e89cc0138a70fc3ac5661922f99b4e3ae135/README.md#license--provenance",
+        "admission_note": "Weights inherit AGPL-3.0 from Ultralytics YOLO11. ONNX Runtime or OpenCV inference does not change the weight license; review distribution obligations before any release."
+      },
+      "asset": {
+        "path": "models/assets/card_recognition/lgd-cards-gen3/model.onnx",
+        "bytes": 38233687,
+        "sha256": "8b767cdfed2c8e954a9134013ac3d2f2c53be048768d559675be01277a8a8fd1",
+        "git_tracked": false
+      },
+      "class_mapping": {
+        "path": "models/assets/card_recognition/lgd-cards-gen3/model.classes.json",
+        "bytes": 316,
+        "sha256": "8a2d7e9dacf245aca5ef5a402cb404def919e9994e9142644d80c6d6248ee038",
+        "classes": 52,
+        "git_tracked": false
+      },
+      "framework": {
+        "name": "opencv-dnn",
+        "tested_version": "5.0.0",
+        "format": "YOLO11s ONNX, output shape 1x56x8400"
+      },
+      "input_contract": "one project-owned BGR FramePacket already cropped to one fixed card-slot ROI; letterboxed to 640x640 without runtime download",
+      "output_contract": "owned CardFrameEvidence mapped from one of 52 rank+suit codes; only calibrated multi-frame confirmation emits CardObservation and the adapter never advances game state",
+      "dataset_manifest_sha256": null,
+      "view_manifest_sha256": null,
+      "metrics": {
+        "upstream_private_poc_holdout": {
+          "frames": 225,
+          "boxes": 4317,
+          "recall": 0.847,
+          "precision_proxy": 0.771,
+          "evidence_scope": "self-reported private proof-of-concept table video; not Poker Dealer target-camera evidence"
+        },
+        "local_public_single_image_smoke": {
+          "expected_card": "AS",
+          "predicted_card": "AS",
+          "confidence": 0.8228160738945007,
+          "scope": "pipeline smoke only; no accuracy claim"
+        }
+      },
+      "admission_blockers": [
+        "single 52-class detector does not provide required per-rank and per-suit held-out metrics",
+        "no Poker Dealer target-camera, thirteen-slot or four-orientation evaluation",
+        "no held-out physical deck and complete capture-session split",
+        "confidence, ambiguity and temporal thresholds are uncalibrated pilot defaults",
+        "upstream private holdout labels and deck/session provenance are insufficient for project admission",
+        "AGPL-3.0 distribution obligations require review before release"
       ]
     }
   ],

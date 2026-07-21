@@ -1,0 +1,60 @@
+{
+  "schema_version": "1.0",
+  "pilot_status": "development_feasibility_only",
+  "model": {
+    "model_id": "card-identity-lgd-yolo11s-52class",
+    "version": "gen3-hf-b2e9e89cc0138a70",
+    "revision": "b2e9e89cc0138a70fc3ac5661922f99b4e3ae135",
+    "asset_path": "models/assets/card_recognition/lgd-cards-gen3/model.onnx",
+    "asset_bytes": 38233687,
+    "sha256": "8b767cdfed2c8e954a9134013ac3d2f2c53be048768d559675be01277a8a8fd1",
+    "classes_path": "models/assets/card_recognition/lgd-cards-gen3/model.classes.json",
+    "classes_bytes": 316,
+    "classes_sha256": "8a2d7e9dacf245aca5ef5a402cb404def919e9994e9142644d80c6d6248ee038",
+    "framework": "opencv-dnn-onnx",
+    "framework_version": "5.0.0",
+    "license_identifier": "AGPL-3.0",
+    "input_size": [640, 640],
+    "class_codes": [
+      "10C", "10D", "10H", "10S", "2C", "2D", "2H", "2S",
+      "3C", "3D", "3H", "3S", "4C", "4D", "4H", "4S",
+      "5C", "5D", "5H", "5S", "6C", "6D", "6H", "6S",
+      "7C", "7D", "7H", "7S", "8C", "8D", "8H", "8S",
+      "9C", "9D", "9H", "9S", "AC", "AD", "AH", "AS",
+      "JC", "JD", "JH", "JS", "KC", "KD", "KH", "KS",
+      "QC", "QD", "QH", "QS"
+    ]
+  },
+  "inference": {
+    "minimum_confidence": 0.50,
+    "ambiguity_confidence": 0.35,
+    "minimum_confidence_margin": 0.10,
+    "nms_iou_threshold": 0.45,
+    "maximum_candidate_detections": 100,
+    "letterbox_value": 114
+  },
+  "confirmation": {
+    "minimum_stable_frames": 3,
+    "minimum_stable_duration_ms": 150,
+    "stale_after_ms": 1000
+  },
+  "fixed_roi_normalized": {
+    "x_min": 0.25,
+    "y_min": 0.10,
+    "x_max": 0.75,
+    "y_max": 0.90
+  },
+  "camera": {
+    "device_index": 1,
+    "backend": "dshow",
+    "width": 1280,
+    "height": 720,
+    "fps": 30.0
+  },
+  "runtime": {
+    "calibration_version": "lgd-gen3-laptop-pilot-unfrozen-v1",
+    "runtime_downloads": false,
+    "save_frames": false,
+    "max_seconds_default": 300
+  }
+}
