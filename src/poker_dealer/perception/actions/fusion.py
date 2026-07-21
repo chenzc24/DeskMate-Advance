@@ -7,7 +7,7 @@ from collections.abc import Sequence
 from poker_dealer.domain import ActionEvidenceState, PlayerActionObservation
 
 
-def _source(observation: PlayerActionObservation) -> str:
+def action_observation_source(observation: PlayerActionObservation) -> str:
     if observation.model_version.startswith("player-action-mediapipe"):
         return "gesture"
     if observation.model_version.startswith("player-action-vosk"):
@@ -47,7 +47,7 @@ def fuse_action_observations(
         if item.evidence_state is ActionEvidenceState.CANDIDATE
     ]
     actions = {item.candidate_action for item in candidates}
-    sources = sorted({_source(item) for item in fresh})
+    sources = sorted({action_observation_source(item) for item in fresh})
     flags = [f"fusion_sources:{','.join(sources)}"]
     candidate_action = None
     confidence = max(

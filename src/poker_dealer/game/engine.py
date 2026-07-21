@@ -519,7 +519,11 @@ class ActionPromoter:
                 source=(
                     "voice_adapter"
                     if observation.model_version.startswith("player-action-vosk")
-                    else "gesture_adapter"
+                    else (
+                        "multimodal_adapter"
+                        if observation.model_version.startswith("multimodal-action-fusion")
+                        else "gesture_adapter"
+                    )
                 ),
             ),
             "candidate_promoted",

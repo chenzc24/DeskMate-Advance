@@ -10,7 +10,7 @@ from .mediapipe_adapter import (
     GestureModelError,
     MediaPipeGestureAdapter,
 )
-from .fusion import fuse_action_observations
+from .fusion import action_observation_source, fuse_action_observations
 from .speech import (
     SpeechModelConfig,
     SpeechModelError,
@@ -30,6 +30,7 @@ from .temporal import (
     GestureTemporalAdapter,
     observation_to_dict,
 )
+from .window import MultimodalActionWindow
 
 __all__ = [
     "ActionObservationContext",
@@ -40,6 +41,7 @@ __all__ = [
     "GesturePilotConfig",
     "GestureTemporalAdapter",
     "MediaPipeGestureAdapter",
+    "MultimodalActionWindow",
     "MultiSeatGesturePilotConfig",
     "NormalizedRoi",
     "SpeechModelConfig",
@@ -50,6 +52,7 @@ __all__ = [
     "SeatRoiRouter",
     "SeatRoutingResult",
     "VoskSpeechRecognizer",
+    "action_observation_source",
     "fuse_action_observations",
     "observation_to_dict",
 ]
