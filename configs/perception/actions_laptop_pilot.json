@@ -1,0 +1,47 @@
+{
+  "schema_version": "1.0",
+  "pilot_status": "development_feasibility_only",
+  "model": {
+    "model_id": "player-action-mediapipe-canned-gesture",
+    "version": "float16-latest-downloaded-20260721",
+    "asset_path": "models/assets/gesture_recognizer.task",
+    "sha256": "97952348cf6a6a4915c2ea1496b4b37ebabc50cbbf80571435643c455f2b0482",
+    "framework": "mediapipe-tasks-python",
+    "framework_version": "0.10.35",
+    "num_hands": 1
+  },
+  "camera": {
+    "device_index": 0,
+    "backend": "dshow",
+    "width": 1280,
+    "height": 720,
+    "fps": 30.0
+  },
+  "focus_roi_normalized": {
+    "x_min": 0.05,
+    "y_min": 0.05,
+    "x_max": 0.95,
+    "y_max": 0.95
+  },
+  "gesture_to_action": {
+    "Thumb_Down": "fold",
+    "Open_Palm": "check",
+    "Thumb_Up": "call",
+    "Victory": "bet",
+    "Pointing_Up": "raise"
+  },
+  "ignored_canned_gestures": ["None", "Closed_Fist", "ILoveYou"],
+  "confirmation": {
+    "minimum_score": 0.60,
+    "minimum_stable_frames": 5,
+    "minimum_stable_duration_ms": 250,
+    "release_frames": 3,
+    "cooldown_ms": 1000
+  },
+  "runtime": {
+    "model_level": "development",
+    "calibration_version": "laptop-pilot-unfrozen-v2-victory-bet",
+    "save_frames": false,
+    "max_seconds_default": 60
+  }
+}

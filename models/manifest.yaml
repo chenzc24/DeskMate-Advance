@@ -1,76 +1,184 @@
 {
   "schema_version": "1.0",
-  "updated_on": "2026-07-20",
+  "updated_on": "2026-07-21",
   "asset_root": "models/assets",
   "runtime_downloads_allowed": false,
-  "notes": "JSON-compatible YAML; development assets for Gate 1 evaluation only.",
-  "licensing": {
-    "mediapipe_framework_repository_license": "Apache-2.0",
-    "model_asset_license_status": "pending_explicit_asset_confirmation",
-    "restriction_until_confirmed": "local_project_evaluation_only",
-    "note": "The framework repository license is not assumed to license separately hosted model bytes."
-  },
+  "notes": "No Poker Dealer model is admitted for release. MediaPipe gesture, Vosk English, YuNet face detection and SFace embedding assets are development-only Stage 2A feasibility evidence.",
   "models": [
     {
-      "model_id": "pose_landmarker",
-      "version": "mediapipe-full-float16-latest-20260720",
+      "model_id": "player-action-mediapipe-canned-gesture",
+      "version": "float16-latest-downloaded-20260721",
       "state": "development",
-      "role": "primary_gate1_evaluation",
-      "local_path": "models/assets/pose_landmarker_full.task",
-      "source_url": "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/latest/pose_landmarker_full.task",
-      "bytes": 9398198,
-      "sha256": "4eaa5eb7a98365221087693fcc286334cf0858e2eb6e15b506aa4a7ecdcec4ad"
+      "task": "single-hand static canned gesture feasibility baseline",
+      "source": {
+        "provider": "Google MediaPipe",
+        "download_url": "https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/latest/gesture_recognizer.task",
+        "documentation_url": "https://developers.google.com/edge/mediapipe/solutions/vision/gesture_recognizer",
+        "model_card_url": "https://storage.googleapis.com/mediapipe-assets/gesture_recognizer/model_card_hand_gesture_classification_with_faireness_2022.pdf",
+        "retrieved_on": "2026-07-21"
+      },
+      "license": {
+        "identifier": "Apache-2.0",
+        "evidence_url": "https://github.com/google-ai-edge/mediapipe/blob/master/LICENSE",
+        "admission_note": "Reconfirm that the published task asset is covered before any candidate or release promotion."
+      },
+      "asset": {
+        "path": "models/assets/gesture_recognizer.task",
+        "bytes": 8373440,
+        "sha256": "97952348cf6a6a4915c2ea1496b4b37ebabc50cbbf80571435643c455f2b0482",
+        "git_tracked": false
+      },
+      "framework": {
+        "name": "mediapipe-tasks-python",
+        "tested_version": "0.10.35",
+        "format": "MediaPipe .task / TensorFlow Lite float16 bundle"
+      },
+      "input_contract": "one BGR FramePacket converted to owned RGB input; one detected hand maximum; state-provided normalized focus ROI",
+      "output_contract": "owned label/score/centroid evidence mapped to PlayerActionObservation; never a direct PlayerAction",
+      "canned_labels": [
+        "None", "Closed_Fist", "Open_Palm", "Pointing_Up",
+        "Thumb_Down", "Thumb_Up", "Victory", "ILoveYou"
+      ],
+      "dataset_manifest_sha256": null,
+      "view_manifest_sha256": null,
+      "metrics": {},
+      "admission_blockers": [
+        "pilot mapping is not frozen gesture grammar",
+        "no held-out participant/session dataset",
+        "no per-action or false-acceptance metrics",
+        "no four-seat target-camera evidence",
+        "static gestures only; motion gestures are out of scope for this model"
+      ]
     },
     {
-      "model_id": "pose_landmarker",
-      "version": "mediapipe-lite-float16-latest-20260720",
+      "model_id": "player-action-vosk-small-en-us",
+      "version": "vosk-model-small-en-us-0.15",
       "state": "development",
-      "role": "fallback_gate1_evaluation",
-      "local_path": "models/assets/pose_landmarker_lite.task",
-      "source_url": "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task",
-      "bytes": 5777746,
-      "sha256": "59929e1d1ee95287735ddd833b19cf4ac46d29bc7afddbbf6753c459690d574a"
+      "task": "focused-seat closed-vocabulary English poker-command feasibility baseline",
+      "source": {
+        "provider": "Alpha Cephei Vosk",
+        "download_url": "https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip",
+        "documentation_url": "https://alphacephei.com/vosk/models",
+        "microphone_example_url": "https://github.com/alphacep/vosk-api/blob/master/python/example/test_microphone.py",
+        "retrieved_on": "2026-07-21"
+      },
+      "license": {
+        "identifier": "Apache-2.0",
+        "evidence_url": "https://alphacephei.com/vosk/models",
+        "admission_note": "License is listed by the official model catalog; recheck asset and runtime notices before candidate or release promotion."
+      },
+      "asset": {
+        "path": "models/assets/vosk-model-small-en-us-0.15",
+        "archive_path": "models/assets/vosk-model-small-en-us-0.15.zip",
+        "archive_bytes": 41205931,
+        "archive_sha256": "30f26242c4eb449f948e42cb302dd7a686cb29a3423a8367f99ff41780942498",
+        "tree_files": 14,
+        "tree_bytes": 70898967,
+        "tree_sha256": "57929637421baa20ff74ffb194f48e7c4a5bd0c09eac1c79a3c305ddf32db038",
+        "git_tracked": false
+      },
+      "framework": {
+        "name": "vosk",
+        "tested_version": "0.3.45",
+        "format": "Kaldi/Vosk small US English streaming model"
+      },
+      "input_contract": "bounded mono 16 kHz int16 PCM from the state-owned focused-seat listening window; no audio persistence",
+      "output_contract": "closed-vocabulary transcript/confidence evidence mapped to PlayerActionObservation; never a direct PlayerAction or seat identity",
+      "closed_vocabulary": [
+        "fold", "check", "call", "bet", "raise", "cancel", "confirm"
+      ],
+      "dataset_manifest_sha256": null,
+      "view_manifest_sha256": null,
+      "metrics": {},
+      "admission_blockers": [
+        "no held-out participant/session speech dataset",
+        "no per-command, false-acceptance, latency or rejection metrics",
+        "no four-seat cross-speaker leakage evidence",
+        "Laptop microphone and acting-seat window do not prove speaker seat",
+        "command grammar, confirmation UX and conflict policy are not frozen"
+      ]
     },
     {
-      "model_id": "hand_landmarker",
-      "version": "mediapipe-full-float16-latest-20260720",
+      "model_id": "face-identity-opencv-yunet",
+      "version": "face_detection_yunet_2023mar",
       "state": "development",
-      "role": "primary_gate1_evaluation",
-      "local_path": "models/assets/hand_landmarker.task",
-      "source_url": "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/latest/hand_landmarker.task",
-      "bytes": 7819105,
-      "sha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1"
+      "task": "single-view face detection for consented session identity verification",
+      "source": {
+        "provider": "OpenCV Zoo",
+        "download_url": "https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet/face_detection_yunet_2023mar.onnx",
+        "documentation_url": "https://docs.opencv.org/4.x/d0/dd4/tutorial_dnn_face.html",
+        "model_repository_url": "https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet",
+        "retrieved_on": "2026-07-21"
+      },
+      "license": {
+        "identifier": "MIT",
+        "evidence_url": "https://github.com/opencv/opencv_zoo/blob/main/LICENSE",
+        "admission_note": "Recheck the model repository and third-party notices before candidate or release promotion."
+      },
+      "asset": {
+        "path": "models/assets/face_identity/face_detection_yunet_2023mar.onnx",
+        "bytes": 232589,
+        "sha256": "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4",
+        "git_tracked": false
+      },
+      "framework": {
+        "name": "opencv-dnn",
+        "tested_version": "5.0.0",
+        "format": "ONNX"
+      },
+      "input_contract": "one owned BGR FramePacket; session verification window only; no frame persistence",
+      "output_contract": "face box, landmarks and score passed in memory to alignment/embedding; never a player ID or acting seat",
+      "dataset_manifest_sha256": null,
+      "view_manifest_sha256": null,
+      "metrics": {},
+      "admission_blockers": [
+        "no held-out target-camera participant/session evaluation",
+        "minimum face size and detector threshold are pilot defaults",
+        "no rotating-robot blur, pose, lighting or occlusion evidence",
+        "no liveness or presentation-attack protection"
+      ]
     },
     {
-      "model_id": "face_landmarker",
-      "version": "mediapipe-float16-latest-20260720",
+      "model_id": "face-identity-opencv-sface",
+      "version": "face_recognition_sface_2021dec",
       "state": "development",
-      "role": "primary_gate1_evaluation",
-      "local_path": "models/assets/face_landmarker.task",
-      "source_url": "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/latest/face_landmarker.task",
-      "bytes": 3758596,
-      "sha256": "64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff"
-    },
-    {
-      "model_id": "phone_detector",
-      "version": "efficientdet-lite0-int8-latest-20260720",
-      "state": "development",
-      "role": "primary_gate1_evaluation",
-      "local_path": "models/assets/efficientdet_lite0_int8.tflite",
-      "source_url": "https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/int8/latest/efficientdet_lite0.tflite",
-      "bytes": 4602795,
-      "sha256": "0720bf247bd76e6594ea28fa9c6f7c5242be774818997dbbeffc4da460c723bb"
+      "task": "aligned face embedding for consented in-memory session gallery matching",
+      "source": {
+        "provider": "OpenCV Zoo",
+        "download_url": "https://github.com/opencv/opencv_zoo/raw/main/models/face_recognition_sface/face_recognition_sface_2021dec.onnx",
+        "documentation_url": "https://docs.opencv.org/4.x/d0/dd4/tutorial_dnn_face.html",
+        "model_repository_url": "https://github.com/opencv/opencv_zoo/tree/main/models/face_recognition_sface",
+        "retrieved_on": "2026-07-21"
+      },
+      "license": {
+        "identifier": "Apache-2.0",
+        "evidence_url": "https://github.com/opencv/opencv_zoo/blob/main/models/face_recognition_sface/LICENSE",
+        "admission_note": "Recheck the asset-specific license and third-party notices before candidate or release promotion."
+      },
+      "asset": {
+        "path": "models/assets/face_identity/face_recognition_sface_2021dec.onnx",
+        "bytes": 38696353,
+        "sha256": "0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e83484087c34e79",
+        "git_tracked": false
+      },
+      "framework": {
+        "name": "opencv-dnn",
+        "tested_version": "5.0.0",
+        "format": "ONNX"
+      },
+      "input_contract": "one YuNet-aligned face crop from an exact-one-face session window",
+      "output_contract": "L2-normalized embedding retained only in process memory; serialized observation contains player_id or unknown but no embedding",
+      "dataset_manifest_sha256": null,
+      "view_manifest_sha256": null,
+      "metrics": {},
+      "admission_blockers": [
+        "cosine threshold and identity margin are uncalibrated pilot defaults",
+        "no false-match/non-match or unknown rejection evaluation",
+        "no held-out participant/session split",
+        "no liveness or presentation-attack protection",
+        "explicit consent and guaranteed process-exit cleanup require operator validation"
+      ]
     }
   ],
-  "supporting_assets": [
-    {
-      "asset_id": "efficientdet_lite0_labelmap",
-      "local_path": "models/assets/efficientdet_lite0_labelmap.txt",
-      "source_url": "https://storage.googleapis.com/mediapipe-tasks/object_detector/labelmap.txt",
-      "bytes": 661,
-      "sha256": "f8803ef7900160c629d570848dfda4175e21667bf7b71f73f8ece4938c9f2bf2",
-      "required_category": "cell phone",
-      "required_category_verified": true
-    }
-  ]
+  "supporting_assets": []
 }

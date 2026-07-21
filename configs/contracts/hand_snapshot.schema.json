@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://poker-dealer.local/schemas/hand-snapshot-1.1.json",
+  "title": "Recoverable hand state snapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "rules_version", "hand_id", "state_version", "phase",
+    "street", "button", "small_blind_seat", "big_blind_seat", "acting_seat",
+    "legal_actions", "players", "pot_units", "pots", "slot_states", "confirmed_cards",
+    "pending_command_id", "paused_reason"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.1"},
+    "rules_version": {"const": "1.2"},
+    "hand_id": {"type": "string", "minLength": 1},
+    "state_version": {"type": "integer", "minimum": 0},
+    "phase": {"enum": ["setup", "posting_blinds", "dealing_hole", "awaiting_action", "dealing_board", "showdown", "settled", "paused_recovery", "voided"]},
+    "street": {"oneOf": [{"enum": ["preflop", "flop", "turn", "river", "showdown"]}, {"type": "null"}]},
+    "button": {"enum": ["seat_a", "seat_b", "seat_c", "seat_d"]},
+    "small_blind_seat": {"enum": ["seat_a", "seat_b", "seat_c", "seat_d"]},
+    "big_blind_seat": {"enum": ["seat_a", "seat_b", "seat_c", "seat_d"]},
+    "acting_seat": {"oneOf": [{"enum": ["seat_a", "seat_b", "seat_c", "seat_d"]}, {"type": "null"}]},
+    "legal_actions": {"type": "array", "items": {"enum": ["fold", "check", "call", "bet", "raise"]}, "uniqueItems": true},
+    "players": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seat_a", "seat_b", "seat_c", "seat_d"],
+      "properties": {
+        "seat_a": {"$ref": "#/$defs/player"},
+        "seat_b": {"$ref": "#/$defs/player"},
+        "seat_c": {"$ref": "#/$defs/player"},
+        "seat_d": {"$ref": "#/$defs/player"}
+      }
+    },
+    "pot_units": {"type": "integer", "minimum": 0},
+    "pots": {"type": "array", "items": {"$ref": "#/$defs/pot"}},
+    "slot_states": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "board_flop_1", "board_flop_2", "board_flop_3", "board_turn",
+        "board_river", "seat_a_hole_1", "seat_a_hole_2",
+        "seat_b_hole_1", "seat_b_hole_2", "seat_c_hole_1",
+        "seat_c_hole_2", "seat_d_hole_1", "seat_d_hole_2"
+      ],
+      "properties": {
+        "board_flop_1": {"$ref": "#/$defs/slot_lifecycle"},
+        "board_flop_2": {"$ref": "#/$defs/slot_lifecycle"},
+        "board_flop_3": {"$ref": "#/$defs/slot_lifecycle"},
+        "board_turn": {"$ref": "#/$defs/slot_lifecycle"},
+        "board_river": {"$ref": "#/$defs/slot_lifecycle"},
+        "seat_a_hole_1": {"$ref": "#/$defs/slot_lifecycle"},
+        "seat_a_hole_2": {"$ref": "#/$defs/slot_lifecycle"},
+        "seat_b_hole_1": {"$ref": "#/$defs/slot_lifecycle"},
+        "seat_b_hole_2": {"$ref": "#/$defs/slot_lifecycle"},
+        "seat_c_hole_1": {"$ref": "#/$defs/slot_lifecycle"},
+        "seat_c_hole_2": {"$ref": "#/$defs/slot_lifecycle"},
+        "seat_d_hole_1": {"$ref": "#/$defs/slot_lifecycle"},
+        "seat_d_hole_2": {"$ref": "#/$defs/slot_lifecycle"}
+      }
+    },
+    "confirmed_cards": {"type": "array", "items": {"$ref": "#/$defs/slotted_card"}, "uniqueItems": true},
+    "pending_command_id": {"type": ["string", "null"]},
+    "paused_reason": {"type": ["string", "null"]}
+  },
+  "$defs": {
+    "slot_lifecycle": {
+      "enum": [
+        "expected_empty", "delivery_pending", "present_face_down",
+        "reveal_pending", "face_up_unconfirmed", "confirmed", "cleared",
+        "unknown", "conflict"
+      ]
+    },
+    "player": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stack_units", "street_commit_units", "hand_commit_units", "folded", "all_in"],
+      "properties": {
+        "stack_units": {"type": "integer", "minimum": 0},
+        "street_commit_units": {"type": "integer", "minimum": 0},
+        "hand_commit_units": {"type": "integer", "minimum": 0},
+        "folded": {"type": "boolean"},
+        "all_in": {"type": "boolean"}
+      }
+    },
+    "pot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pot_id", "amount_units", "eligible_seats"],
+      "properties": {
+        "pot_id": {"type": "string", "minLength": 1},
+        "amount_units": {"type": "integer", "minimum": 1},
+        "eligible_seats": {"type": "array", "minItems": 1, "items": {"enum": ["seat_a", "seat_b", "seat_c", "seat_d"]}, "uniqueItems": true}
+      }
+    },
+    "slotted_card": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["slot_id", "rank", "suit"],
+      "properties": {
+        "slot_id": {"type": "string", "minLength": 1},
+        "rank": {"enum": ["2", "3", "4", "5", "6", "7", "8", "9", "T", "J", "Q", "K", "A"]},
+        "suit": {"enum": ["clubs", "diamonds", "hearts", "spades"]}
+      }
+    }
+  }
+}

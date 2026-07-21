@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://poker-dealer.local/schemas/table-layout-1.1.json",
+  "title": "Poker Dealer logical table layout",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "contract_status", "tabletop_frame",
+    "mechanical_targets", "vision_slots", "action_regions", "camera", "safety"
+  ],
+  "properties": {
+    "$schema": {"type": "string"},
+    "schema_version": {"const": "1.1"},
+    "contract_status": {"const": "logical_card_and_action_ids_frozen_geometry_pending"},
+    "tabletop_frame": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["origin", "seat_order_clockwise", "physical_dimensions_status"],
+      "properties": {
+        "origin": {"const": "top_left_from_overhead_camera_view"},
+        "seat_order_clockwise": {"const": ["seat_a", "seat_b", "seat_c", "seat_d"]},
+        "physical_dimensions_status": {"const": "requires_robotics_measurement"}
+      }
+    },
+    "mechanical_targets": {
+      "type": "array",
+      "minItems": 10,
+      "maxItems": 10,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/mechanical_target"}
+    },
+    "vision_slots": {
+      "type": "array",
+      "minItems": 13,
+      "maxItems": 13,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/vision_slot"}
+    },
+    "action_regions": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/action_region"}
+    },
+    "camera": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "preferred_mount", "selection_status", "must_see_all_vision_slots",
+        "must_see_all_action_regions",
+        "must_exclude_private_hole_cards_until_showdown"
+      ],
+      "properties": {
+        "preferred_mount": {"const": "fixed_overhead_independent_usb_camera"},
+        "selection_status": {"const": "pending_target_sample"},
+        "must_see_all_vision_slots": {"const": true},
+        "must_see_all_action_regions": {"const": true},
+        "must_exclude_private_hole_cards_until_showdown": {"const": false}
+      }
+    },
+    "safety": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "motion_zone_status", "player_hands_prohibited_during_motion",
+        "physical_guard_required", "operator_required_for_motion_tests"
+      ],
+      "properties": {
+        "motion_zone_status": {"const": "pending_robotics_geometry"},
+        "player_hands_prohibited_during_motion": {"const": true},
+        "physical_guard_required": {"const": true},
+        "operator_required_for_motion_tests": {"const": true}
+      }
+    }
+  },
+  "$defs": {
+    "mechanical_target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target_id", "purpose", "geometry_status"],
+      "properties": {
+        "target_id": {
+          "enum": [
+            "seat_a", "seat_b", "seat_c", "seat_d", "burn_tray", "board_flop_1",
+            "board_flop_2", "board_flop_3", "board_turn", "board_river"
+          ]
+        },
+        "purpose": {"enum": ["hole_card_delivery", "face_down_burn_card", "face_up_board_card"]},
+        "geometry_status": {"const": "pending_measurement"}
+      }
+    },
+    "vision_slot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["slot_id", "purpose", "roi_status"],
+      "properties": {
+        "slot_id": {
+          "enum": [
+            "board_flop_1", "board_flop_2", "board_flop_3", "board_turn",
+            "board_river", "seat_a_hole_1", "seat_a_hole_2",
+            "seat_b_hole_1", "seat_b_hole_2", "seat_c_hole_1",
+            "seat_c_hole_2", "seat_d_hole_1", "seat_d_hole_2"
+          ]
+        },
+        "purpose": {"enum": ["board_card", "showdown_card"]},
+        "roi_status": {"const": "pending_target_camera"}
+      }
+    },
+    "action_region": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["region_id", "seat_id", "purpose", "roi_status"],
+      "properties": {
+        "region_id": {
+          "enum": ["seat_a_action", "seat_b_action", "seat_c_action", "seat_d_action"]
+        },
+        "seat_id": {"enum": ["seat_a", "seat_b", "seat_c", "seat_d"]},
+        "purpose": {"const": "player_action_evidence"},
+        "roi_status": {"const": "pending_target_camera"}
+      }
+    }
+  }
+}

@@ -1,0 +1,167 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://poker-dealer.local/schemas/dealer-message-1.0.json",
+  "title": "Semantic dealer command or terminal acknowledgement",
+  "oneOf": [
+    {"$ref": "#/$defs/command"},
+    {"$ref": "#/$defs/ack"}
+  ],
+  "$defs": {
+    "target": {
+      "enum": [
+        "seat_a", "seat_b", "seat_c", "seat_d", "burn_tray", "board_flop_1",
+        "board_flop_2", "board_flop_3", "board_turn", "board_river"
+      ]
+    },
+    "command": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version", "message_type", "command_id", "issued_at_ns",
+        "command", "target_slot", "timeout_ms"
+      ],
+      "properties": {
+        "schema_version": {"const": "1.0"},
+        "message_type": {"const": "command"},
+        "command_id": {"type": "string", "minLength": 1},
+        "issued_at_ns": {"type": "integer", "minimum": 0},
+        "command": {"enum": ["home", "rotate_to", "dispense_one", "stop", "get_status", "reset_fault"]},
+        "target_slot": {"oneOf": [{"$ref": "#/$defs/target"}, {"type": "null"}]},
+        "timeout_ms": {"type": "integer", "minimum": 1}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"command": {"const": "rotate_to"}}},
+          "then": {"properties": {"target_slot": {"$ref": "#/$defs/target"}}},
+          "else": {"properties": {"target_slot": {"type": "null"}}}
+        }
+      ]
+    },
+    "sensor_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["homed", "at_target", "deck_present", "exit_pulses", "interlock_closed", "emergency_stop"],
+      "properties": {
+        "homed": {"type": ["boolean", "null"]},
+        "at_target": {"type": ["boolean", "null"]},
+        "deck_present": {"type": ["boolean", "null"]},
+        "exit_pulses": {"type": ["integer", "null"], "minimum": 0},
+        "interlock_closed": {"type": ["boolean", "null"]},
+        "emergency_stop": {"type": ["boolean", "null"]}
+      }
+    },
+    "ack": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version", "message_type", "command_id", "command", "target_slot", "observed_at_ns",
+        "status", "device_state", "device_state_version", "error_code",
+        "reason", "sensor_evidence"
+      ],
+      "properties": {
+        "schema_version": {"const": "1.0"},
+        "message_type": {"const": "ack"},
+        "command_id": {"type": "string", "minLength": 1},
+        "command": {"enum": ["home", "rotate_to", "dispense_one", "stop", "get_status", "reset_fault"]},
+        "target_slot": {"oneOf": [{"$ref": "#/$defs/target"}, {"type": "null"}]},
+        "observed_at_ns": {"type": "integer", "minimum": 0},
+        "status": {"enum": ["succeeded", "failed", "rejected", "timed_out"]},
+        "device_state": {"enum": ["booting", "not_homed", "ready", "moving", "dispensing", "fault", "e_stop"]},
+        "device_state_version": {"type": "integer", "minimum": 0},
+        "error_code": {
+          "oneOf": [
+            {"enum": ["not_homed", "invalid_target", "deck_empty", "feed_jam", "double_feed", "position_timeout", "interlock_open", "emergency_stop", "transport_lost", "protocol_error"]},
+            {"type": "null"}
+          ]
+        },
+        "reason": {"type": ["string", "null"]},
+        "sensor_evidence": {"$ref": "#/$defs/sensor_evidence"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"command": {"const": "rotate_to"}}},
+          "then": {"properties": {"target_slot": {"$ref": "#/$defs/target"}}},
+          "else": {"properties": {"target_slot": {"type": "null"}}}
+        },
+        {
+          "if": {"properties": {"status": {"const": "succeeded"}}},
+          "then": {
+            "properties": {
+              "error_code": {"type": "null"},
+              "reason": {"type": "null"}
+            }
+          },
+          "else": {
+            "properties": {
+              "error_code": {"type": "string"},
+              "reason": {"type": "string", "minLength": 1}
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {"const": "succeeded"},
+              "command": {"const": "dispense_one"}
+            },
+            "required": ["status", "command"]
+          },
+          "then": {
+            "properties": {
+              "sensor_evidence": {
+                "properties": {
+                  "homed": {"const": true},
+                  "at_target": {"const": true},
+                  "exit_pulses": {"const": 1},
+                  "interlock_closed": {"const": true},
+                  "emergency_stop": {"const": false}
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {"const": "succeeded"},
+              "command": {"const": "home"}
+            },
+            "required": ["status", "command"]
+          },
+          "then": {
+            "properties": {
+              "sensor_evidence": {
+                "properties": {
+                  "homed": {"const": true},
+                  "interlock_closed": {"const": true},
+                  "emergency_stop": {"const": false}
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {"const": "succeeded"},
+              "command": {"const": "rotate_to"}
+            },
+            "required": ["status", "command"]
+          },
+          "then": {
+            "properties": {
+              "sensor_evidence": {
+                "properties": {
+                  "homed": {"const": true},
+                  "at_target": {"const": true},
+                  "interlock_closed": {"const": true},
+                  "emergency_stop": {"const": false}
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

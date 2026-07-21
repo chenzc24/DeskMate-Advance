@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://poker-dealer.local/schemas/stage0-decisions-1.2.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "stage_status", "decisions"],
+  "properties": {
+    "$schema": {"type": "string"},
+    "schema_version": {"const": "1.2"},
+    "stage_status": {"const": "four_player_perception_state_contract_partial_evidence_open"},
+    "decisions": {
+      "type": "array",
+      "minItems": 21,
+      "maxItems": 21,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "title", "status", "frozen", "open", "owner", "required_evidence", "blocks"],
+        "properties": {
+          "id": {"pattern": "^S0-(0[1-9]|1[0-9]|2[01])$"},
+          "title": {"type": "string", "minLength": 1},
+          "status": {"enum": ["frozen", "partially_frozen", "evidence_required"]},
+          "frozen": {"type": "string", "minLength": 1},
+          "open": {"type": "string", "minLength": 1},
+          "owner": {"enum": ["software", "dl", "robotics", "joint"]},
+          "required_evidence": {"type": "string", "minLength": 1},
+          "blocks": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true}
+        }
+      }
+    }
+  }
+}

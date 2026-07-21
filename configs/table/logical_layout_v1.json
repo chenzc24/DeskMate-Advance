@@ -1,0 +1,56 @@
+{
+  "$schema": "../contracts/table_layout.schema.json",
+  "schema_version": "1.1",
+  "contract_status": "logical_card_and_action_ids_frozen_geometry_pending",
+  "tabletop_frame": {
+    "origin": "top_left_from_overhead_camera_view",
+    "seat_order_clockwise": ["seat_a", "seat_b", "seat_c", "seat_d"],
+    "physical_dimensions_status": "requires_robotics_measurement"
+  },
+  "mechanical_targets": [
+    {"target_id": "seat_a", "purpose": "hole_card_delivery", "geometry_status": "pending_measurement"},
+    {"target_id": "seat_b", "purpose": "hole_card_delivery", "geometry_status": "pending_measurement"},
+    {"target_id": "seat_c", "purpose": "hole_card_delivery", "geometry_status": "pending_measurement"},
+    {"target_id": "seat_d", "purpose": "hole_card_delivery", "geometry_status": "pending_measurement"},
+    {"target_id": "burn_tray", "purpose": "face_down_burn_card", "geometry_status": "pending_measurement"},
+    {"target_id": "board_flop_1", "purpose": "face_up_board_card", "geometry_status": "pending_measurement"},
+    {"target_id": "board_flop_2", "purpose": "face_up_board_card", "geometry_status": "pending_measurement"},
+    {"target_id": "board_flop_3", "purpose": "face_up_board_card", "geometry_status": "pending_measurement"},
+    {"target_id": "board_turn", "purpose": "face_up_board_card", "geometry_status": "pending_measurement"},
+    {"target_id": "board_river", "purpose": "face_up_board_card", "geometry_status": "pending_measurement"}
+  ],
+  "vision_slots": [
+    {"slot_id": "board_flop_1", "purpose": "board_card", "roi_status": "pending_target_camera"},
+    {"slot_id": "board_flop_2", "purpose": "board_card", "roi_status": "pending_target_camera"},
+    {"slot_id": "board_flop_3", "purpose": "board_card", "roi_status": "pending_target_camera"},
+    {"slot_id": "board_turn", "purpose": "board_card", "roi_status": "pending_target_camera"},
+    {"slot_id": "board_river", "purpose": "board_card", "roi_status": "pending_target_camera"},
+    {"slot_id": "seat_a_hole_1", "purpose": "showdown_card", "roi_status": "pending_target_camera"},
+    {"slot_id": "seat_a_hole_2", "purpose": "showdown_card", "roi_status": "pending_target_camera"},
+    {"slot_id": "seat_b_hole_1", "purpose": "showdown_card", "roi_status": "pending_target_camera"},
+    {"slot_id": "seat_b_hole_2", "purpose": "showdown_card", "roi_status": "pending_target_camera"},
+    {"slot_id": "seat_c_hole_1", "purpose": "showdown_card", "roi_status": "pending_target_camera"},
+    {"slot_id": "seat_c_hole_2", "purpose": "showdown_card", "roi_status": "pending_target_camera"},
+    {"slot_id": "seat_d_hole_1", "purpose": "showdown_card", "roi_status": "pending_target_camera"},
+    {"slot_id": "seat_d_hole_2", "purpose": "showdown_card", "roi_status": "pending_target_camera"}
+  ],
+  "action_regions": [
+    {"region_id": "seat_a_action", "seat_id": "seat_a", "purpose": "player_action_evidence", "roi_status": "pending_target_camera"},
+    {"region_id": "seat_b_action", "seat_id": "seat_b", "purpose": "player_action_evidence", "roi_status": "pending_target_camera"},
+    {"region_id": "seat_c_action", "seat_id": "seat_c", "purpose": "player_action_evidence", "roi_status": "pending_target_camera"},
+    {"region_id": "seat_d_action", "seat_id": "seat_d", "purpose": "player_action_evidence", "roi_status": "pending_target_camera"}
+  ],
+  "camera": {
+    "preferred_mount": "fixed_overhead_independent_usb_camera",
+    "selection_status": "pending_target_sample",
+    "must_see_all_vision_slots": true,
+    "must_see_all_action_regions": true,
+    "must_exclude_private_hole_cards_until_showdown": false
+  },
+  "safety": {
+    "motion_zone_status": "pending_robotics_geometry",
+    "player_hands_prohibited_during_motion": true,
+    "physical_guard_required": true,
+    "operator_required_for_motion_tests": true
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://poker-dealer.local/schemas/action-observation-1.0.json",
+  "title": "Temporal player-action evidence at the focused seat",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "observation_id", "hand_id", "expected_state_version",
+    "window_started_at_ns", "observed_at_ns", "focus_seat",
+    "evidence_state", "candidate_action", "confidence",
+    "stable_duration_ms", "stable_frames", "model_version",
+    "calibration_version", "quality_flags"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "observation_id": {"type": "string", "minLength": 1},
+    "hand_id": {"type": "string", "minLength": 1},
+    "expected_state_version": {"type": "integer", "minimum": 0},
+    "window_started_at_ns": {"type": "integer", "minimum": 0},
+    "observed_at_ns": {"type": "integer", "minimum": 0},
+    "focus_seat": {"$ref": "#/$defs/seat"},
+    "evidence_state": {"$ref": "#/$defs/evidence_state"},
+    "candidate_action": {
+      "oneOf": [{"$ref": "#/$defs/action"}, {"type": "null"}]
+    },
+    "confidence": {
+      "oneOf": [
+        {"type": "number", "minimum": 0, "maximum": 1},
+        {"type": "null"}
+      ]
+    },
+    "stable_duration_ms": {"type": "integer", "minimum": 0},
+    "stable_frames": {"type": "integer", "minimum": 1},
+    "model_version": {"type": "string", "minLength": 1},
+    "calibration_version": {"type": "string", "minLength": 1},
+    "quality_flags": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1},
+      "uniqueItems": true
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"evidence_state": {"const": "candidate"}}},
+      "then": {
+        "properties": {
+          "candidate_action": {"$ref": "#/$defs/action"},
+          "confidence": {"type": "number", "minimum": 0, "maximum": 1}
+        }
+      },
+      "else": {"properties": {"candidate_action": {"type": "null"}}}
+    }
+  ],
+  "$defs": {
+    "seat": {"enum": ["seat_a", "seat_b", "seat_c", "seat_d"]},
+    "evidence_state": {
+      "enum": [
+        "no_action", "action_start", "candidate", "ambiguous",
+        "occluded", "out_of_roi", "unknown"
+      ]
+    },
+    "action": {"enum": ["fold", "check", "call", "bet", "raise"]}
+  }
+}

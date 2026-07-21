@@ -1,1 +1,0 @@
-"""Timestamp-derived project logic."""

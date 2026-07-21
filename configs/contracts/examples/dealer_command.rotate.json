@@ -1,0 +1,9 @@
+{
+  "schema_version": "1.0",
+  "message_type": "command",
+  "command_id": "cmd-hand-0001-0004",
+  "issued_at_ns": 1234567000,
+  "command": "rotate_to",
+  "target_slot": "board_flop_1",
+  "timeout_ms": 5000
+}

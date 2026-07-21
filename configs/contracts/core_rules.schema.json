@@ -1,0 +1,291 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://poker-dealer.local/schemas/core-rules-1.2.json",
+  "title": "Poker Dealer four-player Core rules",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "contract_status", "variant", "rules_source", "table",
+    "session_defaults", "position_order", "blinds_defaults", "betting",
+    "behavior_perception", "table_scene", "deal", "showdown", "ledger",
+    "acceptance"
+  ],
+  "properties": {
+    "$schema": {"type": "string"},
+    "schema_version": {"const": "1.2"},
+    "contract_status": {"const": "four_player_perception_state_contract_frozen_betting_structure_pending"},
+    "variant": {"const": "four_player_texas_holdem"},
+    "rules_source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "url", "project_overrides_document"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "url": {"type": "string", "format": "uri"},
+        "project_overrides_document": {"const": "docs/contracts/GAME_RULES.md"}
+      }
+    },
+    "table": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["players", "seats_clockwise", "deck_cards", "jokers", "rake_units"],
+      "properties": {
+        "players": {"const": 4},
+        "seats_clockwise": {"const": ["seat_a", "seat_b", "seat_c", "seat_d"]},
+        "deck_cards": {"const": 52},
+        "jokers": {"const": false},
+        "rake_units": {"const": 0}
+      }
+    },
+    "session_defaults": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "starting_stack_units", "minimum_stack_to_start_hand_units",
+        "rebuy_or_end_session_below_minimum", "button_starts_at",
+        "button_advances_after", "button_stays_after_void_or_redeal"
+      ],
+      "properties": {
+        "starting_stack_units": {"type": "integer", "minimum": 2},
+        "minimum_stack_to_start_hand_units": {"type": "integer", "minimum": 1},
+        "rebuy_or_end_session_below_minimum": {"const": true},
+        "button_starts_at": {"$ref": "#/$defs/seat"},
+        "button_advances_after": {"const": "settled_hand"},
+        "button_stays_after_void_or_redeal": {"const": true}
+      }
+    },
+    "position_order": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "small_blind", "big_blind", "first_hole_card",
+        "button_receives_last_hole_card_each_round", "preflop_first_actor",
+        "postflop_first_actor", "skip_folded_or_all_in_for_action"
+      ],
+      "properties": {
+        "small_blind": {"const": "first_active_seat_left_of_button"},
+        "big_blind": {"const": "next_active_seat_left_of_small_blind"},
+        "first_hole_card": {"const": "first_active_seat_left_of_button"},
+        "button_receives_last_hole_card_each_round": {"const": true},
+        "preflop_first_actor": {"const": "first_actionable_seat_left_of_big_blind"},
+        "postflop_first_actor": {"const": "first_actionable_seat_left_of_button"},
+        "skip_folded_or_all_in_for_action": {"const": true}
+      }
+    },
+    "blinds_defaults": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["small_blind_units", "big_blind_units"],
+      "properties": {
+        "small_blind_units": {"type": "integer", "minimum": 1},
+        "big_blind_units": {"type": "integer", "minimum": 1}
+      }
+    },
+    "betting": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "product_decision_status", "candidate_structure",
+        "actions_semantics_frozen", "ui_implementation", "amount_field_policy",
+        "numeric_values_status", "small_bet_units_default",
+        "small_bet_streets", "big_bet_units_default", "big_bet_streets",
+        "max_full_bets_per_street_default",
+        "preflop_big_blind_counts_as_first_bet_for_fixed_limit", "allow_all_in",
+        "short_all_in_does_not_reopen_action", "main_and_side_pots_required",
+        "unmatched_excess_is_returned", "timeout_policy",
+        "action_timeout_seconds_default"
+      ],
+      "properties": {
+        "product_decision_status": {"const": "pending_confirmation"},
+        "candidate_structure": {"const": "fixed_limit"},
+        "actions_semantics_frozen": {"const": ["fold", "check", "call", "bet", "raise"]},
+        "ui_implementation": {"const": "replaceable"},
+        "amount_field_policy": {"const": "null_for_fixed_limit_required_for_no_limit_bet_or_raise"},
+        "numeric_values_status": {"const": "configurable_defaults"},
+        "small_bet_units_default": {"type": "integer", "minimum": 1},
+        "small_bet_streets": {"const": ["preflop", "flop"]},
+        "big_bet_units_default": {"type": "integer", "minimum": 1},
+        "big_bet_streets": {"const": ["turn", "river"]},
+        "max_full_bets_per_street_default": {"type": "integer", "minimum": 2},
+        "preflop_big_blind_counts_as_first_bet_for_fixed_limit": {"const": true},
+        "allow_all_in": {"const": true},
+        "short_all_in_does_not_reopen_action": {"const": true},
+        "main_and_side_pots_required": {"const": true},
+        "unmatched_excess_is_returned": {"const": true},
+        "timeout_policy": {"const": "pause_for_operator"},
+        "action_timeout_seconds_default": {"type": "integer", "minimum": 1}
+      }
+    },
+    "behavior_perception": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contract_status", "acting_seat_authority", "seat_binding",
+        "model_output_contract", "evidence_states", "semantic_candidates",
+        "non_current_seat_policy", "attention_switch_trigger",
+        "temporal_confirmation_required", "calibrated_confidence_required",
+        "uncertain_policy", "action_feedback_required",
+        "feedback_implementation", "gesture_grammar_status",
+        "confirmation_thresholds_status",
+        "explicit_player_confirmation_status", "face_identity_allowed",
+        "face_identity_scope", "face_identity_authority",
+        "face_embedding_persistence", "face_identity_unknown_policy",
+        "face_identity_consent_required"
+      ],
+      "properties": {
+        "contract_status": {"const": "attention_and_evidence_frozen_thresholds_pending"},
+        "acting_seat_authority": {"const": "deterministic_game_state_machine"},
+        "seat_binding": {"const": "state_machine_seat_with_session_face_verification"},
+        "model_output_contract": {"const": "player_action_observation_evidence_only"},
+        "evidence_states": {
+          "const": [
+            "no_action", "action_start", "candidate", "ambiguous",
+            "occluded", "out_of_roi", "unknown"
+          ]
+        },
+        "semantic_candidates": {"const": ["fold", "check", "call", "bet", "raise"]},
+        "non_current_seat_policy": {"const": "negative_evidence_never_promoted_to_action"},
+        "attention_switch_trigger": {"const": "validated_action_committed_and_state_version_advanced"},
+        "temporal_confirmation_required": {"const": true},
+        "calibrated_confidence_required": {"const": true},
+        "uncertain_policy": {"const": "hold_current_actor_and_request_retry_or_operator"},
+        "action_feedback_required": {"const": true},
+        "feedback_implementation": {"const": "replaceable"},
+        "gesture_grammar_status": {"const": "pending_human_and_target_camera_evidence"},
+        "confirmation_thresholds_status": {"const": "pending_target_camera_evidence"},
+        "explicit_player_confirmation_status": {"const": "pending_failure_evidence"},
+        "face_identity_allowed": {"const": true},
+        "face_identity_scope": {"const": "session_only_explicit_enrollment"},
+        "face_identity_authority": {"const": "verification_only_never_selects_acting_seat"},
+        "face_embedding_persistence": {"const": "memory_only_never_serialized"},
+        "face_identity_unknown_policy": {"const": "hold_focus_and_request_retry_or_operator"},
+        "face_identity_consent_required": {"const": true}
+      }
+    },
+    "table_scene": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state_authority", "model_output_contract", "slot_lifecycle",
+        "phase_driven_roi_activation", "robot_ack_role", "vision_role",
+        "visible_identity_advance_policy", "duplicate_or_conflict_policy",
+        "unknown_or_occluded_policy", "reset_policy", "roi_geometry_status"
+      ],
+      "properties": {
+        "state_authority": {"const": "deterministic_game_state_machine"},
+        "model_output_contract": {"const": "card_observation_evidence_only"},
+        "slot_lifecycle": {
+          "const": [
+            "expected_empty", "delivery_pending", "present_face_down",
+            "reveal_pending", "face_up_unconfirmed", "confirmed", "cleared",
+            "unknown", "conflict"
+          ]
+        },
+        "phase_driven_roi_activation": {"const": true},
+        "robot_ack_role": {"const": "proves_dispense_not_card_identity"},
+        "vision_role": {"const": "proves_occupancy_orientation_and_visible_card_identity"},
+        "visible_identity_advance_policy": {"const": "matching_ack_and_stable_visual_evidence_when_required"},
+        "duplicate_or_conflict_policy": {"const": "pause_for_operator"},
+        "unknown_or_occluded_policy": {"const": "hold_expected_state_and_reobserve"},
+        "reset_policy": {"const": "operator_clears_all_slots_before_next_hand_ready"},
+        "roi_geometry_status": {"const": "pending_target_camera_evidence"}
+      }
+    },
+    "deal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "manual_shuffle_and_load_before_each_hand", "hole_cards_per_player",
+        "hole_cards_face_down", "hole_deal_rounds", "burn_before_each_board_street",
+        "flop_cards", "turn_cards", "river_cards", "board_reveal_mode",
+        "manual_card_return_after_hand", "deal_progress_requires_success_ack",
+        "misdeal_before_player_action", "physical_state_uncertain"
+      ],
+      "properties": {
+        "manual_shuffle_and_load_before_each_hand": {"const": true},
+        "hole_cards_per_player": {"const": 2},
+        "hole_cards_face_down": {"const": true},
+        "hole_deal_rounds": {"const": 2},
+        "burn_before_each_board_street": {"const": true},
+        "flop_cards": {"const": 3},
+        "turn_cards": {"const": 1},
+        "river_cards": {"const": 1},
+        "board_reveal_mode": {"const": "pending_s0_13_decision"},
+        "manual_card_return_after_hand": {"const": true},
+        "deal_progress_requires_success_ack": {"const": true},
+        "misdeal_before_player_action": {"const": "void_and_redeal_same_button"},
+        "physical_state_uncertain": {"const": "pause_for_operator"}
+      }
+    },
+    "showdown": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contract_status", "all_live_players_expose_both_hole_cards",
+        "exposure_mode", "required_confirmed_board_cards",
+        "required_confirmed_hole_cards_per_live_player", "best_five_from_seven",
+        "pot_eligibility_filters_folded_players",
+        "evaluate_each_main_or_side_pot_independently", "tie_policy",
+        "odd_unit_policy", "duplicate_card_policy", "unknown_card_policy"
+      ],
+      "properties": {
+        "contract_status": {"const": "frozen"},
+        "all_live_players_expose_both_hole_cards": {"const": true},
+        "exposure_mode": {"const": "each_live_player_to_two_fixed_rois"},
+        "required_confirmed_board_cards": {"const": 5},
+        "required_confirmed_hole_cards_per_live_player": {"const": 2},
+        "best_five_from_seven": {"const": true},
+        "pot_eligibility_filters_folded_players": {"const": true},
+        "evaluate_each_main_or_side_pot_independently": {"const": true},
+        "tie_policy": {"const": "split_each_pot_equally"},
+        "odd_unit_policy": {"const": "first_eligible_seat_left_of_button"},
+        "duplicate_card_policy": {"const": "pause_for_operator"},
+        "unknown_card_policy": {"const": "pause_and_reobserve"}
+      }
+    },
+    "ledger": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "physical_chip_handling", "physical_chip_recognition",
+        "physical_chips_authoritative", "authoritative_balance",
+        "balance_change_source", "action_application_atomic_with_state_version",
+        "append_only_hand_log_required",
+        "manual_adjustment_requires_reason_and_operator_id", "rebuy_policy",
+        "negative_balance_allowed", "conserve_total_units",
+        "settlement_is_idempotent"
+      ],
+      "properties": {
+        "physical_chip_handling": {"const": false},
+        "physical_chip_recognition": {"const": false},
+        "physical_chips_authoritative": {"const": false},
+        "authoritative_balance": {"const": "digital_ledger"},
+        "balance_change_source": {"const": "validated_actions_and_audited_operator_adjustments"},
+        "action_application_atomic_with_state_version": {"const": true},
+        "append_only_hand_log_required": {"const": true},
+        "manual_adjustment_requires_reason_and_operator_id": {"const": true},
+        "rebuy_policy": {"const": "explicit_audited_event_or_end_session"},
+        "negative_balance_allowed": {"const": false},
+        "conserve_total_units": {"const": true},
+        "settlement_is_idempotent": {"const": true}
+      }
+    },
+    "acceptance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policy_status", "consecutive_hands", "live_presentation_may_be_shorter",
+        "shorter_presentation_does_not_replace_evidence"
+      ],
+      "properties": {
+        "policy_status": {"const": "frozen_quality_gate_not_product_feature"},
+        "consecutive_hands": {"const": 20},
+        "live_presentation_may_be_shorter": {"const": true},
+        "shorter_presentation_does_not_replace_evidence": {"const": true}
+      }
+    }
+  },
+  "$defs": {
+    "seat": {"enum": ["seat_a", "seat_b", "seat_c", "seat_d"]}
+  }
+}

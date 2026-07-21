@@ -1,0 +1,59 @@
+{
+  "schema_version": "1.0",
+  "pilot_status": "development_feasibility_only",
+  "policy_version": "s0-21-session-face-v1",
+  "detector": {
+    "model_id": "face-identity-opencv-yunet",
+    "version": "face_detection_yunet_2023mar",
+    "asset_path": "models/assets/face_identity/face_detection_yunet_2023mar.onnx",
+    "sha256": "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4",
+    "framework": "opencv-dnn",
+    "framework_version": "5.0.0",
+    "input_size": [320, 320],
+    "score_threshold": 0.90,
+    "nms_threshold": 0.30,
+    "top_k": 5000,
+    "minimum_face_size_px": 80
+  },
+  "embedder": {
+    "model_id": "face-identity-opencv-sface",
+    "version": "face_recognition_sface_2021dec",
+    "asset_path": "models/assets/face_identity/face_recognition_sface_2021dec.onnx",
+    "sha256": "0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e83484087c34e79",
+    "framework": "opencv-dnn",
+    "framework_version": "5.0.0"
+  },
+  "enrollment": {
+    "minimum_samples": 5,
+    "maximum_players": 4,
+    "require_exactly_one_face": true,
+    "explicit_consent_required": true
+  },
+  "matching": {
+    "metric": "cosine_similarity",
+    "official_lfw_reference_threshold": 0.363,
+    "pilot_minimum_similarity": 0.45,
+    "pilot_minimum_margin": 0.08,
+    "minimum_stable_frames": 5,
+    "minimum_stable_duration_ms": 300
+  },
+  "privacy": {
+    "scope": "session_only",
+    "save_frames": false,
+    "persist_embeddings": false,
+    "runtime_downloads": false,
+    "clear_gallery_on_exit": true
+  },
+  "authority": {
+    "acting_seat_source": "deterministic_game_state_machine",
+    "identity_role": "verification_only",
+    "unknown_or_mismatch": "hold_focus_and_request_retry_or_operator"
+  },
+  "camera": {
+    "device_index": 0,
+    "backend": "dshow",
+    "width": 1280,
+    "height": 720,
+    "fps": 30.0
+  }
+}

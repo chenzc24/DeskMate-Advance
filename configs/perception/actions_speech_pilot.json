@@ -1,0 +1,47 @@
+{
+  "schema_version": "1.0",
+  "pilot_status": "development_feasibility_only",
+  "model": {
+    "model_id": "player-action-vosk-small-en-us",
+    "version": "vosk-model-small-en-us-0.15",
+    "asset_path": "models/assets/vosk-model-small-en-us-0.15",
+    "tree_sha256": "57929637421baa20ff74ffb194f48e7c4a5bd0c09eac1c79a3c305ddf32db038",
+    "framework": "vosk",
+    "framework_version": "0.3.45"
+  },
+  "audio": {
+    "sample_rate_hz": 16000,
+    "channels": 1,
+    "dtype": "int16",
+    "blocksize_frames": 4000,
+    "queue_max_blocks": 32
+  },
+  "command_to_action": {
+    "fold": "fold",
+    "check": "check",
+    "call": "call",
+    "bet": "bet",
+    "raise": "raise"
+  },
+  "control_commands": ["cancel", "confirm"],
+  "recognition_grammar": {
+    "fold": "fold",
+    "check": "check",
+    "call": "call",
+    "bet": "bet",
+    "raise": "raise",
+    "cancel": "cancel",
+    "confirm": "confirm"
+  },
+  "confirmation": {
+    "minimum_confidence": 0.90,
+    "candidate_cooldown_ms": 1000
+  },
+  "runtime": {
+    "model_level": "development",
+    "calibration_version": "laptop-mic-pilot-unfrozen-v1",
+    "seat_attribution": "state_owned_listening_window_only",
+    "save_audio": false,
+    "max_seconds_default": 60
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://poker-dealer.local/schemas/face-identity-observation-1.0.json",
+  "title": "Session-only face identity verification evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "observation_id", "session_id",
+    "expected_state_version", "observed_at_ns", "focus_seat",
+    "identity_state", "player_id", "registered_seat", "similarity",
+    "second_best_similarity", "stable_frames", "stable_duration_ms",
+    "model_version", "policy_version", "quality_flags"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "observation_id": {"type": "string", "minLength": 1},
+    "session_id": {"type": "string", "minLength": 1},
+    "expected_state_version": {"type": "integer", "minimum": 0},
+    "observed_at_ns": {"type": "integer", "minimum": 0},
+    "focus_seat": {"enum": ["seat_a", "seat_b", "seat_c", "seat_d"]},
+    "identity_state": {
+      "enum": [
+        "no_face", "multiple_faces", "enrollment_required", "identity_start",
+        "matched", "unknown", "ambiguous", "low_quality", "seat_mismatch"
+      ]
+    },
+    "player_id": {"oneOf": [{"type": "string", "minLength": 1}, {"type": "null"}]},
+    "registered_seat": {
+      "oneOf": [
+        {"enum": ["seat_a", "seat_b", "seat_c", "seat_d"]},
+        {"type": "null"}
+      ]
+    },
+    "similarity": {"oneOf": [{"type": "number", "minimum": -1, "maximum": 1}, {"type": "null"}]},
+    "second_best_similarity": {"oneOf": [{"type": "number", "minimum": -1, "maximum": 1}, {"type": "null"}]},
+    "stable_frames": {"type": "integer", "minimum": 1},
+    "stable_duration_ms": {"type": "integer", "minimum": 0},
+    "model_version": {"type": "string", "minLength": 1},
+    "policy_version": {"const": "s0-21-session-face-v1"},
+    "quality_flags": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1},
+      "uniqueItems": true
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"identity_state": {"enum": ["matched", "seat_mismatch"]}}},
+      "then": {
+        "properties": {
+          "player_id": {"type": "string", "minLength": 1},
+          "registered_seat": {"enum": ["seat_a", "seat_b", "seat_c", "seat_d"]},
+          "similarity": {"type": "number", "minimum": -1, "maximum": 1}
+        }
+      },
+      "else": {
+        "properties": {
+          "player_id": {"type": "null"},
+          "registered_seat": {"type": "null"}
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "schema_version": "1.0",
+  "message_type": "ack",
+  "command_id": "cmd-hand-0001-0004",
+  "command": "dispense_one",
+  "target_slot": null,
+  "observed_at_ns": 1234567999,
+  "status": "failed",
+  "device_state": "fault",
+  "device_state_version": 18,
+  "error_code": "feed_jam",
+  "reason": "exit sensor remained blocked after bounded reverse",
+  "sensor_evidence": {
+    "homed": true,
+    "at_target": true,
+    "deck_present": true,
+    "exit_pulses": 0,
+    "interlock_closed": true,
+    "emergency_stop": false
+  }
+}

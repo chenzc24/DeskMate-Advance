@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0",
+  "observation_id": "action-obs-hand-0001-seat-d-window-7",
+  "hand_id": "hand-0001",
+  "expected_state_version": 12,
+  "window_started_at_ns": 1234500000,
+  "observed_at_ns": 1234900000,
+  "focus_seat": "seat_d",
+  "evidence_state": "candidate",
+  "candidate_action": "call",
+  "confidence": 0.97,
+  "stable_duration_ms": 400,
+  "stable_frames": 12,
+  "model_version": "player-action-development-v1",
+  "calibration_version": "seat-action-rois-development-v1",
+  "quality_flags": []
+}

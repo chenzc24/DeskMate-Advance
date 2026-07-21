@@ -1,0 +1,11 @@
+{
+  "schema_version": "1.0",
+  "action_id": "action-hand-0001-0002",
+  "hand_id": "hand-0001",
+  "expected_state_version": 12,
+  "received_at_ns": 1234568000,
+  "seat": "seat_a",
+  "action": "raise",
+  "amount_units": null,
+  "source": "software_ui"
+}

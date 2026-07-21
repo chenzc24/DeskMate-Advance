@@ -1,0 +1,241 @@
+{
+  "$schema": "../contracts/walkthroughs.schema.json",
+  "schema_version": "1.0",
+  "rules_version": "1.2",
+  "scenarios": [
+    {
+      "id": "WT-01-three-folds-preflop",
+      "tags": ["fold", "preflop", "ledger", "four_player"],
+      "button": "seat_a",
+      "starting_stacks": {"seat_a": 80, "seat_b": 80, "seat_c": 80, "seat_d": 80},
+      "steps": [
+        {"kind": "post_blind", "value": "small_blind_1", "seat": "seat_b"},
+        {"kind": "post_blind", "value": "big_blind_2", "seat": "seat_c"},
+        {"kind": "deal_sequence", "value": "seat_b,seat_c,seat_d,seat_a,seat_b,seat_c,seat_d,seat_a"},
+        {"kind": "player_action", "value": "fold", "seat": "seat_d"},
+        {"kind": "player_action", "value": "fold", "seat": "seat_a"},
+        {"kind": "player_action", "value": "fold", "seat": "seat_b"}
+      ],
+      "expected": {"terminal_phase": "settled", "winner": "seat_c", "pause_reason": null, "pot_units": 0, "next_button": "seat_b"}
+    },
+    {
+      "id": "WT-02-four-way-check-through",
+      "tags": ["check_through", "showdown", "full_hand", "four_player"],
+      "button": "seat_a",
+      "starting_stacks": {"seat_a": 80, "seat_b": 80, "seat_c": 80, "seat_d": 80},
+      "steps": [
+        {"kind": "player_action", "value": "seat_d_call_2", "seat": "seat_d"},
+        {"kind": "player_action", "value": "seat_a_call_2", "seat": "seat_a"},
+        {"kind": "player_action", "value": "seat_b_call_to_2", "seat": "seat_b"},
+        {"kind": "player_action", "value": "seat_c_check", "seat": "seat_c"},
+        {"kind": "board_sequence", "value": "burn,flop1,flop2,flop3,burn,turn,burn,river"},
+        {"kind": "player_action", "value": "clockwise_check_all_postflop"},
+        {"kind": "card_observation", "value": "thirteen_unique_slots_confirmed"}
+      ],
+      "expected": {"terminal_phase": "settled", "winner": "multi_player_evaluator_result", "pause_reason": null, "pot_units": 0, "next_button": "seat_b"}
+    },
+    {
+      "id": "WT-03-four-way-raise-cap-candidate",
+      "tags": ["raise_cap", "preflop", "illegal_action", "fixed_limit_candidate"],
+      "button": "seat_a",
+      "starting_stacks": {"seat_a": 80, "seat_b": 80, "seat_c": 80, "seat_d": 80},
+      "steps": [
+        {"kind": "player_action", "value": "raise_to_4", "seat": "seat_d"},
+        {"kind": "player_action", "value": "raise_to_6", "seat": "seat_a"},
+        {"kind": "player_action", "value": "raise_to_8", "seat": "seat_b"},
+        {"kind": "player_action", "value": "raise_rejected_cap_then_call", "seat": "seat_c"},
+        {"kind": "player_action", "value": "call_to_8", "seat": "seat_d"},
+        {"kind": "player_action", "value": "call_to_8", "seat": "seat_a"}
+      ],
+      "expected": {"terminal_phase": "dealing_board", "winner": null, "pause_reason": null, "pot_units": 32, "next_button": null}
+    },
+    {
+      "id": "WT-04-flop-bet-call-folds",
+      "tags": ["bet", "call", "fold", "flop", "action_skip"],
+      "button": "seat_a",
+      "starting_stacks": {"seat_a": 80, "seat_b": 80, "seat_c": 80, "seat_d": 80},
+      "steps": [
+        {"kind": "player_action", "value": "four_way_preflop_call_check"},
+        {"kind": "board_sequence", "value": "burn,flop1,flop2,flop3"},
+        {"kind": "player_action", "value": "bet_2", "seat": "seat_b"},
+        {"kind": "player_action", "value": "fold", "seat": "seat_c"},
+        {"kind": "player_action", "value": "call_2", "seat": "seat_d"},
+        {"kind": "player_action", "value": "fold", "seat": "seat_a"}
+      ],
+      "expected": {"terminal_phase": "dealing_board", "winner": null, "pause_reason": null, "pot_units": 12, "next_button": null}
+    },
+    {
+      "id": "WT-05-multiway-side-pots",
+      "tags": ["all_in", "side_pot", "main_pot", "ledger", "four_player"],
+      "button": "seat_a",
+      "starting_stacks": {"seat_a": 10, "seat_b": 20, "seat_c": 40, "seat_d": 40},
+      "steps": [
+        {"kind": "ledger", "value": "final_contributions_a10_b20_c40_d40"},
+        {"kind": "ledger", "value": "main_40_eligible_a_b_c_d"},
+        {"kind": "ledger", "value": "side_1_30_eligible_b_c_d"},
+        {"kind": "ledger", "value": "side_2_40_eligible_c_d"},
+        {"kind": "state_transition", "value": "run_board_without_further_actions"}
+      ],
+      "expected": {"terminal_phase": "dealing_board", "winner": null, "pause_reason": null, "pot_units": 110, "next_button": null}
+    },
+    {
+      "id": "WT-06-tied-main-separate-side",
+      "tags": ["tie", "showdown", "split_pot", "side_pot"],
+      "button": "seat_b",
+      "starting_stacks": {"seat_a": 20, "seat_b": 40, "seat_c": 40, "seat_d": 40},
+      "steps": [
+        {"kind": "card_observation", "value": "all_live_required_slots_unique_and_confirmed"},
+        {"kind": "evaluation", "value": "seat_a_seat_b_tie_main_pot"},
+        {"kind": "evaluation", "value": "seat_c_wins_side_pot"},
+        {"kind": "ledger", "value": "split_each_pot_by_eligibility"}
+      ],
+      "expected": {"terminal_phase": "settled", "winner": "multiple_pot_winners", "pause_reason": null, "pot_units": 0, "next_button": "seat_c"}
+    },
+    {
+      "id": "WT-07-vision-unknown",
+      "tags": ["vision_unknown", "recovery", "showdown"],
+      "button": "seat_a",
+      "starting_stacks": {"seat_a": 80, "seat_b": 80, "seat_c": 80, "seat_d": 80},
+      "steps": [
+        {"kind": "card_observation", "value": "seat_c_hole_2_unknown"},
+        {"kind": "state_transition", "value": "pause_without_any_pot_evaluation"},
+        {"kind": "operator_recovery", "value": "reobserve_same_slot"}
+      ],
+      "expected": {"terminal_phase": "paused_recovery", "winner": null, "pause_reason": "card_unknown", "pot_units": null, "next_button": null}
+    },
+    {
+      "id": "WT-08-duplicate-card",
+      "tags": ["duplicate_card", "recovery", "showdown"],
+      "button": "seat_b",
+      "starting_stacks": {"seat_a": 80, "seat_b": 80, "seat_c": 80, "seat_d": 80},
+      "steps": [
+        {"kind": "card_observation", "value": "ace_spades_in_two_of_thirteen_slots"},
+        {"kind": "state_transition", "value": "pause_without_any_pot_evaluation"}
+      ],
+      "expected": {"terminal_phase": "paused_recovery", "winner": null, "pause_reason": "duplicate_card_identity", "pot_units": null, "next_button": null}
+    },
+    {
+      "id": "WT-09-feeder-jam",
+      "tags": ["dealer_jam", "recovery", "ack"],
+      "button": "seat_a",
+      "starting_stacks": {"seat_a": 80, "seat_b": 80, "seat_c": 80, "seat_d": 80},
+      "steps": [
+        {"kind": "dealer_command", "value": "dispense_one_to_seat_d"},
+        {"kind": "dealer_ack", "value": "failed_feed_jam"},
+        {"kind": "state_transition", "value": "do_not_increment_dealt_card_count"}
+      ],
+      "expected": {"terminal_phase": "paused_recovery", "winner": null, "pause_reason": "feed_jam", "pot_units": 3, "next_button": null}
+    },
+    {
+      "id": "WT-10-player-timeout",
+      "tags": ["timeout", "recovery", "action"],
+      "button": "seat_b",
+      "starting_stacks": {"seat_a": 80, "seat_b": 80, "seat_c": 80, "seat_d": 80},
+      "steps": [
+        {"kind": "timer", "value": "action_timeout_default_30_seconds"},
+        {"kind": "state_transition", "value": "pause_no_auto_fold"}
+      ],
+      "expected": {"terminal_phase": "paused_recovery", "winner": null, "pause_reason": "player_action_timeout", "pot_units": 3, "next_button": null}
+    },
+    {
+      "id": "WT-11-duplicate-ack",
+      "tags": ["duplicate_ack", "idempotency", "protocol"],
+      "button": "seat_a",
+      "starting_stacks": {"seat_a": 80, "seat_b": 80, "seat_c": 80, "seat_d": 80},
+      "steps": [
+        {"kind": "dealer_ack", "value": "succeeded_cmd_42"},
+        {"kind": "dealer_ack", "value": "repeat_succeeded_cmd_42"},
+        {"kind": "state_transition", "value": "increment_once_only"}
+      ],
+      "expected": {"terminal_phase": "dealing_hole", "winner": null, "pause_reason": null, "pot_units": 3, "next_button": null}
+    },
+    {
+      "id": "WT-12-misdeal-redeal",
+      "tags": ["misdeal", "redeal", "button"],
+      "button": "seat_d",
+      "starting_stacks": {"seat_a": 80, "seat_b": 80, "seat_c": 80, "seat_d": 80},
+      "steps": [
+        {"kind": "dealer_ack", "value": "double_feed_before_player_action"},
+        {"kind": "state_transition", "value": "void_hand"},
+        {"kind": "operator_recovery", "value": "collect_complete_deck_shuffle_reload"},
+        {"kind": "state_transition", "value": "redeal_same_button_seat_d"}
+      ],
+      "expected": {"terminal_phase": "setup", "winner": null, "pause_reason": "misdeal_redeal_required", "pot_units": 0, "next_button": "seat_d"}
+    },
+    {
+      "id": "WT-13-button-role-rotation",
+      "tags": ["position_rotation", "button", "four_player"],
+      "button": "seat_a",
+      "starting_stacks": {"seat_a": 80, "seat_b": 80, "seat_c": 80, "seat_d": 80},
+      "steps": [
+        {"kind": "state_transition", "value": "settle_hand_button_a"},
+        {"kind": "state_transition", "value": "next_roles_button_b_sb_c_bb_d_utg_a"},
+        {"kind": "deal_sequence", "value": "seat_c,seat_d,seat_a,seat_b,seat_c,seat_d,seat_a,seat_b"}
+      ],
+      "expected": {"terminal_phase": "setup", "winner": null, "pause_reason": null, "pot_units": 0, "next_button": "seat_b"}
+    },
+    {
+      "id": "WT-14-non-current-seat-evidence",
+      "tags": ["attention_gating", "non_current_seat", "action_evidence"],
+      "button": "seat_a",
+      "starting_stacks": {"seat_a": 80, "seat_b": 79, "seat_c": 78, "seat_d": 80},
+      "steps": [
+        {"kind": "state_transition", "value": "preflop_acting_seat_d_state_12"},
+        {"kind": "action_observation", "value": "seat_b_raise_candidate_must_not_promote", "seat": "seat_b"},
+        {"kind": "state_transition", "value": "hold_state_12_focus_seat_d_ledger_unchanged"}
+      ],
+      "expected": {"terminal_phase": "awaiting_action", "winner": null, "pause_reason": null, "pot_units": 3, "next_button": null}
+    },
+    {
+      "id": "WT-15-ambiguous-current-action",
+      "tags": ["action_rejection", "ambiguous", "attention_gating"],
+      "button": "seat_a",
+      "starting_stacks": {"seat_a": 80, "seat_b": 79, "seat_c": 78, "seat_d": 80},
+      "steps": [
+        {"kind": "state_transition", "value": "preflop_acting_seat_d_state_12"},
+        {"kind": "action_observation", "value": "seat_d_ambiguous_call_or_raise", "seat": "seat_d"},
+        {"kind": "state_transition", "value": "hold_state_12_focus_seat_d_request_retry"}
+      ],
+      "expected": {"terminal_phase": "awaiting_action", "winner": null, "pause_reason": null, "pot_units": 3, "next_button": null}
+    },
+    {
+      "id": "WT-16-action-commit-switches-focus",
+      "tags": ["action_confirmation", "attention_switch", "ledger_atomicity"],
+      "button": "seat_a",
+      "starting_stacks": {"seat_a": 80, "seat_b": 79, "seat_c": 78, "seat_d": 80},
+      "steps": [
+        {"kind": "state_transition", "value": "preflop_acting_seat_d_state_12"},
+        {"kind": "action_observation", "value": "seat_d_call_candidate_temporally_confirmed_state_12", "seat": "seat_d"},
+        {"kind": "player_action", "value": "validate_and_commit_call_2", "seat": "seat_d"},
+        {"kind": "ledger", "value": "atomically_stack_d_78_pot_5_state_13"},
+        {"kind": "state_transition", "value": "focus_switches_to_seat_a_only_after_commit"}
+      ],
+      "expected": {"terminal_phase": "awaiting_action", "winner": null, "pause_reason": null, "pot_units": 5, "next_button": null}
+    },
+    {
+      "id": "WT-17-ack-without-visible-card-confirmation",
+      "tags": ["scene_lifecycle", "ack_visual_fusion", "face_up_unconfirmed"],
+      "button": "seat_a",
+      "starting_stacks": {"seat_a": 78, "seat_b": 78, "seat_c": 78, "seat_d": 78},
+      "steps": [
+        {"kind": "state_transition", "value": "board_flop_1_delivery_pending"},
+        {"kind": "dealer_ack", "value": "dispense_succeeded_proves_physical_delivery_only"},
+        {"kind": "card_observation", "value": "board_flop_1_face_up_unconfirmed"},
+        {"kind": "state_transition", "value": "hold_board_flop_1_expected_state_do_not_advance"}
+      ],
+      "expected": {"terminal_phase": "dealing_board", "winner": null, "pause_reason": null, "pot_units": 8, "next_button": null}
+    },
+    {
+      "id": "WT-18-audited-rebuy",
+      "tags": ["ledger_audit", "rebuy", "operator_adjustment"],
+      "button": "seat_a",
+      "starting_stacks": {"seat_a": 0, "seat_b": 80, "seat_c": 80, "seat_d": 80},
+      "steps": [
+        {"kind": "operator_adjustment", "value": "rebuy_seat_a_plus_80_operator_id_and_reason_required", "seat": "seat_a"},
+        {"kind": "ledger", "value": "append_event_then_atomically_set_stack_a_80_state_version_plus_1"},
+        {"kind": "state_transition", "value": "setup_ready_without_editing_history"}
+      ],
+      "expected": {"terminal_phase": "setup", "winner": null, "pause_reason": null, "pot_units": 0, "next_button": null}
+    }
+  ]
+}

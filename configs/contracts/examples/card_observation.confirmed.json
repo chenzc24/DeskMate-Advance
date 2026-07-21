@@ -1,0 +1,13 @@
+{
+  "schema_version": "1.0",
+  "observation_id": "obs-hand-0001-board-flop-1-v3",
+  "slot_id": "board_flop_1",
+  "observed_at_ns": 1234567890,
+  "status": "confirmed",
+  "card": {"rank": "A", "suit": "spades"},
+  "confidence": 0.998,
+  "model_version": "card-rank-suit-development-v1",
+  "calibration_version": "table-calibration-development-v1",
+  "stable_frames": 3,
+  "quality_flags": []
+}

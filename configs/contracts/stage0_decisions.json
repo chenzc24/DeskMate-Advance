@@ -1,0 +1,217 @@
+{
+  "$schema": "stage0_decisions.schema.json",
+  "schema_version": "1.2",
+  "stage_status": "four_player_perception_state_contract_partial_evidence_open",
+  "decisions": [
+    {
+      "id": "S0-01",
+      "title": "single-card feeder mechanism",
+      "status": "evidence_required",
+      "frozen": "Core uses one stationary central dealer serving four fixed player seats and board/burn targets.",
+      "open": "Feeder, separation and selectable face orientation implementation.",
+      "owner": "robotics",
+      "required_evidence": "Real-card prototype across multiple decks with no unobserved double-feed.",
+      "blocks": ["stage3_mechanism_freeze"]
+    },
+    {
+      "id": "S0-02",
+      "title": "camera position",
+      "status": "evidence_required",
+      "frozen": "One fixed camera must observe all thirteen card slots and four fixed player action regions; independent overhead USB is preferred.",
+      "open": "Exact device, height, lens, angle and lighting for readable cards and temporally usable player behaviour at all four seats.",
+      "owner": "dl",
+      "required_evidence": "Target-camera samples from all four seat orientations with glyph pixels, glare and occlusion report.",
+      "blocks": ["stage2_dataset_freeze"]
+    },
+    {
+      "id": "S0-03",
+      "title": "mechanical target geometry",
+      "status": "partially_frozen",
+      "frozen": "Ten target IDs in logical_layout_v1.json: four seats, burn tray and five board positions.",
+      "open": "Angles, distances, drop polygons and tolerances.",
+      "owner": "robotics",
+      "required_evidence": "Dimensioned tabletop drawing and repeated delivery test per target.",
+      "blocks": ["stage3_target_calibration"]
+    },
+    {
+      "id": "S0-04",
+      "title": "board placement",
+      "status": "partially_frozen",
+      "frozen": "Five ordered board slots with separate mechanical and vision IDs.",
+      "open": "Card spacing, physical mat size, delivery trajectory and relation to four showdown areas.",
+      "owner": "joint",
+      "required_evidence": "Four-seat paper mock showing no overlap and complete camera visibility.",
+      "blocks": ["stage2_roi_freeze", "stage3_target_calibration"]
+    },
+    {
+      "id": "S0-05",
+      "title": "showdown exposure",
+      "status": "frozen",
+      "frozen": "Every live player exposes both hole cards into that seat's two fixed ROIs; folded players are not evaluated.",
+      "open": "Reveal-order etiquette is not a state dependency; physical ROI geometry remains under S0-02/04.",
+      "owner": "software",
+      "required_evidence": "Stage 1 multi-player showdown replay and Stage 2 four-orientation usability test.",
+      "blocks": []
+    },
+    {
+      "id": "S0-06",
+      "title": "player action interface",
+      "status": "partially_frozen",
+      "frozen": "Action semantics are fold/check/call/bet/raise with hand/action/state identity and legality validation.",
+      "open": "Laptop UI, physical controls, gesture or voice adapters may be substituted; No-Limit would require amount_units for bet/raise.",
+      "owner": "software",
+      "required_evidence": "Stage 1 adapter-neutral action contract and at least one software UI implementation.",
+      "blocks": ["stage1_action_adapter_freeze"]
+    },
+    {
+      "id": "S0-07",
+      "title": "betting structure and numeric defaults",
+      "status": "partially_frozen",
+      "frozen": "Fixed-Limit is the current Core candidate; integer ledger, all-in and multi-player main/side pots are required regardless.",
+      "open": "Human product confirmation of Fixed-Limit. 1/2 blinds, 2/4 bets, cap 4 and stack 80 are configurable defaults, not product freeze.",
+      "owner": "joint",
+      "required_evidence": "Product decision followed by versioned Stage 1 reducer config and walkthrough approval.",
+      "blocks": ["stage1_betting_reducer_freeze"]
+    },
+    {
+      "id": "S0-08",
+      "title": "timeouts and recovery",
+      "status": "partially_frozen",
+      "frozen": "Player timeout defaults to 30 seconds and pauses; mechanism commands are bounded and never imply success.",
+      "open": "UI timeout default may change; per-command values require measured hardware P95/P99.",
+      "owner": "joint",
+      "required_evidence": "Stage 3 latency distribution and Stage 4 four-player recovery injection.",
+      "blocks": ["stage4_timeout_freeze"]
+    },
+    {
+      "id": "S0-09",
+      "title": "sensors and safety",
+      "status": "evidence_required",
+      "frozen": "Success ACK requires physical evidence; E-stop, homing, interlock and watchdog are mandatory.",
+      "open": "Sensor technology, circuit, thresholds, four-seat motion envelope and stop time.",
+      "owner": "robotics",
+      "required_evidence": "BOM/schematic plus witnessed home, jam, double-feed, disconnect and E-stop tests.",
+      "blocks": ["stage3_safety_gate"]
+    },
+    {
+      "id": "S0-10",
+      "title": "host-controller protocol",
+      "status": "partially_frozen",
+      "frozen": "Versioned command/ACK semantics, ten target IDs, correlation ID, error codes, idempotency, heartbeat and status query.",
+      "open": "USB serial framing, CRC representation and MCU parser constraints.",
+      "owner": "joint",
+      "required_evidence": "Cross-language mock parses valid, invalid, duplicate and interrupted messages.",
+      "blocks": ["stage3_wire_protocol_freeze"]
+    },
+    {
+      "id": "S0-11",
+      "title": "target decks and lighting",
+      "status": "evidence_required",
+      "frozen": "A held-out physical deck/session and all four seat orientations are mandatory for final testing.",
+      "open": "Exact deck SKUs, count, mat and lighting fixture.",
+      "owner": "dl",
+      "required_evidence": "Procurement list and pilot manifest with at least three physical decks and two face designs.",
+      "blocks": ["stage2_dataset_freeze"]
+    },
+    {
+      "id": "S0-12",
+      "title": "acceptance duration",
+      "status": "frozen",
+      "frozen": "Formal acceptance requires at least 20 consecutive four-player hands; this is a quality gate, not a product feature.",
+      "open": "A shorter live presentation may use the same build but cannot replace acceptance evidence.",
+      "owner": "joint",
+      "required_evidence": "Stage 5 hand logs including folds, multi-way showdown, side pot, tie and recovery.",
+      "blocks": []
+    },
+    {
+      "id": "S0-13",
+      "title": "automatic board-card reveal",
+      "status": "evidence_required",
+      "frozen": "Board cards must end face-up in their fixed slots before visual confirmation; hole and burn cards remain face-down.",
+      "open": "Selective flip chute, independent reveal board or explicit manual-flip fallback and its impact on product claim.",
+      "owner": "joint",
+      "required_evidence": "Robotics comparison prototype with orientation success, jam and landing-position results.",
+      "blocks": ["stage3_mechanism_freeze", "core_autonomy_claim"]
+    },
+    {
+      "id": "S0-14",
+      "title": "between-hand reset",
+      "status": "partially_frozen",
+      "frozen": "After every hand an operator collects used and remaining cards, restores a complete deck, shuffles and reloads before homing/ready confirmation.",
+      "open": "Exact checklist, deck-count confirmation method and UI prompts.",
+      "owner": "joint",
+      "required_evidence": "Operator walkthrough completing reset without stale software or physical state.",
+      "blocks": ["stage5_operator_runbook"]
+    },
+    {
+      "id": "S0-15",
+      "title": "button and turn indication",
+      "status": "partially_frozen",
+      "frozen": "Button, SB, BB, UTG/current actor and seat identities must be unambiguous to all four players.",
+      "open": "Laptop-only display, illuminated physical marker or robot lighting implementation.",
+      "owner": "joint",
+      "required_evidence": "Four-player paper/UI walkthrough with no role or action-order ambiguity.",
+      "blocks": ["stage1_ui_acceptance"]
+    },
+    {
+      "id": "S0-16",
+      "title": "player behaviour perception contract",
+      "status": "partially_frozen",
+      "frozen": "A model observes only the state-machine-selected seat view and emits PlayerActionObservation evidence; optional S0-21 session face verification cannot select the acting seat, and model evidence never mutates the game directly.",
+      "open": "Exact gesture grammar, camera coverage, input features, temporal model and whether particular actions require an explicit player confirmation interaction.",
+      "owner": "dl",
+      "required_evidence": "Target-camera pilot covering all five actions, no-action, ordinary hand motion, simultaneous neighbour motion, occlusion and cancellation for all four seats.",
+      "blocks": ["stage2_action_model_selection", "stage4_action_adapter_freeze"]
+    },
+    {
+      "id": "S0-17",
+      "title": "acting-seat attention authority",
+      "status": "frozen",
+      "frozen": "The deterministic game state machine is the sole acting-seat authority; only its current seat ROI may yield a candidate action, and attention changes only after a legal action is atomically committed with a new state version.",
+      "open": "The visual highlight, sound cue or physical light used to tell players about the already-determined focus remains replaceable under S0-15.",
+      "owner": "software",
+      "required_evidence": "Stage 1 replay proving non-current-seat and stale-window evidence cannot change state, ledger or focus.",
+      "blocks": []
+    },
+    {
+      "id": "S0-18",
+      "title": "temporal action confirmation and rejection",
+      "status": "partially_frozen",
+      "frozen": "Action promotion requires timestamped multi-frame temporal evidence, calibrated confidence, state-version matching, legality validation and action feedback; ambiguous, occluded, out-of-ROI, conflicting or stale evidence keeps the same acting seat and changes no ledger state.",
+      "open": "Per-action thresholds, window duration, entry/exit rules, cooldown and any explicit confirmation step require target-user evidence.",
+      "owner": "joint",
+      "required_evidence": "Held-out participant/session evaluation reporting per-action precision/recall/F1, false accepted actions per hour and hand, rejection coverage and P95 confirmation latency.",
+      "blocks": ["stage2_action_model_admission", "stage4_action_confirmation_freeze"]
+    },
+    {
+      "id": "S0-19",
+      "title": "phase-aware table scene state",
+      "status": "partially_frozen",
+      "frozen": "The state machine owns each of thirteen slot lifecycles and activates ROIs by expected phase; robot ACK proves dispensing while stable visual evidence separately proves occupancy, face orientation and visible identity. Unknown, occlusion, duplicate identity or conflict cannot advance state.",
+      "open": "Final ROI geometry, occupancy/orientation thresholds, board reveal implementation and which hidden-card presence checks are achievable from the target camera.",
+      "owner": "joint",
+      "required_evidence": "Full-hand target-table replay covering empty, face-down, face-up unreadable, confirmed, occluded, duplicate, misplaced and uncleared slot states.",
+      "blocks": ["stage2_scene_model_admission", "stage4_scene_fusion_freeze"]
+    },
+    {
+      "id": "S0-20",
+      "title": "authoritative ledger and audited adjustment",
+      "status": "frozen",
+      "frozen": "The digital ledger is the only Core balance authority; physical chips are neither recognized nor authoritative. Validated actions and explicit audited operator adjustments are the only balance-change sources, applied atomically with state versions and preserved in an append-only hand log.",
+      "open": "The operator UI presentation is replaceable; physical chip recognition, collection and payout remain Plus scope.",
+      "owner": "software",
+      "required_evidence": "Stage 1 property and recovery tests for conservation, idempotency, side-pot eligibility, rebuy or end-session events, and restart from the append-only log.",
+      "blocks": []
+    },
+    {
+      "id": "S0-21",
+      "title": "session-only face identity verification",
+      "status": "partially_frozen",
+      "frozen": "After explicit participant consent and per-session enrollment, local face detection and embeddings may return a registered player_id or unknown for the robot/state-selected seat view. Embeddings remain memory-only, are cleared with the session, and never select acting_seat, transfer cards/chips, or mutate the ledger.",
+      "open": "Enrollment UX, detector/embedding admission, cosine and ambiguity thresholds, liveness, target rotating-camera evidence and mismatch recovery.",
+      "owner": "joint",
+      "required_evidence": "Held-out participant/session evaluation covering false match, false non-match, unknown people, multiple faces, pose, lighting, replay/spoof attempts, consent and verified memory-only cleanup.",
+      "blocks": ["stage2_identity_model_admission", "stage4_identity_verification_freeze"]
+    }
+  ]
+}

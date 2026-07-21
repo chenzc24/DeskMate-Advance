@@ -1,1 +1,0 @@
-"""DeskMate Advance package."""

@@ -1,182 +1,121 @@
-# DeskMate Advance Repository Rules
+# Poker Dealer Repository Rules
 
-This directory is the independent DeskMate Advance project root. Keep the
-workflow small: one source of truth per artifact type, one bounded target at a
-time, and no copied datasets or checkpoints without a clear reason.
-
-The completed Baseline repository is a separate task. Do not import its code,
-data, weights, labels, configs, package interfaces, or architectural
-assumptions into this repository.
+This is the independent Poker Dealer project root. The completed Baseline and
+archived DeskMate are separate products: do not import their code, data,
+weights, configs, package interfaces, or runtime assumptions.
 
 ## Authority And Scope
 
-1. `DeskMate_Advance_Proposal (1).pptx` is the read-only product requirement
-   and overrides derived project documents.
-2. `docs/plans/ADVANCE_PROJECT_MASTER_PLAN.md` governs function scope,
-   pretrained-model selection, learned extensions, event contracts, gates,
-   integration, and delivery until a human explicitly supersedes it.
-3. A dated target plan may bound implementation work but may not weaken the
-   authorities or safety requirements above.
+1. `docs/plans/POKER_DEALER_MASTER_PLAN.md` is the active product and delivery
+   authority until a human explicitly supersedes it.
+2. `docs/stages/STAGE_*.md` define the deliverables and gates for each stage;
+   they may not silently expand Core scope.
+3. `configs/game/core_v1.json` freezes the four-player position, state-owned
+   action attention, perception evidence, table-slot lifecycle, ledger, pot,
+   showdown and safety semantics. Its Fixed-Limit structure is still a candidate and its
+   numeric values are defaults exactly as S0-07 states. Hardware/geometry facts
+   remain pending in the decision register and Gate audit; partial software
+   freeze must not be misrepresented as product or physical validation.
+4. DeskMate history is read-only at the branch/commit named in
+   `archive/deskmate/README.md`; it is never an active dependency.
 
-Do not modify the containing `DeepLearning` workspace unless the user
-explicitly names it. Preserve unrelated dirty files. Never commit, push,
-create a branch, publish a release, or open a PR unless the user asks.
+Do not modify the containing `DeepLearning` workspace unless the user names it.
+Preserve unrelated dirty and ignored files. Never commit, push, create a branch,
+publish a release, or open a PR unless the user asks.
 
 ## Minimal Target Workflow
 
 For code, data, model, protocol, hardware-integration, or multi-file changes,
-create or update one plan at:
+create or update one `plan/<git-user>/<YYYY-MM-DD-target>/plan.md`. Record the
+outcome/owned paths, dirty read-only paths, external dependencies, validation,
+physical-motion status and commit intent. Avoid overlapping policy documents.
 
-```text
-plan/<git-user>/<YYYY-MM-DD-target>/plan.md
-```
+## Core Product Boundary
 
-State only:
+Core v1 is a fixed four-seat/four-player Texas Hold'em table with manual shuffle
+and deck loading, automatic single-card dealing, manual card return,
+state-controlled fixed-seat player-behaviour evidence, face-up card recognition,
+deterministic rules/evaluation, multi-pot digital accounting, and an
+authoritative digital chip ledger.
+Fixed-Limit is the current candidate but remains a human product decision;
+stakes, stack, cap and timeout values are defaults. Physical chip handling,
+free-space card collection, 5–6 player expansion, unconstrained table vision,
+autonomous shuffling and treating gesture/voice as game logic are Plus work.
 
-- outcome and owned paths;
-- dirty paths left read-only;
-- external data, model, service, and hardware dependencies;
-- validation and whether physical robot motion is involved;
-- commit intent.
+Preserve this dependency direction:
 
-Do not create extra policy documents, experience notes, or overlapping plans
-unless a human requests them. Record factual completed validation once in
-`plan/log.md` when that path exists.
+`camera/action input -> owned observations -> deterministic game engine ->`
+`semantic dealer command -> safety controller/robot adapter -> acknowledgement`
 
-## Artifact Ownership
+- Game rules and hand ranking are deterministic code, never model predictions.
+- Models emit observations with confidence/evidence, never game transitions,
+  motor speeds, servo angles, GPIO writes, or serial bytes.
+- The game state machine is the sole `acting_seat` authority. Only its focused
+  fixed seat ROI can yield an action candidate; focus changes only after a
+  legal action and ledger update commit atomically with a new state version.
+- Player-action model output stays `PlayerActionObservation` evidence until
+  temporal/calibration confirmation and game legality checks succeed. Stale,
+  non-current-seat, ambiguous, occluded or conflicting evidence changes
+  neither focus nor ledger. Under S0-21 only, consented session face identity
+  may verify a registered player at the already-selected seat; it never selects
+  focus, transfers game state, or mutates the ledger. Embeddings are memory-only.
+- The digital ledger is the only Core balance authority. Physical chips are
+  not recognized and operator adjustments/rebuys require append-only audited
+  events with operator identity and reason.
+- The game engine requests semantic actions such as `rotate_to` and
+  `dispense_one`; the robotics controller owns kinematics and actuation.
+- A successful command acknowledgement is required before advancing a physical
+  deal step. Timeout, jam, duplicate card, unknown vision, illegal action,
+  disconnect, or state mismatch pauses the hand for human recovery.
+- Unknown/low-confidence evidence is not absence and is never guessed into a
+  card identity. Duplicate identities in one hand are a hard error.
+- Keep camera, game, perception and mechanism simulators independently usable.
+- Keep queues/windows bounded and use monotonic timestamps for durations.
 
-Git is the control plane; large binaries and privacy-sensitive media stay local
-or in an approved artifact store.
+## Artifact, Data And Model Rules
 
-| Artifact | Canonical location | Git policy | Lifetime |
-| --- | --- | --- | --- |
-| source/review/split manifests | `data/manifests/` | tracked | permanent |
-| raw video, audio, images, and landmarks containing identity metadata | `data/raw/` | ignored | keep one canonical copy |
-| derived sequence datasets | `data/work/<dataset-id>/` | ignored | reproducible and disposable |
-| training runs | `runs/<run-id>/` | ignored | temporary workspace |
-| model metadata | `models/manifest.yaml` | tracked | permanent |
-| model weights and exports | `models/` or artifact store | ignored except metadata | retain only admitted versions |
-| detailed runtime evidence | `artifacts/` | ignored | retain only when needed |
-| compact evaluation summaries | `docs/evaluation/` | tracked | permanent |
+Git tracks source, configs, schemas, compact evaluation, manifests and model
+metadata. Raw/private images and video stay in ignored `data/raw/`; derived
+views in ignored `data/work/`; runs in ignored `runs/`; weights in ignored
+`models/assets/`. Never commit identity-bearing media, credentials, licenses,
+consent records or signed URLs. Never commit or persist face embeddings; clear
+the in-memory enrollment gallery at session end. Face enrollment requires
+explicit participant consent.
 
-New pipelines must not create another full copy merely to rename, verify
-determinism, or hand data to a run. Generate reproducible views, compare their
-manifests and hashes, then remove disposable copies.
+Identify a dataset snapshot by manifest SHA-256. Keep original bytes immutable;
+split card data by physical deck design and complete capture session, and split
+behaviour data by participant and complete session, before generating crops,
+sequences or augmentations. Keep adjacent windows, near duplicates and all
+views of one source item in one split. Card negatives include glare, blur,
+occlusion, empty slots, hands, shadows, wrong orientation and unknown deck
+backs. Behaviour negatives include ordinary hand motion, card/chip handling,
+cancelled actions, simultaneous neighbour motion, occlusion and long no-action
+recordings.
 
-## Dataset Rules
+No runtime model is admitted until `models/manifest.yaml` records immutable
+version, source/license, exact weight hash, dataset/view hashes, framework,
+input/output contract, metrics and offline export. Model states are
+`development`, `candidate`, `release`, or `fallback`; only one release and one
+fallback per model ID may be active. Runtime downloads are prohibited.
 
-- Identify a dataset snapshot by its manifest SHA-256, not its directory name.
-- Keep original bytes immutable and store one manifest row per source item with
-  consent/license status, participant, session, device, label, and content
-  hash where applicable.
-- Split by participant and complete recording session before generating
-  windows, landmark sequences, crops, or augmentations.
-- Keep duplicate, near-duplicate, adjacent-window, and same-session relatives
-  in one split. Frame-level random splitting is prohibited.
-- The exact train/selection/test proportions belong in the active plan and
-  resolved config; do not silently change them between runs.
-- Include transition clips, missing-landmark cases, ordinary hand motion, and
-  long no-event recordings as negative evidence.
-- Derived views must carry parent sample ID, split, transform, extractor and
-  config hashes. They are cache, not new independent data.
-- Never delete a canonical source or frozen manifest until a verified second
-  copy exists.
-- Never commit private video/audio, face imagery, participant identifiers,
-  consent records, credentials, or signed download URLs.
-
-## Experiment And Model Rules
-
-Use one immutable run ID:
-
-```text
-<task>-<dataset-id>-<model>-s<seed>-<YYYYMMDD-HHMM>
-```
-
-Every meaningful run records the Git commit and dirty state, resolved config,
-dataset and derived-view manifest hashes, feature-extractor/version hash, base
-weight hash when applicable, seed, environment, metrics, and produced
-checkpoint/export hashes. A directory name alone is not provenance.
-
-- `runs/` is scratch space, never the permanent release registry.
-- Keep configs and metrics for useful comparisons. Keep resumable and selected
-  checkpoints only while they remain active candidates.
-- Failed-run weights are disposable after their metrics, config, and failure
-  reason are recorded.
-- Promote a model by adding an immutable version and SHA-256 to
-  `models/manifest.yaml`.
-- Release and fallback configs must resolve through the manifest, not an
-  arbitrary mutable path under `runs/`.
-- Model states are `development`, `candidate`, `release`, or `fallback`. Only
-  one release and one fallback per model ID may be active.
-- Data cleanup, checkpoint deletion, and artifact retirement require explicit
-  human approval after a read-only inventory.
-
-## Advance Architecture Invariants
-
-- Keep the project boundary independent of the Baseline repository; no runtime
-  or build dependency may point to `../project`.
-- Preserve the logical flow:
-  `sensor input -> pretrained feature extraction -> temporal model/logic ->
-  UnifiedEvent -> controller adapter`.
-- The primary learned extension is a compact temporal gesture model over
-  normalized hand-landmark sequences. Additional learned models start only
-  after the gates in `docs/plans/ADVANCE_PROJECT_MASTER_PLAN.md` are
-  satisfied.
-- Framework tensors, MediaPipe result objects, and device-specific handles must
-  not cross the model/runtime boundary. Convert them to owned domain records.
-- Preserve timestamps and missing-data masks. Do not infer duration from a
-  fixed frame-rate assumption.
-- Low-confidence, stale, conflicting, or incomplete evidence becomes
-  `unknown` or no event; it is never treated as confirmed negative evidence.
-- Frame predictions must pass smoothing, multi-frame confirmation, duration or
-  entry/exit thresholds, and cooldown before producing a persistent event.
-- A model emits semantic events and evidence, never motor speeds, servo angles,
-  or direct Arduino commands.
-- `suggested_action` is advisory. The controller owns prioritization, distance
-  limits, obstacle handling, manual stop, watchdog, and final actuation.
-- Keep a model replay path and a legal event simulator so model and controller
-  can be tested independently.
-- Keep queues and windows bounded. Long-running inference must not accumulate
-  frames, audio, events, or logs without limit.
-
-## Unified Event Rules
-
-Every emitted event must conform to one versioned project schema and include,
-at minimum:
-
-- semantic event name;
-- `model_level: "advanced"` for learned Advance outputs;
-- calibrated confidence;
-- timestamp-derived duration;
-- compact supporting evidence;
-- schema/model version and traceable inference context in logs.
-
-The controller-facing event vocabulary is a project contract. Changing a
-field, label, unit, default, or rejection rule requires an explicit migration
-and consumer validation; do not make silent compatibility changes.
-
-## Validation
+## Validation And Safety
 
 Always run `git diff --check` and scoped `git status --short --branch`.
+Documentation/config work must parse machine-readable files and verify links,
+IDs, labels, units, versions, gates and archive references. Python work runs
+targeted tests and the practical full suite.
 
-- Documentation/config: parse machine-readable files and check referenced
-  paths, IDs, hashes, labels, units, versions, and gates.
-- Python: run targeted tests and `python -m pytest -q tests` when practical.
-- Model/data: record exact dataset, view, extractor, config, and checkpoint
-  hashes; compare candidates on identical held-out participant/session groups.
-- Classification: report per-class precision, recall, F1, confusion matrix,
-  rejection/unknown behaviour, and calibration rather than accuracy alone.
-- Continuous behaviour: use long negative recordings and report false trigger
-  rate, detection latency, missing-data behaviour, and cooldown behaviour.
-- Perception/runtime: use recorded target-camera/audio evidence and report
-  validity, stale/miss rate, throughput, memory, and P95 latency; do not infer
-  performance from code inspection.
-- Integration: test recorded-model replay and simulated events before live
-  hardware. Validate both sides of the event contract independently.
-- Robot motion: protocol/mock tests first. Physical motion requires an
-  operator, clear area, low speed, distance limits, collision protection,
-  watchdog, and emergency/manual stop.
+Card perception reports per-rank/per-suit precision, recall, F1, confusion,
+unknown/rejection behaviour, duplicate-card detection, per-slot stability,
+latency and target-camera results across held-out decks/sessions. Integration
+uses simulator and recorded replay before hardware.
 
-Downloaded data, weights, runs, videos, audio, logs, secrets, signed URLs, and
-local environments must remain outside Git. The final demo must load every
-required model and runtime asset offline.
+Player-action perception reports per-action precision, recall, F1, confusion,
+calibration/rejection, false accepted actions per hour and hand, cross-seat
+leakage, cancellation behaviour and P95 confirmation latency on held-out
+participants/sessions. Accuracy alone never admits an action model.
+
+Physical motion requires an operator, clear area, guards, low force/speed,
+homing, card-present and jam sensing, current/timeout limits, watchdog, manual
+stop, and recovery instructions. Protocol/mock tests come first. No target
+plan may authorize unattended physical motion.

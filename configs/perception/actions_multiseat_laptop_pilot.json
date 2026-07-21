@@ -1,0 +1,21 @@
+{
+  "schema_version": "1.0",
+  "pilot_status": "development_feasibility_only",
+  "layout_status": "laptop_quadrant_pilot_not_target_geometry",
+  "gesture_config_path": "configs/perception/actions_laptop_pilot.json",
+  "max_hands": 4,
+  "initial_focus_seat": "seat_a",
+  "seat_rois_normalized": {
+    "seat_a": {"x_min": 0.02, "y_min": 0.52, "x_max": 0.48, "y_max": 0.98},
+    "seat_b": {"x_min": 0.02, "y_min": 0.02, "x_max": 0.48, "y_max": 0.48},
+    "seat_c": {"x_min": 0.52, "y_min": 0.02, "x_max": 0.98, "y_max": 0.48},
+    "seat_d": {"x_min": 0.52, "y_min": 0.52, "x_max": 0.98, "y_max": 0.98}
+  },
+  "ui_controls": {
+    "seat_a_key": "1",
+    "seat_b_key": "2",
+    "seat_c_key": "3",
+    "seat_d_key": "4",
+    "quit_keys": ["q", "escape"]
+  }
+}

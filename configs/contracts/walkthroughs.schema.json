@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://poker-dealer.local/schemas/stage0-walkthroughs-1.0.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "rules_version", "scenarios"],
+  "properties": {
+    "$schema": {"type": "string"},
+    "schema_version": {"const": "1.0"},
+    "rules_version": {"const": "1.2"},
+    "scenarios": {
+      "type": "array",
+      "minItems": 10,
+      "items": {"$ref": "#/$defs/scenario"}
+    }
+  },
+  "$defs": {
+    "scenario": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "tags", "button", "starting_stacks", "steps", "expected"],
+      "properties": {
+        "id": {"pattern": "^WT-[0-9]{2}-[a-z0-9-]+$"},
+        "tags": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+        "button": {"enum": ["seat_a", "seat_b", "seat_c", "seat_d"]},
+        "starting_stacks": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["seat_a", "seat_b", "seat_c", "seat_d"],
+          "properties": {
+            "seat_a": {"type": "integer", "minimum": 0},
+            "seat_b": {"type": "integer", "minimum": 0},
+            "seat_c": {"type": "integer", "minimum": 0},
+            "seat_d": {"type": "integer", "minimum": 0}
+          }
+        },
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "value"],
+            "properties": {
+              "kind": {"enum": ["post_blind", "deal_sequence", "board_sequence", "action_observation", "player_action", "card_observation", "dealer_command", "dealer_ack", "evaluation", "ledger", "operator_adjustment", "timer", "state_transition", "operator_recovery"]},
+              "value": {"type": "string", "minLength": 1},
+              "seat": {"enum": ["seat_a", "seat_b", "seat_c", "seat_d"]}
+            }
+          }
+        },
+        "expected": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["terminal_phase", "winner", "pause_reason", "pot_units", "next_button"],
+          "properties": {
+            "terminal_phase": {"enum": ["setup", "dealing_hole", "awaiting_action", "dealing_board", "showdown", "settled", "paused_recovery", "voided"]},
+            "winner": {"type": ["string", "null"]},
+            "pause_reason": {"type": ["string", "null"]},
+            "pot_units": {"type": ["integer", "null"], "minimum": 0},
+            "next_button": {"type": ["string", "null"]}
+          }
+        }
+      }
+    }
+  }
+}

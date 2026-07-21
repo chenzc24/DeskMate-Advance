@@ -1,0 +1,41 @@
+{
+  "schema_version": "1.1",
+  "rules_version": "1.2",
+  "hand_id": "hand-0001",
+  "state_version": 8,
+  "phase": "awaiting_action",
+  "street": "preflop",
+  "button": "seat_a",
+  "small_blind_seat": "seat_b",
+  "big_blind_seat": "seat_c",
+  "acting_seat": "seat_d",
+  "legal_actions": ["fold", "call", "raise"],
+  "players": {
+    "seat_a": {"stack_units": 80, "street_commit_units": 0, "hand_commit_units": 0, "folded": false, "all_in": false},
+    "seat_b": {"stack_units": 79, "street_commit_units": 1, "hand_commit_units": 1, "folded": false, "all_in": false},
+    "seat_c": {"stack_units": 78, "street_commit_units": 2, "hand_commit_units": 2, "folded": false, "all_in": false},
+    "seat_d": {"stack_units": 80, "street_commit_units": 0, "hand_commit_units": 0, "folded": false, "all_in": false}
+  },
+  "pot_units": 3,
+  "pots": [
+    {"pot_id": "main", "amount_units": 3, "eligible_seats": ["seat_a", "seat_b", "seat_c", "seat_d"]}
+  ],
+  "slot_states": {
+    "board_flop_1": "expected_empty",
+    "board_flop_2": "expected_empty",
+    "board_flop_3": "expected_empty",
+    "board_turn": "expected_empty",
+    "board_river": "expected_empty",
+    "seat_a_hole_1": "present_face_down",
+    "seat_a_hole_2": "present_face_down",
+    "seat_b_hole_1": "present_face_down",
+    "seat_b_hole_2": "present_face_down",
+    "seat_c_hole_1": "present_face_down",
+    "seat_c_hole_2": "present_face_down",
+    "seat_d_hole_1": "present_face_down",
+    "seat_d_hole_2": "present_face_down"
+  },
+  "confirmed_cards": [],
+  "pending_command_id": null,
+  "paused_reason": null
+}

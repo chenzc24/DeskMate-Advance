@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://poker-dealer.local/schemas/player-action-1.0.json",
+  "title": "Player action request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "action_id", "hand_id", "expected_state_version",
+    "received_at_ns", "seat", "action", "amount_units", "source"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "action_id": {"type": "string", "minLength": 1},
+    "hand_id": {"type": "string", "minLength": 1},
+    "expected_state_version": {"type": "integer", "minimum": 0},
+    "received_at_ns": {"type": "integer", "minimum": 0},
+    "seat": {"enum": ["seat_a", "seat_b", "seat_c", "seat_d"]},
+    "action": {"enum": ["fold", "check", "call", "bet", "raise"]},
+    "amount_units": {"type": ["integer", "null"], "minimum": 1},
+    "source": {"enum": ["software_ui", "physical_controls", "gesture_adapter", "voice_adapter", "simulator"]}
+  }
+}

@@ -1,0 +1,152 @@
+{
+  "$schema": "../contracts/core_rules.schema.json",
+  "schema_version": "1.2",
+  "contract_status": "four_player_perception_state_contract_frozen_betting_structure_pending",
+  "variant": "four_player_texas_holdem",
+  "rules_source": {
+    "name": "Poker TDA Rules 2024 for button, blinds and clockwise action",
+    "url": "https://www.pokertda.com/view-poker-tda-rules/",
+    "project_overrides_document": "docs/contracts/GAME_RULES.md"
+  },
+  "table": {
+    "players": 4,
+    "seats_clockwise": ["seat_a", "seat_b", "seat_c", "seat_d"],
+    "deck_cards": 52,
+    "jokers": false,
+    "rake_units": 0
+  },
+  "session_defaults": {
+    "starting_stack_units": 80,
+    "minimum_stack_to_start_hand_units": 2,
+    "rebuy_or_end_session_below_minimum": true,
+    "button_starts_at": "seat_a",
+    "button_advances_after": "settled_hand",
+    "button_stays_after_void_or_redeal": true
+  },
+  "position_order": {
+    "small_blind": "first_active_seat_left_of_button",
+    "big_blind": "next_active_seat_left_of_small_blind",
+    "first_hole_card": "first_active_seat_left_of_button",
+    "button_receives_last_hole_card_each_round": true,
+    "preflop_first_actor": "first_actionable_seat_left_of_big_blind",
+    "postflop_first_actor": "first_actionable_seat_left_of_button",
+    "skip_folded_or_all_in_for_action": true
+  },
+  "blinds_defaults": {
+    "small_blind_units": 1,
+    "big_blind_units": 2
+  },
+  "betting": {
+    "product_decision_status": "pending_confirmation",
+    "candidate_structure": "fixed_limit",
+    "actions_semantics_frozen": ["fold", "check", "call", "bet", "raise"],
+    "ui_implementation": "replaceable",
+    "amount_field_policy": "null_for_fixed_limit_required_for_no_limit_bet_or_raise",
+    "numeric_values_status": "configurable_defaults",
+    "small_bet_units_default": 2,
+    "small_bet_streets": ["preflop", "flop"],
+    "big_bet_units_default": 4,
+    "big_bet_streets": ["turn", "river"],
+    "max_full_bets_per_street_default": 4,
+    "preflop_big_blind_counts_as_first_bet_for_fixed_limit": true,
+    "allow_all_in": true,
+    "short_all_in_does_not_reopen_action": true,
+    "main_and_side_pots_required": true,
+    "unmatched_excess_is_returned": true,
+    "timeout_policy": "pause_for_operator",
+    "action_timeout_seconds_default": 30
+  },
+  "behavior_perception": {
+    "contract_status": "attention_and_evidence_frozen_thresholds_pending",
+    "acting_seat_authority": "deterministic_game_state_machine",
+    "seat_binding": "state_machine_seat_with_session_face_verification",
+    "model_output_contract": "player_action_observation_evidence_only",
+    "evidence_states": [
+      "no_action", "action_start", "candidate", "ambiguous", "occluded",
+      "out_of_roi", "unknown"
+    ],
+    "semantic_candidates": ["fold", "check", "call", "bet", "raise"],
+    "non_current_seat_policy": "negative_evidence_never_promoted_to_action",
+    "attention_switch_trigger": "validated_action_committed_and_state_version_advanced",
+    "temporal_confirmation_required": true,
+    "calibrated_confidence_required": true,
+    "uncertain_policy": "hold_current_actor_and_request_retry_or_operator",
+    "action_feedback_required": true,
+    "feedback_implementation": "replaceable",
+    "gesture_grammar_status": "pending_human_and_target_camera_evidence",
+    "confirmation_thresholds_status": "pending_target_camera_evidence",
+    "explicit_player_confirmation_status": "pending_failure_evidence",
+    "face_identity_allowed": true,
+    "face_identity_scope": "session_only_explicit_enrollment",
+    "face_identity_authority": "verification_only_never_selects_acting_seat",
+    "face_embedding_persistence": "memory_only_never_serialized",
+    "face_identity_unknown_policy": "hold_focus_and_request_retry_or_operator",
+    "face_identity_consent_required": true
+  },
+  "table_scene": {
+    "state_authority": "deterministic_game_state_machine",
+    "model_output_contract": "card_observation_evidence_only",
+    "slot_lifecycle": [
+      "expected_empty", "delivery_pending", "present_face_down",
+      "reveal_pending", "face_up_unconfirmed", "confirmed", "cleared",
+      "unknown", "conflict"
+    ],
+    "phase_driven_roi_activation": true,
+    "robot_ack_role": "proves_dispense_not_card_identity",
+    "vision_role": "proves_occupancy_orientation_and_visible_card_identity",
+    "visible_identity_advance_policy": "matching_ack_and_stable_visual_evidence_when_required",
+    "duplicate_or_conflict_policy": "pause_for_operator",
+    "unknown_or_occluded_policy": "hold_expected_state_and_reobserve",
+    "reset_policy": "operator_clears_all_slots_before_next_hand_ready",
+    "roi_geometry_status": "pending_target_camera_evidence"
+  },
+  "deal": {
+    "manual_shuffle_and_load_before_each_hand": true,
+    "hole_cards_per_player": 2,
+    "hole_cards_face_down": true,
+    "hole_deal_rounds": 2,
+    "burn_before_each_board_street": true,
+    "flop_cards": 3,
+    "turn_cards": 1,
+    "river_cards": 1,
+    "board_reveal_mode": "pending_s0_13_decision",
+    "manual_card_return_after_hand": true,
+    "deal_progress_requires_success_ack": true,
+    "misdeal_before_player_action": "void_and_redeal_same_button",
+    "physical_state_uncertain": "pause_for_operator"
+  },
+  "showdown": {
+    "contract_status": "frozen",
+    "all_live_players_expose_both_hole_cards": true,
+    "exposure_mode": "each_live_player_to_two_fixed_rois",
+    "required_confirmed_board_cards": 5,
+    "required_confirmed_hole_cards_per_live_player": 2,
+    "best_five_from_seven": true,
+    "pot_eligibility_filters_folded_players": true,
+    "evaluate_each_main_or_side_pot_independently": true,
+    "tie_policy": "split_each_pot_equally",
+    "odd_unit_policy": "first_eligible_seat_left_of_button",
+    "duplicate_card_policy": "pause_for_operator",
+    "unknown_card_policy": "pause_and_reobserve"
+  },
+  "ledger": {
+    "physical_chip_handling": false,
+    "physical_chip_recognition": false,
+    "physical_chips_authoritative": false,
+    "authoritative_balance": "digital_ledger",
+    "balance_change_source": "validated_actions_and_audited_operator_adjustments",
+    "action_application_atomic_with_state_version": true,
+    "append_only_hand_log_required": true,
+    "manual_adjustment_requires_reason_and_operator_id": true,
+    "rebuy_policy": "explicit_audited_event_or_end_session",
+    "negative_balance_allowed": false,
+    "conserve_total_units": true,
+    "settlement_is_idempotent": true
+  },
+  "acceptance": {
+    "policy_status": "frozen_quality_gate_not_product_feature",
+    "consecutive_hands": 20,
+    "live_presentation_may_be_shorter": true,
+    "shorter_presentation_does_not_replace_evidence": true
+  }
+}
