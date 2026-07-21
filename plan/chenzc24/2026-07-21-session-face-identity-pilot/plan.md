@@ -38,3 +38,19 @@ is authorized.
 ## Commit Intent
 
 Do not commit or push unless the user explicitly requests it.
+
+## Completed Outcome
+
+- Registered S0-21 as an explicit product amendment while preserving S0-17
+  state-machine seat authority and game/ledger isolation.
+- Pinned and hash-verified official OpenCV Zoo YuNet and SFace development
+  assets; runtime downloads remain prohibited.
+- Implemented exact-one-face detection/alignment/embedding, consent-gated
+  four-player in-memory enrollment, cosine threshold/margin rejection,
+  temporal confirmation and `player_id`/unknown/mismatch observations.
+- Added a non-recording Laptop UI and session cleanup on `X` or process exit.
+- Passed 18 scoped identity/contract tests and the full 130-test suite. A
+  20-frame camera-0 smoke completed with zero missing reads, 31.19 ms mean
+  inference latency, no saved frames and no persisted embeddings.
+- Physical-motion status remains `not connected / not authorized`. No commit,
+  push, branch or release was created.
