@@ -32,6 +32,23 @@ $env:PYTHONPATH = "src"
 .\.venv\Scripts\python.exe scripts\perception\live_sequential_part_a.py --index 0 --backend dshow --speech-device 1 --consent-confirmed --max-seconds 900
 ```
 
+机器人 MJPEG 视频流模式使用同一套人脸、手势、语音和状态机，仅替换相机输入：
+
+```powershell
+$env:PYTHONPATH = "src"
+.\.venv\Scripts\python.exe scripts\perception\live_sequential_part_a.py --stream-url http://100.80.46.54:5000/video_feed --speech-device 1 --consent-confirmed --max-seconds 900
+```
+
+该模式不保存帧，后台只保留最新一帧；被覆盖的积压帧记录为
+`FramePacket.dropped_before`。MJPEG 不含源端拍摄时间戳，因此当前时间语义是
+laptop 收帧的 monotonic 时间。此入口仍使用 `SimulatedDealer`，不会让机器人
+转动；真实转向 ACK 和稳定等待仍属于后续 Robotics 集成门。
+
+若单条 MJPEG 连接结束但服务仍可达，相机层会进行最多五次有界重连。重连期间
+runtime 只记录 `camera_read_status=missing`，不清空注册库、不接受新动作、也不
+推进状态；恢复后记录 `camera_reconnected`。只有重连全部失败才记录
+`disconnected` 并安全退出。
+
 Setup 阶段：
 
 - `1`–`4` 只选择注册目标，不改变游戏状态。
@@ -57,3 +74,7 @@ Setup 阶段：
 ## Gate 尚未关闭
 
 Laptop 冒烟只证明四个本地模型和摄像头/麦克风能够共存。还需要四名 held-out 参与者的顺序测试，报告每个动作的 precision/recall/F1、false accepted actions、语音/手势冲突、跨玩家/跨席泄漏、身份拒识、P95 端到端延迟，以及真实 `rotate_to` ACK/停稳后图像。500 ms、1.5 s 和各模型阈值均为 Pilot 参数。
+
+四人真人执行步骤、固定 D→A→B→C 序列、九个安全/恢复 case、不可覆盖的 JSONL 证据和自动分析命令见[四人真人验收执行包](stage2a-four-player-live-acceptance.md)。该执行包当前仅为 `prepared_not_executed`。
+
+设备/资产预检、匿名 session、九 Case 汇总、数据 manifest/split、离线安全 replay 与可选 landmark TCN 后训练骨架见[验收前基础设施](stage2a-prevalidation-infrastructure.md)。这些产物只表示工具已准备，不表示真人 Gate 或模型录取完成。

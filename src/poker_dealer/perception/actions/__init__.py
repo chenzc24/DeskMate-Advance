@@ -17,6 +17,7 @@ from .speech import (
     SpeechObservationAdapter,
     SpeechPilotConfig,
     SpeechUtteranceEvidence,
+    SpeakerVerificationConfig,
     VoskSpeechRecognizer,
 )
 from .seats import (
@@ -31,6 +32,15 @@ from .temporal import (
     observation_to_dict,
 )
 from .window import MultimodalActionWindow
+from .speech_intent import (
+    PendingSpeechAction,
+    SpeechConfirmationController,
+    SpeechConfirmationOutcome,
+    SpeechConfirmationStatus,
+    SpeechIntentKind,
+    SpeechIntentObservation,
+    classify_speech_intent,
+)
 
 __all__ = [
     "ActionObservationContext",
@@ -49,10 +59,18 @@ __all__ = [
     "SpeechObservationAdapter",
     "SpeechPilotConfig",
     "SpeechUtteranceEvidence",
+    "SpeakerVerificationConfig",
+    "PendingSpeechAction",
+    "SpeechConfirmationController",
+    "SpeechConfirmationOutcome",
+    "SpeechConfirmationStatus",
+    "SpeechIntentKind",
+    "SpeechIntentObservation",
     "SeatRoiRouter",
     "SeatRoutingResult",
     "VoskSpeechRecognizer",
     "action_observation_source",
     "fuse_action_observations",
+    "classify_speech_intent",
     "observation_to_dict",
 ]

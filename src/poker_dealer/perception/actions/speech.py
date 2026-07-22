@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Mapping
+
+import numpy as np
 
 from poker_dealer.domain import (
     ActionEvidenceState,
@@ -17,9 +19,9 @@ from poker_dealer.domain import (
 from .temporal import ActionObservationContext
 
 try:
-    from vosk import KaldiRecognizer, Model, SetLogLevel
+    from vosk import KaldiRecognizer, Model, SetLogLevel, SpkModel
 except ImportError:  # pragma: no cover - exercised through the runtime error
-    KaldiRecognizer = Model = None  # type: ignore[assignment,misc]
+    KaldiRecognizer = Model = SpkModel = None  # type: ignore[assignment,misc]
     SetLogLevel = None  # type: ignore[assignment]
 
 
@@ -52,6 +54,82 @@ class SpeechModelConfig:
         if len(self.tree_sha256) != 64:
             raise ValueError("speech model tree SHA-256 must have 64 digits")
         int(self.tree_sha256, 16)
+
+
+@dataclass(frozen=True, slots=True)
+class SpeakerVerificationConfig:
+    """Development-only Vosk x-vector and session-gallery policy."""
+
+    schema_version: str
+    pilot_status: str
+    model: SpeechModelConfig
+    minimum_samples: int
+    minimum_speaker_frames: int
+    minimum_similarity: float
+    minimum_margin: float
+    confirmation_timeout_ms: int
+    embeddings_memory_only: bool
+    audio_saved: bool
+
+    def __post_init__(self) -> None:
+        if self.schema_version != "1.0":
+            raise ValueError("unsupported speaker verification schema version")
+        if self.pilot_status != "development_feasibility_only":
+            raise ValueError("speaker verification must remain development-only")
+        if self.minimum_samples < 2:
+            raise ValueError("speaker enrollment requires at least two samples")
+        if self.minimum_speaker_frames <= 0:
+            raise ValueError("minimum speaker frames must be positive")
+        if not -1.0 <= self.minimum_similarity <= 1.0:
+            raise ValueError("speaker similarity must be in [-1, 1]")
+        if not 0.0 <= self.minimum_margin <= 2.0:
+            raise ValueError("speaker margin must be in [0, 2]")
+        if self.confirmation_timeout_ms <= 0:
+            raise ValueError("speaker confirmation timeout must be positive")
+        if not self.embeddings_memory_only or self.audio_saved:
+            raise ValueError("speaker pilot cannot persist embeddings or audio")
+
+    @classmethod
+    def from_json(cls, path: str | Path) -> SpeakerVerificationConfig:
+        config_path = Path(path).resolve()
+        value = json.loads(config_path.read_text(encoding="utf-8"))
+        project_root = config_path.parents[2]
+        model = value["model"]
+        enrollment = value["enrollment"]
+        matching = value["matching"]
+        runtime = value["runtime"]
+        return cls(
+            schema_version=value["schema_version"],
+            pilot_status=value["pilot_status"],
+            model=SpeechModelConfig(
+                model_id=model["model_id"],
+                version=model["version"],
+                asset_path=project_root / model["asset_path"],
+                tree_sha256=model["tree_sha256"].lower(),
+                framework=model["framework"],
+                framework_version=model["framework_version"],
+            ),
+            minimum_samples=int(enrollment["minimum_samples"]),
+            minimum_speaker_frames=int(enrollment["minimum_speaker_frames"]),
+            minimum_similarity=float(matching["minimum_similarity"]),
+            minimum_margin=float(matching["minimum_margin"]),
+            confirmation_timeout_ms=int(runtime["confirmation_timeout_ms"]),
+            embeddings_memory_only=bool(runtime["embeddings_memory_only"]),
+            audio_saved=bool(runtime["audio_saved"]),
+        )
+
+    def verify_model_asset(self) -> str:
+        if not self.model.asset_path.is_dir():
+            raise FileNotFoundError(
+                f"speaker model asset is missing: {self.model.asset_path}"
+            )
+        actual = _tree_sha256(self.model.asset_path)
+        if actual != self.model.tree_sha256:
+            raise ValueError(
+                "speaker model tree SHA-256 mismatch: "
+                f"expected {self.model.tree_sha256}, got {actual}"
+            )
+        return actual
 
 
 @dataclass(frozen=True, slots=True)
@@ -157,6 +235,10 @@ class SpeechUtteranceEvidence:
     confidence: float | None
     is_final: bool
     supporting_blocks: int = 1
+    speaker_embedding: np.ndarray | None = field(
+        default=None, repr=False, compare=False
+    )
+    speaker_frames: int = 0
 
     def __post_init__(self) -> None:
         if self.window_started_at_ns < 0 or self.observed_at_ns < 0:
@@ -167,10 +249,23 @@ class SpeechUtteranceEvidence:
             raise ValueError("speech confidence must be in [0, 1]")
         if self.supporting_blocks <= 0:
             raise ValueError("supporting audio blocks must be positive")
+        if self.speaker_frames < 0:
+            raise ValueError("speaker frame count must be non-negative")
+        if self.speaker_embedding is not None:
+            embedding = np.asarray(self.speaker_embedding, dtype=np.float32).reshape(-1).copy()
+            norm = float(np.linalg.norm(embedding))
+            if embedding.size == 0 or not np.isfinite(norm) or norm <= 0:
+                raise ValueError("speaker embedding must be finite and non-zero")
+            embedding /= norm
+            embedding.setflags(write=False)
+            object.__setattr__(self, "speaker_embedding", embedding)
 
     @property
     def canonical_transcript(self) -> str:
-        return "".join(self.transcript.split())
+        # Vosk may surround a valid closed-grammar command with acoustic
+        # out-of-vocabulary markers. Removing only the literal marker keeps the
+        # command recoverable; a pure unknown utterance becomes empty evidence.
+        return "".join(self.transcript.replace("[unk]", " ").split())
 
 
 class SpeechModelError(RuntimeError):
@@ -180,7 +275,11 @@ class SpeechModelError(RuntimeError):
 class VoskSpeechRecognizer:
     """Bounded streaming decoder that never stores PCM or free-form text."""
 
-    def __init__(self, config: SpeechPilotConfig) -> None:
+    def __init__(
+        self,
+        config: SpeechPilotConfig,
+        speaker_config: SpeakerVerificationConfig | None = None,
+    ) -> None:
         if Model is None or KaldiRecognizer is None:
             raise SpeechModelError(
                 "Vosk is unavailable; install the speech-pilot dependency"
@@ -196,6 +295,15 @@ class VoskSpeechRecognizer:
                 config.grammar_json(),
             )
             self._recognizer.SetWords(True)
+            self._speaker_model = None
+            if speaker_config is not None:
+                if SpkModel is None:
+                    raise SpeechModelError(
+                        "this Vosk build does not provide speaker verification"
+                    )
+                speaker_config.verify_model_asset()
+                self._speaker_model = SpkModel(str(speaker_config.model.asset_path))
+                self._recognizer.SetSpkModel(self._speaker_model)
         except (RuntimeError, ValueError) as exc:
             raise SpeechModelError(f"failed to load Vosk speech model: {exc}") from exc
         self._window_started_at_ns: int | None = None
@@ -252,6 +360,11 @@ class VoskSpeechRecognizer:
         confidence = (
             sum(confidences) / len(confidences) if confidences else None
         )
+        raw_embedding = payload.get("spk")
+        speaker_embedding = None
+        if isinstance(raw_embedding, list) and raw_embedding:
+            speaker_embedding = np.asarray(raw_embedding, dtype=np.float32)
+        speaker_frames = int(payload.get("spk_frames", 0) or 0)
         started_at_ns = self._window_started_at_ns
         supporting_blocks = self._window_blocks
         self._window_started_at_ns = None
@@ -266,6 +379,8 @@ class VoskSpeechRecognizer:
             confidence=confidence,
             is_final=True,
             supporting_blocks=supporting_blocks,
+            speaker_embedding=speaker_embedding,
+            speaker_frames=speaker_frames,
         )
 
 

@@ -1,0 +1,74 @@
+{
+  "schema_version": "1.0",
+  "handoff_id": "stage2a-part-a-<date>-<version>",
+  "status": "not_ready",
+  "scope": "gesture_speech_identity_evidence_to_deterministic_game_legality",
+  "runtime": {
+    "git_commit": null,
+    "entrypoint": "scripts/perception/live_sequential_part_a.py",
+    "player_mode": "four_player_core",
+    "protocol_id": "stage2a-four-player-live-acceptance-v1"
+  },
+  "evidence": {
+    "four_player_batch_report_path": null,
+    "four_player_batch_report_sha256": null,
+    "safety_replay_report_path": null,
+    "safety_replay_report_sha256": null
+  },
+  "data": {
+    "source_manifest_path": null,
+    "source_manifest_sha256": null,
+    "view_manifest_path": null,
+    "view_manifest_sha256": null,
+    "participant_session_split_verified": false
+  },
+  "models": [
+    {
+      "model_id": "player-action-mediapipe-canned-gesture",
+      "state": "development",
+      "asset_sha256": "97952348cf6a6a4915c2ea1496b4b37ebabc50cbbf80571435643c455f2b0482"
+    },
+    {
+      "model_id": "player-action-vosk-small-en-us",
+      "state": "development",
+      "asset_sha256": "57929637421baa20ff74ffb194f48e7c4a5bd0c09eac1c79a3c305ddf32db038"
+    },
+    {
+      "model_id": "player-action-landmark-tcn",
+      "state": "development_untrained",
+      "asset_sha256": null
+    }
+  ],
+  "metrics": {
+    "per_action_precision_recall_f1": null,
+    "confusion_matrix": null,
+    "unknown_rejection_coverage": null,
+    "false_accepted_actions_per_hour_and_hand": null,
+    "cross_seat_leakage": null,
+    "cancellation_false_confirmation": null,
+    "p50_p95_confirmation_latency": null
+  },
+  "fallback": {
+    "model_id": "player-action-mediapipe-canned-gesture",
+    "operator_confirmation_available": true,
+    "unknown_conflict_or_stale_holds_state": true
+  },
+  "privacy": {
+    "raw_media_in_bundle": false,
+    "audio_in_bundle": false,
+    "embeddings_in_bundle": false,
+    "consent_records_in_bundle": false
+  },
+  "physical_motion": {
+    "authorized": false,
+    "validated": false,
+    "adapter": "simulated_dealer_only"
+  },
+  "open_blockers": [
+    "four-player live acceptance is not executed",
+    "held-out participant/session metrics are missing",
+    "target-camera transfer is missing",
+    "formal biometric identity product decision is open",
+    "real rotate_to acknowledgement and stopped image are missing"
+  ]
+}

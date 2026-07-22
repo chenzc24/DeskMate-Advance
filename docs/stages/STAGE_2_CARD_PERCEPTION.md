@@ -139,3 +139,5 @@ Gate 2A/2B 分别录取行为模型和牌面模型；任一模型未达到阈值
 原四象限 Laptop ROI 仅保留为输入路由测试夹具，不代表机器人真实视角。真实系统按状态机的顺时针行动顺序旋转到一个席位；可选的人脸模块随后核验当前画面是否为该席位本场注册的 `player_id`。实现、边界和待测指标见 [本场人脸身份核验 Pilot](../evaluation/stage2a-session-face-identity-pilot.md)。它属于 Part A，但不是动作识别器，也不是席位选择器。
 
 顺序式 Part A runtime 现已把模拟转向 ACK、身份门、手势/英文语音融合、游戏合法性和下一 `acting_seat` 串成一个 betting-round 闭环。它到 `dealing_board/settled` 即停止，不能代替 Part B 或真实发牌 ACK。详见 [顺序式纵向闭环](../evaluation/stage2a-sequential-vertical-loop.md)。
+
+四人真人测试前的设备/资产预检、匿名 session、九 Case 审计、批量汇总、行为数据 manifest/split、离线安全 replay 和可选 landmark TCN 骨架已经准备，但仍保持 `prepared_not_executed / prepared_not_trained`。入口见[验收前基础设施](../evaluation/stage2a-prevalidation-infrastructure.md)。

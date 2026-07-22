@@ -104,6 +104,14 @@ class MultimodalActionWindow:
         self._context = None
         self._candidates.clear()
 
+    def cancel_pending_speech(self) -> bool:
+        """Remove speech evidence without discarding a target-owned gesture."""
+
+        removed = self._candidates.pop("speech", None) is not None
+        if not self._candidates:
+            self._context = None
+        return removed
+
     def _prune(self, latest_ns: int) -> None:
         cutoff = latest_ns - self.max_skew_ms * 1_000_000
         self._candidates = {

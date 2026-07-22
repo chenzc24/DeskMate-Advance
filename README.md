@@ -91,6 +91,18 @@ $env:PYTHONPATH = "src"
 .\.venv\Scripts\python.exe scripts\perception\live_sequential_part_a.py --index 0 --backend dshow --speech-device 1 --consent-confirmed --max-seconds 900
 ```
 
+To use the robot's HTTP MJPEG camera instead of the laptop camera, replace the
+local camera flags with:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\perception\live_sequential_part_a.py --stream-url http://100.80.46.54:5000/video_feed --speech-device 1 --consent-confirmed --max-seconds 900
+```
+
+This remains a perception-only run: frames are not saved and `rotate_to`
+acknowledgements are still simulated. The stream adapter retains only the
+latest received frame so slow model inference cannot accumulate stale MJPEG
+frames.
+
 During setup, use `1`–`4` and `E` to enroll all four players, then `S` to start.
 The default `four_player_core` mode refuses an incomplete roster. During the
 hand the state machine owns focus; identity must remain current for new action
@@ -100,6 +112,13 @@ confirmation. The separate two-player fixture requires the explicit
 `--player-mode two_player_pilot` option. Rotation is simulated and the pilot
 stops at the Part A betting-round boundary rather than inventing card or
 physical-dealing acknowledgements.
+
+Before a four-participant acceptance session, run the read-only preflight,
+create one ignored pseudonymous session record, execute each `FPA-00` through
+`FPA-08` under the same session group, add the operator observation beside each
+attempt, and generate the batch report. The complete commands and the separate
+data/TCN preparation path are in
+[`docs/evaluation/stage2a-prevalidation-infrastructure.md`](docs/evaluation/stage2a-prevalidation-infrastructure.md).
 
 No physical mechanism may move from software until Stage 3 safety and hardware
 gates are signed off by an operator and the robotics owner.

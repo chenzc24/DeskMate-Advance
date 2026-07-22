@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import replace
 
+import pytest
+
 from poker_dealer.domain import (
     ActionEvidenceState,
     DealerAck,
@@ -16,6 +18,10 @@ from poker_dealer.domain import (
 )
 from poker_dealer.game import HandEngine, SimulatedDealer
 from poker_dealer.perception.identity import FaceIdentityObservation, FaceIdentityState
+from poker_dealer.perception.attribution import (
+    ActorBindingLease,
+    AttributedActionCandidate,
+)
 from poker_dealer.runtime import PartAPhase, SequentialPartACoordinator
 
 
@@ -221,3 +227,86 @@ def test_four_player_preflop_coordinator_closes_d_a_b_c_in_order() -> None:
     assert coordinator.phase is PartAPhase.ROUND_COMPLETE
     assert coordinator.engine.state.phase.value == "dealing_board"
     assert coordinator.focus_seat is None
+
+
+def test_strict_coordinator_requires_matching_actor_binding() -> None:
+    coordinator = SequentialPartACoordinator(
+        HandEngine.start("strict-vertical", Seat.A),
+        "session",
+        require_actor_binding=True,
+    )
+    dealer = SimulatedDealer()
+    dealer.homed = True
+    command = coordinator.request_rotation(1)
+    assert coordinator.accept_rotation_ack(dealer.execute(command, 2))
+    matched = identity(
+        coordinator,
+        FaceIdentityState.MATCHED,
+        player_id="player_d",
+        registered_seat=Seat.D,
+    )
+    assert coordinator.accept_identity(matched)
+    raw = action(coordinator)
+    assert coordinator.accept_action(raw).reason == "attributed_action_required"
+    assert coordinator.engine.state.state_version == 0
+
+    lease = ActorBindingLease(lease_ms=2000)
+    binding = lease.open(
+        matched, hand_id=coordinator.engine.state.hand_id, person_track_id="person:1"
+    )
+    coordinator.bind_actor(binding)
+    bound = AttributedActionCandidate(raw, binding, "pose_wrist", 0.9)
+    outcome = coordinator.accept_attributed_action(bound)
+    assert outcome.accepted
+    assert coordinator.engine.state.state_version == 1
+    assert coordinator.active_actor_binding is None
+
+
+def test_strict_coordinator_rejects_another_binding_id() -> None:
+    coordinator = SequentialPartACoordinator(
+        HandEngine.start("strict-mismatch", Seat.A),
+        "session",
+        require_actor_binding=True,
+    )
+    dealer = SimulatedDealer()
+    dealer.homed = True
+    command = coordinator.request_rotation(1)
+    assert coordinator.accept_rotation_ack(dealer.execute(command, 2))
+    matched = identity(
+        coordinator,
+        FaceIdentityState.MATCHED,
+        player_id="player_d",
+        registered_seat=Seat.D,
+    )
+    assert coordinator.accept_identity(matched)
+    lease = ActorBindingLease(lease_ms=2000)
+    first = lease.open(
+        matched, hand_id=coordinator.engine.state.hand_id, person_track_id="person:1"
+    )
+    coordinator.bind_actor(first)
+    second = ActorBindingLease(lease_ms=2000).open(
+        matched, hand_id=coordinator.engine.state.hand_id, person_track_id="person:2"
+    )
+    outcome = coordinator.accept_attributed_action(
+        AttributedActionCandidate(action(coordinator), second, "pose_wrist", 0.9)
+    )
+    assert not outcome.accepted
+    assert outcome.reason == "actor_binding_mismatch"
+    assert coordinator.engine.state.state_version == 0
+
+
+def test_visual_settle_gate_is_required_when_enabled() -> None:
+    coordinator = SequentialPartACoordinator(
+        HandEngine.start("settle", Seat.A),
+        "session",
+        require_visual_settle=True,
+    )
+    dealer = SimulatedDealer()
+    dealer.homed = True
+    command = coordinator.request_rotation(1)
+    assert coordinator.accept_rotation_ack(dealer.execute(command, 2))
+    assert coordinator.phase is PartAPhase.WAITING_VISUAL_SETTLE
+    with pytest.raises(ValueError, match="identity evidence"):
+        coordinator.accept_identity(identity(coordinator, FaceIdentityState.UNKNOWN))
+    coordinator.accept_visual_settle()
+    assert coordinator.phase is PartAPhase.VERIFYING_IDENTITY

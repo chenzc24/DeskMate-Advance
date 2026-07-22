@@ -68,7 +68,7 @@ def run_camera_preview(config: CameraConfig, *, title: str) -> int:
                     cv2.putText(
                         display,
                         (
-                            f"camera={config.device_index}  "
+                            f"source={config.source_id}  "
                             f"{result.frame.width}x{result.frame.height}"
                         ),
                         (20, 35),

@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0",
+  "pilot_status": "development_feasibility_only",
+  "model": {
+    "model_id": "player-speaker-vosk-spk",
+    "version": "vosk-model-spk-0.4",
+    "asset_path": "models/assets/vosk-model-spk-0.4",
+    "tree_sha256": "bfb2d247c774f5e721607923e14ee1d91282fcb158c9d634ecae7d14cae28639",
+    "framework": "vosk",
+    "framework_version": "0.3.45"
+  },
+  "enrollment": {
+    "minimum_samples": 3,
+    "minimum_speaker_frames": 40
+  },
+  "matching": {
+    "minimum_similarity": 0.70,
+    "minimum_margin": 0.08
+  },
+  "runtime": {
+    "confirmation_timeout_ms": 8000,
+    "embeddings_memory_only": true,
+    "audio_saved": false
+  }
+}

@@ -1,0 +1,334 @@
+{
+  "schema_version": "1.0",
+  "protocol_id": "stage2a-four-player-live-acceptance-v1",
+  "status": "planned_not_executed",
+  "runtime": {
+    "player_mode": "four_player_core",
+    "button": "seat_a",
+    "expected_first_acting_seat": "seat_d",
+    "identity_grace_ms": 1000,
+    "rotation_adapter": "simulated_dealer_only",
+    "save_frames": false,
+    "save_audio": false,
+    "persist_embeddings": false
+  },
+  "happy_path_transitions": [
+    {
+      "acting_seat": "seat_d",
+      "action": "call",
+      "before_version": 0,
+      "after_version": 1,
+      "next_seat": "seat_a"
+    },
+    {
+      "acting_seat": "seat_a",
+      "action": "call",
+      "before_version": 1,
+      "after_version": 2,
+      "next_seat": "seat_b"
+    },
+    {
+      "acting_seat": "seat_b",
+      "action": "call",
+      "before_version": 2,
+      "after_version": 3,
+      "next_seat": "seat_c"
+    },
+    {
+      "acting_seat": "seat_c",
+      "action": "check",
+      "before_version": 3,
+      "after_version": 4,
+      "next_seat": null,
+      "game_phase": "dealing_board",
+      "runtime_phase": "round_complete"
+    }
+  ],
+  "cases": [
+    {
+      "case_id": "FPA-00",
+      "title": "Incomplete four-player roster is blocked",
+      "operator_steps": [
+        "Enroll only seat_a, seat_b and seat_c.",
+        "Press S once, wait for the blocked status, then quit."
+      ],
+      "assertions": {
+        "required_events": [
+          {
+            "type": "enrollment_completed",
+            "min_count": 3
+          },
+          {
+            "type": "hand_start_blocked",
+            "fields": {
+              "mode": "four_player_core"
+            },
+            "min_count": 1
+          }
+        ],
+        "forbidden_events": [
+          {
+            "type": "enrollment_completed",
+            "fields": {
+              "seat": "seat_d"
+            }
+          },
+          {
+            "type": "hand_started"
+          },
+          {
+            "type": "state_transition"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "FPA-01",
+      "title": "Four-player D-A-B-C happy path",
+      "operator_steps": [
+        "Enroll four distinct consenting players at A, B, C and D.",
+        "Start with Button A.",
+        "D says or gestures call; A call; B call; C check.",
+        "Stop after ROUND_COMPLETE."
+      ],
+      "assertions": {
+        "required_events": [
+          {
+            "type": "enrollment_completed",
+            "min_count": 4
+          },
+          {
+            "type": "hand_started",
+            "fields": {
+              "mode": "four_player_core",
+              "button": "seat_a",
+              "first_acting_seat": "seat_d"
+            },
+            "min_count": 1
+          }
+        ],
+        "exact_transitions_ref": "happy_path_transitions"
+      }
+    },
+    {
+      "case_id": "FPA-02",
+      "title": "Wrong registered player cannot act",
+      "operator_steps": [
+        "Enroll all four players and start the hand.",
+        "While D is expected, present registered player A and attempt call.",
+        "Wait for seat_mismatch, verify the version stays zero, then quit."
+      ],
+      "assertions": {
+        "required_events": [
+          {
+            "type": "identity_observation",
+            "fields": {
+              "state": "seat_mismatch",
+              "focus_seat": "seat_d",
+              "state_version": 0
+            },
+            "min_count": 1
+          }
+        ],
+        "forbidden_events": [
+          {
+            "type": "state_transition"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "FPA-03",
+      "title": "Multiple faces close an open action window",
+      "operator_steps": [
+        "Open D's action window with D alone.",
+        "Before acting, place a second registered player in frame.",
+        "Verify the window closes and the version stays zero, then quit."
+      ],
+      "assertions": {
+        "ordered_events": [
+          {
+            "type": "identity_gate_opened",
+            "fields": {
+              "focus_seat": "seat_d",
+              "state_version": 0
+            }
+          },
+          {
+            "type": "action_window_closed",
+            "fields": {
+              "reason": "different_or_multiple_player_detected",
+              "focus_seat": "seat_d",
+              "state_version": 0
+            }
+          }
+        ],
+        "forbidden_events": [
+          {
+            "type": "state_transition"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "FPA-04",
+      "title": "Face loss beyond grace revokes pending evidence",
+      "operator_steps": [
+        "Open D's action window and begin but do not complete a gesture.",
+        "Leave the frame for more than one second.",
+        "Verify the window closes and the version stays zero, then quit."
+      ],
+      "assertions": {
+        "ordered_events": [
+          {
+            "type": "identity_gate_opened",
+            "fields": {
+              "focus_seat": "seat_d",
+              "state_version": 0
+            }
+          },
+          {
+            "type": "action_window_closed",
+            "fields": {
+              "reason": "face_missing_or_unknown_beyond_grace",
+              "focus_seat": "seat_d",
+              "state_version": 0
+            }
+          }
+        ],
+        "minimum_ordered_gaps_ms": [
+          1000
+        ],
+        "forbidden_events": [
+          {
+            "type": "state_transition"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "FPA-05",
+      "title": "Speech-only action requires UI confirmation",
+      "operator_steps": [
+        "Open D's action window and say call without a gesture.",
+        "Wait at least 500 ms and verify no transition occurs.",
+        "Press C once and stop after D's call is accepted."
+      ],
+      "assertions": {
+        "ordered_events": [
+          {
+            "type": "speech_observation",
+            "fields": {
+              "candidate_action": "call",
+              "focus_seat": "seat_d",
+              "state_version": 0
+            }
+          },
+          {
+            "type": "speech_ui_confirmation",
+            "fields": {
+              "candidate_action": "call",
+              "focus_seat": "seat_d",
+              "state_version": 0
+            }
+          },
+          {
+            "type": "state_transition",
+            "fields": {
+              "acting_seat": "seat_d",
+              "action": "call",
+              "before_version": 0,
+              "after_version": 1,
+              "next_seat": "seat_a"
+            }
+          }
+        ],
+        "minimum_ordered_gaps_ms": [
+          500,
+          0
+        ],
+        "transition_count": 1
+      }
+    },
+    {
+      "case_id": "FPA-06",
+      "title": "Conflicting gesture and speech are rejected",
+      "operator_steps": [
+        "Open D's action window.",
+        "Produce call by one modality and fold by the other within the fusion window.",
+        "Verify an ambiguous rejected decision and unchanged version, then quit."
+      ],
+      "assertions": {
+        "required_events": [
+          {
+            "type": "multimodal_action_decision",
+            "fields": {
+              "accepted": false,
+              "evidence_state": "ambiguous",
+              "focus_seat": "seat_d",
+              "expected_state_version": 0
+            },
+            "min_count": 1
+          }
+        ],
+        "forbidden_events": [
+          {
+            "type": "state_transition"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "FPA-07",
+      "title": "Ordinary no-action activity never advances the hand",
+      "operator_steps": [
+        "Open D's action window.",
+        "For at least two minutes, handle cards, touch the face, drink water and make ordinary hand motions without a command.",
+        "Quit without performing a poker action."
+      ],
+      "assertions": {
+        "required_events": [
+          {
+            "type": "identity_gate_opened",
+            "fields": {
+              "focus_seat": "seat_d",
+              "state_version": 0
+            },
+            "min_count": 1
+          },
+          {
+            "type": "summary",
+            "min_count": 1
+          }
+        ],
+        "minimum_summary_elapsed_seconds": 120,
+        "forbidden_events": [
+          {
+            "type": "state_transition"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "FPA-08",
+      "title": "Wrong-player recovery still completes D-A-B-C",
+      "operator_steps": [
+        "Before every correct player appears, briefly present a different registered player.",
+        "After the mismatch is logged, present the correct player and complete D call, A call, B call and C check.",
+        "Stop after ROUND_COMPLETE."
+      ],
+      "assertions": {
+        "required_events": [
+          {
+            "type": "identity_observation",
+            "fields": {
+              "state": "seat_mismatch"
+            },
+            "min_count": 4
+          }
+        ],
+        "exact_transitions_ref": "happy_path_transitions"
+      }
+    }
+  ]
+}

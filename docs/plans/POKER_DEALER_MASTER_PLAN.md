@@ -109,7 +109,7 @@ Stage 1 的不依赖实体证据部分现在即可开始；Stage 2A、2B 和 Sta
 | 00A 契约 | 四人 Core 范围确认 | rules v1.2、S0-01…20、schemas、18 walkthroughs | 已完成软件契约迁移 |
 | 00B 证据 | 00A | S0-07/16/18 产品决定，目标相机/桌面/机构/安全证据 | 进行中，尚未关闭 |
 | 1 软件 oracle | 00A | 可重放状态机、行为 focus、账本、牌型、三类 simulator、属性测试 | 工程实现与测试通过；Fixed-Limit adapter 为 candidate，release 总门仍受 S0-07 限制 |
-| 2A 行为感知 | S0-02/16/18 子 Gate | held-out participant/session 指标、校准阈值、离线 export | Laptop 手势、英文语音及四席 ROI 路由已接入；象限只属 feasibility，真人多席矩阵、最终语法、数据 split 与目标相机 Gate 开放 |
+| 2A 行为感知 | S0-02/16/18 子 Gate | held-out participant/session 指标、校准阈值、离线 export | Laptop 手势、英文语音、顺序式身份门与四席轮转已接入；九 Case 验收、预检、匿名记录、batch、数据 split、安全 replay 和可选 TCN 骨架已准备但未执行/训练；真人矩阵、最终语法、指标与目标相机 Gate 开放 |
 | 2B 牌面感知 | S0-02/04/05/11/13/19 子 Gate | held-out deck/session 指标、牌槽 lifecycle replay、离线 export | 等待目标桌面/相机证据 |
 | 3 发牌机构 | S0-01/03/04/09/10/13 子 Gate | 单张/落点/reveal/安全/协议实测 | 可做受控原型，不可 release |
 | 4 纵向集成 | Gate 1、2A、2B、3 | 六级集成梯、故障注入、10 手 dry run、恢复报告 | 未开始 |

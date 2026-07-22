@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0",
+  "pilot_status": "development_feasibility_only",
+  "pose_model": {
+    "model_id": "actor-attribution-mediapipe-pose-lite",
+    "version": "float16-local-20260721",
+    "asset_path": "models/assets/pose_landmarker_lite.task",
+    "sha256": "59929e1d1ee95287735ddd833b19cf4ac46d29bc7afddbbf6753c459690d574a",
+    "framework": "mediapipe-tasks-python",
+    "framework_version": "0.10.35",
+    "num_poses": 4,
+    "minimum_confidence": 0.5
+  },
+  "policy": {
+    "maximum_face_pose_distance": 0.22,
+    "maximum_track_jump": 0.25,
+    "maximum_hand_wrist_distance": 0.18,
+    "minimum_assignment_margin": 0.03,
+    "actor_lease_ms": 2500,
+    "max_hands": 4
+  },
+  "privacy": {
+    "persist_body_tracks": false,
+    "persist_face_embeddings": false,
+    "persist_speaker_embeddings": false
+  }
+}

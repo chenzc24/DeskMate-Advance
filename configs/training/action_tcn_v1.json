@@ -1,0 +1,53 @@
+{
+  "schema_version": "1.0",
+  "status": "prepared_not_trained",
+  "model_id": "player-action-landmark-tcn",
+  "version": "untrained-v1",
+  "grammar_version": "laptop-pilot-unfrozen-v2-victory-bet",
+  "input": {
+    "landmarks": 21,
+    "coordinates_per_landmark": 3,
+    "feature_dim": 63,
+    "normalization": "wrist_origin_max_xy_radius",
+    "sequence_length": 32,
+    "window_stride": 8,
+    "require_exactly_one_hand": true
+  },
+  "labels": [
+    "no_action",
+    "fold",
+    "check",
+    "call",
+    "bet",
+    "raise"
+  ],
+  "architecture": {
+    "channels": [64, 64],
+    "kernel_size": 3,
+    "dilations": [1, 2],
+    "dropout": 0.2
+  },
+  "training": {
+    "seed": 20260721,
+    "epochs": 50,
+    "batch_size": 64,
+    "learning_rate": 0.001,
+    "weight_decay": 0.0001,
+    "early_stopping_patience": 8,
+    "class_weighting": "inverse_frequency_train_only"
+  },
+  "admission_metrics": [
+    "per_action_precision_recall_f1",
+    "confusion_matrix",
+    "unknown_rejection_coverage",
+    "false_accepted_actions_per_hour_and_hand",
+    "cross_seat_leakage",
+    "cancellation_false_confirmation",
+    "p50_p95_confirmation_latency"
+  ],
+  "export": {
+    "format": "torchscript",
+    "offline_only": true,
+    "reference_export_consistency_required": true
+  }
+}

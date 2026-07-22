@@ -121,3 +121,17 @@ def test_four_player_policy_accepts_matching_gesture_confirmation() -> None:
     assert agreed is not None
     assert agreed.candidate_action is PlayerActionType.RAISE
     assert "multimodal_agreement" in agreed.quality_flags
+
+
+def test_cancel_pending_speech_does_not_remove_gesture() -> None:
+    window = MultimodalActionWindow(max_skew_ms=3000)
+    window.add(candidate("gesture", PlayerActionType.CALL, 1000))
+    window.add(candidate("speech", PlayerActionType.CALL, 1100))
+    # The matching pair emits and clears immediately; repopulate different sources.
+    window.add(candidate("gesture", PlayerActionType.CALL, 1200))
+    assert not window.cancel_pending_speech()
+    assert window.pending_sources == ("gesture",)
+    window.clear()
+    window.add(candidate("speech", PlayerActionType.CALL, 1300))
+    assert window.cancel_pending_speech()
+    assert window.pending_sources == ()

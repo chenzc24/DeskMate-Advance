@@ -1,9 +1,9 @@
 {
   "schema_version": "1.0",
-  "updated_on": "2026-07-21",
+  "updated_on": "2026-07-22",
   "asset_root": "models/assets",
   "runtime_downloads_allowed": false,
-  "notes": "No Poker Dealer model is admitted for release. MediaPipe gesture, Vosk English, YuNet face detection, SFace embedding and LGD card recognition assets are development-only Stage 2 feasibility evidence.",
+  "notes": "No Poker Dealer model is admitted for release. MediaPipe gesture/pose, Vosk English/speaker verification, YuNet face detection, SFace embedding, the untrained landmark TCN draft and LGD card recognition assets are development-only Stage 2 feasibility evidence.",
   "models": [
     {
       "model_id": "player-action-mediapipe-canned-gesture",
@@ -96,6 +96,51 @@
         "no four-seat cross-speaker leakage evidence",
         "Laptop microphone and acting-seat window do not prove speaker seat",
         "command grammar, confirmation UX and conflict policy are not frozen"
+      ]
+    },
+    {
+      "model_id": "player-speaker-vosk-spk",
+      "version": "vosk-model-spk-0.4",
+      "state": "development",
+      "task": "session-only speaker embedding for verification of an already state-bound player",
+      "source": {
+        "provider": "Alpha Cephei Vosk",
+        "download_url": "https://alphacephei.com/vosk/models/vosk-model-spk-0.4.zip",
+        "documentation_url": "https://alphacephei.com/vosk/models",
+        "speaker_example_url": "https://github.com/alphacep/vosk-api/blob/master/python/example/test_speaker.py",
+        "retrieved_on": "2026-07-22"
+      },
+      "license": {
+        "identifier": "Apache-2.0",
+        "evidence_url": "https://alphacephei.com/vosk/models",
+        "admission_note": "The official catalog lists the speaker model as Apache 2.0; recheck asset/runtime notices before candidate promotion."
+      },
+      "asset": {
+        "path": "models/assets/vosk-model-spk-0.4",
+        "archive_path": "models/assets/vosk-model-spk-0.4.zip",
+        "archive_bytes": 13869103,
+        "archive_sha256": "a74d8f51144484813e16af689bb0f916b7a111e2347f467c4933c1166097b5a7",
+        "tree_files": 5,
+        "tree_bytes": 15001021,
+        "tree_sha256": "bfb2d247c774f5e721607923e14ee1d91282fcb158c9d634ecae7d14cae28639",
+        "git_tracked": false
+      },
+      "framework": {
+        "name": "vosk",
+        "tested_version": "0.3.45",
+        "format": "Kaldi/Vosk x-vector speaker model"
+      },
+      "input_contract": "final Vosk utterance from the active state-owned listening window; mono 16 kHz int16 PCM is never persisted",
+      "output_contract": "normalized speaker embedding retained only in process memory and matched against consented session templates; it may verify the already-bound player but never choose the acting seat",
+      "dataset_manifest_sha256": null,
+      "view_manifest_sha256": null,
+      "metrics": {},
+      "admission_blockers": [
+        "similarity and margin thresholds are uncalibrated development defaults",
+        "no held-out participant/session speaker verification dataset",
+        "no false-match, false-non-match, cross-speaker leakage or noisy-room evaluation",
+        "no replay/presentation-attack protection",
+        "target microphone and robot-noise transfer remain unvalidated"
       ]
     },
     {
@@ -242,7 +287,90 @@
         "upstream private holdout labels and deck/session provenance are insufficient for project admission",
         "AGPL-3.0 distribution obligations require review before release"
       ]
+    },
+    {
+      "model_id": "player-action-landmark-tcn",
+      "version": "untrained-v1",
+      "state": "development",
+      "task": "optional compact temporal classifier over normalized 21x3 hand-landmark sequences",
+      "source": {
+        "provider": "Poker Dealer project-owned training code",
+        "config_path": "configs/training/action_tcn_v1.json",
+        "training_entrypoint": "scripts/perception/train_action_tcn.py",
+        "prepared_on": "2026-07-21"
+      },
+      "license": {
+        "identifier": "project-source",
+        "admission_note": "No trained weights exist. Record dataset licenses and notices before any candidate promotion."
+      },
+      "asset": {
+        "path": null,
+        "bytes": null,
+        "sha256": null,
+        "git_tracked": false
+      },
+      "framework": {
+        "name": "pytorch",
+        "tested_version": null,
+        "format": "TorchScript planned; optional training dependency is not installed in the validated runtime environment"
+      },
+      "input_contract": "32-frame sequence of wrist-centered, scale-normalized 21x3 hand landmarks plus a valid-frame mask",
+      "output_contract": "six logits for no_action/fold/check/call/bet/raise; calibration must convert these to PlayerActionObservation evidence, never a direct game action",
+      "dataset_manifest_sha256": null,
+      "view_manifest_sha256": null,
+      "metrics": {},
+      "admission_blockers": [
+        "no four-participant live failure evidence showing that the canned baseline needs post-training",
+        "no immutable participant/session-split source or landmark view manifest",
+        "no trained or exported weights",
+        "no held-out per-action, rejection, false-acceptance, cross-seat or latency metrics",
+        "no reference/export consistency result",
+        "target-camera transfer remains open"
+      ]
     }
   ],
-  "supporting_assets": []
+  "supporting_assets": [
+    {
+      "asset_id": "mediapipe-hand-landmarker",
+      "version": "float16-local-20260721",
+      "purpose": "offline derivation of normalized hand-landmark sequences; not a runtime action authority",
+      "source": {
+        "provider": "Google MediaPipe",
+        "documentation_url": "https://developers.google.com/mediapipe/solutions/vision/hand_landmarker",
+        "retrieved_on": "2026-07-21"
+      },
+      "license": {
+        "identifier": "Apache-2.0",
+        "evidence_url": "https://github.com/google-ai-edge/mediapipe/blob/master/LICENSE",
+        "admission_note": "Reconfirm task-asset coverage before publishing any derived model."
+      },
+      "asset": {
+        "path": "models/assets/hand_landmarker.task",
+        "bytes": 7819105,
+        "sha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+        "git_tracked": false
+      }
+    },
+    {
+      "asset_id": "mediapipe-pose-landmarker-lite",
+      "version": "float16-local-20260721",
+      "purpose": "development-only face-to-body-to-wrist attribution evidence; never a player identity, acting-seat or game-transition authority",
+      "source": {
+        "provider": "Google MediaPipe",
+        "documentation_url": "https://developers.google.com/mediapipe/solutions/vision/pose_landmarker",
+        "retrieved_on": "2026-07-21"
+      },
+      "license": {
+        "identifier": "Apache-2.0",
+        "evidence_url": "https://github.com/google-ai-edge/mediapipe/blob/master/LICENSE",
+        "admission_note": "Reconfirm task-asset coverage before candidate promotion; target-camera attribution evidence is still missing."
+      },
+      "asset": {
+        "path": "models/assets/pose_landmarker_lite.task",
+        "bytes": 5777746,
+        "sha256": "59929e1d1ee95287735ddd833b19cf4ac46d29bc7afddbbf6753c459690d574a",
+        "git_tracked": false
+      }
+    }
+  ]
 }

@@ -22,7 +22,10 @@ class GestureFrameEvidence:
     gesture_score: float | None
     centroid_x: float | None = None
     centroid_y: float | None = None
+    wrist_x: float | None = None
+    wrist_y: float | None = None
     handedness: str | None = None
+    detector_index: int | None = None
     inference_latency_ms: float | None = None
     quality_flags: tuple[str, ...] = ()
 
@@ -38,7 +41,10 @@ class GestureFrameEvidence:
                 self.gesture_score,
                 self.centroid_x,
                 self.centroid_y,
+                self.wrist_x,
+                self.wrist_y,
                 self.handedness,
+                self.detector_index,
             )
         ):
             raise ValueError("missing-hand evidence cannot carry hand outputs")
@@ -46,6 +52,10 @@ class GestureFrameEvidence:
             self.centroid_x is None or self.centroid_y is None
         ):
             raise ValueError("out-of-ROI evidence requires a hand centroid")
+        if self.hand_present and ((self.wrist_x is None) != (self.wrist_y is None)):
+            raise ValueError("hand wrist coordinates must be provided together")
+        if self.detector_index is not None and self.detector_index < 0:
+            raise ValueError("hand detector index must be non-negative")
         if any(not flag.strip() for flag in self.quality_flags):
             raise ValueError("gesture evidence quality flags cannot be empty")
 

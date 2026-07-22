@@ -109,6 +109,8 @@ class MediaPipeGestureAdapter:
         for index, landmarks in enumerate(result.hand_landmarks):
             centroid_x = sum(float(point.x) for point in landmarks) / len(landmarks)
             centroid_y = sum(float(point.y) for point in landmarks) / len(landmarks)
+            wrist_x = float(landmarks[0].x)
+            wrist_y = float(landmarks[0].y)
             in_roi = self.config.focus_roi.contains(centroid_x, centroid_y)
 
             label: str | None = None
@@ -130,7 +132,10 @@ class MediaPipeGestureAdapter:
                     gesture_score=score,
                     centroid_x=centroid_x,
                     centroid_y=centroid_y,
+                    wrist_x=wrist_x,
+                    wrist_y=wrist_y,
                     handedness=handedness,
+                    detector_index=index,
                     inference_latency_ms=latency_ms,
                 )
             )
