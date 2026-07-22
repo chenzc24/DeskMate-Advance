@@ -122,7 +122,7 @@ def test_one_runtime_drives_a_complete_no_burn_hand() -> None:
                     observed_at_ns=identity_time,
                     focus_seat=seat,
                     identity_state=FaceIdentityState.MATCHED,
-                    player_id=f"player:{seat.value}",
+                    player_id=f"player-{seat.value[-1]}",
                     registered_seat=seat,
                     similarity=0.95,
                     second_best_similarity=0.1,

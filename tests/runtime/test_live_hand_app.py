@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import json
 
 import pytest
 
@@ -31,6 +32,24 @@ def test_laptop_and_robot_camera_profiles_share_composition_root() -> None:
     assert laptop.event_log_path(session_id="s1", hand_id="h1") != (
         robot_camera.event_log_path(session_id="s1", hand_id="h1")
     )
+
+
+def test_composition_root_loads_core_rules_instead_of_engine_defaults(
+    tmp_path: Path,
+) -> None:
+    value = json.loads((ROOT / "configs/game/core_v1.json").read_text("utf-8"))
+    value["session_defaults"]["starting_stack_units"] = 96
+    value["betting"]["small_bet_units_default"] = 3
+    value["betting"]["big_bet_units_default"] = 6
+    config_path = tmp_path / "configs/game/core_v1.json"
+    config_path.parent.mkdir(parents=True)
+    config_path.write_text(json.dumps(value), encoding="utf-8")
+    app = LiveHandApplication(
+        tmp_path, RuntimeProfile.from_json(ROOT / "configs/runtime/laptop.json")
+    )
+    assert app.game_config.starting_stack_units == 96
+    assert app.game_config.rules.small_bet_units == 3
+    assert app.game_config.rules.big_bet_units == 6
 
 
 def test_hardware_profile_is_declared_but_cannot_open() -> None:

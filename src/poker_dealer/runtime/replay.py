@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 
 from poker_dealer.domain import (
     ActionEvidenceState,
@@ -99,9 +99,14 @@ class ScriptedReplaySources:
         cards: Mapping[VisionSlot, CardIdentity] = DEFAULT_SHOWDOWN_CARDS,
         *,
         actor_binding: bool = True,
+        action_selector: Callable[
+            [RuntimeObservationContext], PlayerActionType
+        ]
+        | None = None,
     ) -> None:
         self.cards = dict(cards)
         self.actor_binding = actor_binding
+        self.action_selector = action_selector
         self.sequence = 0
 
     def reset_visual_settle(self, context: RuntimeObservationContext) -> None:
@@ -146,10 +151,19 @@ class ScriptedReplaySources:
             return None
         self.sequence += 1
         action = (
-            PlayerActionType.CHECK
-            if PlayerActionType.CHECK in context.legal_actions
-            else PlayerActionType.CALL
+            self.action_selector(context)
+            if self.action_selector is not None
+            else (
+                PlayerActionType.CHECK
+                if PlayerActionType.CHECK in context.legal_actions
+                else PlayerActionType.CALL
+            )
         )
+        if action not in context.legal_actions:
+            raise ValueError(
+                f"script selected illegal {action.value} for "
+                f"{tuple(item.value for item in context.legal_actions)}"
+            )
         observation = PlayerActionObservation(
             observation_id=f"replay-action:{self.sequence}",
             hand_id=context.hand_id,

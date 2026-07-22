@@ -125,7 +125,7 @@ class DealerAck:
                 self._require_safe_evidence(homed=True, at_target=True)
             elif self.command is DealerCommandType.DISPENSE_ONE:
                 self._require_safe_evidence(
-                    homed=True, at_target=True, exit_pulses=1
+                    homed=True, at_target=True, deck_present=True, exit_pulses=1
                 )
         elif self.error_code is None or not self.reason:
             raise ValueError(
@@ -137,6 +137,7 @@ class DealerAck:
         *,
         homed: bool,
         at_target: bool | None = None,
+        deck_present: bool | None = None,
         exit_pulses: int | None = None,
     ) -> None:
         evidence = self.sensor_evidence
@@ -145,6 +146,10 @@ class DealerAck:
         if at_target is not None and evidence.at_target is not at_target:
             raise ValueError(
                 "successful target action acknowledgement requires at_target=true"
+            )
+        if deck_present is not None and evidence.deck_present is not deck_present:
+            raise ValueError(
+                "successful dispense acknowledgement requires deck_present=true"
             )
         if exit_pulses is not None and evidence.exit_pulses != exit_pulses:
             raise ValueError("successful dispense acknowledgement requires one exit pulse")

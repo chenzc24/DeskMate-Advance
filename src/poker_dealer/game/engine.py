@@ -3,12 +3,8 @@
 from __future__ import annotations
 
 import copy
-import hashlib
-import json
-import time
 from dataclasses import dataclass, field
 from enum import StrEnum
-from pathlib import Path
 from typing import Any, Mapping
 
 from poker_dealer.domain import (
@@ -36,7 +32,9 @@ from poker_dealer.domain import (
 )
 
 from .evaluator import HandRank, settle_showdown
+from .event_log import EventLog, HandEvent
 from .pots import OperatorAdjustment, Pot, build_pots
+from .rules import FixedLimitRules
 
 
 class SlotLifecycle(StrEnum):
@@ -83,61 +81,6 @@ def _initial_slot_states() -> dict[VisionSlot, SlotLifecycle]:
     return states
 
 
-@dataclass(frozen=True, slots=True)
-class FixedLimitRules:
-    small_blind_units: int = 1
-    big_blind_units: int = 2
-    small_bet_units: int = 2
-    big_bet_units: int = 4
-    max_full_bets_per_street: int = 4
-    action_timeout_seconds: int = 30
-    rules_version: str = "1.3"
-    product_status: str = "confirmed_core_v1"
-
-    def __post_init__(self) -> None:
-        numeric = (
-            self.small_blind_units,
-            self.big_blind_units,
-            self.small_bet_units,
-            self.big_bet_units,
-            self.max_full_bets_per_street,
-            self.action_timeout_seconds,
-        )
-        if any(value <= 0 for value in numeric):
-            raise ValueError("Fixed-Limit values must be positive")
-        if self.small_blind_units > self.big_blind_units:
-            raise ValueError("small blind cannot exceed big blind")
-
-    @classmethod
-    def from_project_config(cls, path: str | Path) -> FixedLimitRules:
-        config = json.loads(Path(path).read_text(encoding="utf-8"))
-        betting = config["betting"]
-        blinds = config["blinds_defaults"]
-        if betting.get("structure") != "fixed_limit":
-            raise ValueError("Core v1 requires betting.structure=fixed_limit")
-        if betting.get("product_decision_status") != "confirmed_core_v1":
-            raise ValueError("Core v1 Fixed-Limit product decision is not confirmed")
-        return cls(
-            small_blind_units=blinds["small_blind_units"],
-            big_blind_units=blinds["big_blind_units"],
-            small_bet_units=betting["small_bet_units_default"],
-            big_bet_units=betting["big_bet_units_default"],
-            max_full_bets_per_street=betting[
-                "max_full_bets_per_street_default"
-            ],
-            action_timeout_seconds=betting["action_timeout_seconds_default"],
-            rules_version=config["schema_version"],
-            product_status=betting["product_decision_status"],
-        )
-
-    def bet_size(self, street: Street) -> int:
-        if street in {Street.PREFLOP, Street.FLOP}:
-            return self.small_bet_units
-        if street in {Street.TURN, Street.RIVER}:
-            return self.big_bet_units
-        raise ValueError("showdown has no bet size")
-
-
 @dataclass(slots=True)
 class PlayerState:
     stack_units: int
@@ -180,6 +123,9 @@ class HandState:
     awards: dict[Seat, int] = field(default_factory=dict)
     paused_reason: str | None = None
     pending_command_id: str | None = None
+    recovery_phase: HandPhase | None = None
+    recovery_acting_seat: Seat | None = None
+    recovery_pending_command_id: str | None = None
     rules_version: str = "1.3"
 
     def live_seats(self) -> tuple[Seat, ...]:
@@ -281,6 +227,15 @@ def state_to_dict(state: HandState) -> dict[str, Any]:
         "awards": {seat.value: amount for seat, amount in state.awards.items()},
         "paused_reason": state.paused_reason,
         "pending_command_id": state.pending_command_id,
+        "recovery_phase": (
+            state.recovery_phase.value if state.recovery_phase else None
+        ),
+        "recovery_acting_seat": (
+            state.recovery_acting_seat.value
+            if state.recovery_acting_seat
+            else None
+        ),
+        "recovery_pending_command_id": state.recovery_pending_command_id,
         "rules_version": state.rules_version,
     }
 
@@ -332,6 +287,17 @@ def state_from_dict(value: Mapping[str, Any]) -> HandState:
         awards={Seat(seat): amount for seat, amount in value["awards"].items()},
         paused_reason=value["paused_reason"],
         pending_command_id=value["pending_command_id"],
+        recovery_phase=(
+            HandPhase(value["recovery_phase"])
+            if value.get("recovery_phase")
+            else None
+        ),
+        recovery_acting_seat=(
+            Seat(value["recovery_acting_seat"])
+            if value.get("recovery_acting_seat")
+            else None
+        ),
+        recovery_pending_command_id=value.get("recovery_pending_command_id"),
         rules_version=value["rules_version"],
     )
 
@@ -378,109 +344,6 @@ def state_to_contract_snapshot(state: HandState) -> dict[str, Any]:
         "pending_command_id": state.pending_command_id,
         "paused_reason": state.paused_reason,
     }
-
-
-@dataclass(frozen=True, slots=True)
-class HandEvent:
-    sequence: int
-    event_id: str
-    kind: str
-    observed_at_ns: int
-    before_version: int
-    after_version: int
-    accepted: bool
-    payload: Mapping[str, Any]
-    state_after: Mapping[str, Any]
-    previous_hash: str
-    event_hash: str
-
-    def unsigned(self) -> dict[str, Any]:
-        return {
-            "sequence": self.sequence,
-            "event_id": self.event_id,
-            "kind": self.kind,
-            "observed_at_ns": self.observed_at_ns,
-            "before_version": self.before_version,
-            "after_version": self.after_version,
-            "accepted": self.accepted,
-            "payload": self.payload,
-            "state_after": self.state_after,
-            "previous_hash": self.previous_hash,
-        }
-
-
-class EventLog:
-    def __init__(self) -> None:
-        self.events: list[HandEvent] = []
-
-    @staticmethod
-    def _hash(unsigned: Mapping[str, Any]) -> str:
-        encoded = json.dumps(
-            unsigned, sort_keys=True, separators=(",", ":"), ensure_ascii=False
-        ).encode("utf-8")
-        return hashlib.sha256(encoded).hexdigest()
-
-    def append(
-        self,
-        *,
-        kind: str,
-        event_id: str,
-        before_version: int,
-        accepted: bool,
-        payload: Mapping[str, Any],
-        state: HandState,
-        observed_at_ns: int | None = None,
-    ) -> HandEvent:
-        previous_hash = self.events[-1].event_hash if self.events else "0" * 64
-        unsigned = {
-            "sequence": len(self.events),
-            "event_id": event_id,
-            "kind": kind,
-            "observed_at_ns": observed_at_ns or time.monotonic_ns(),
-            "before_version": before_version,
-            "after_version": state.state_version,
-            "accepted": accepted,
-            "payload": dict(payload),
-            "state_after": state_to_dict(state),
-            "previous_hash": previous_hash,
-        }
-        event = HandEvent(**unsigned, event_hash=self._hash(unsigned))
-        self.events.append(event)
-        return event
-
-    def verify(self) -> None:
-        previous_hash = "0" * 64
-        for sequence, event in enumerate(self.events):
-            if event.sequence != sequence or event.previous_hash != previous_hash:
-                raise ValueError("event log sequence/hash chain is invalid")
-            if event.event_hash != self._hash(event.unsigned()):
-                raise ValueError("event log content hash is invalid")
-            previous_hash = event.event_hash
-
-    def recover_state(self) -> HandState:
-        self.verify()
-        if not self.events:
-            raise ValueError("cannot recover an empty event log")
-        return state_from_dict(self.events[-1].state_after)
-
-    def to_jsonl(self) -> str:
-        return "\n".join(
-            json.dumps(
-                {**event.unsigned(), "event_hash": event.event_hash},
-                sort_keys=True,
-                ensure_ascii=False,
-            )
-            for event in self.events
-        )
-
-    @classmethod
-    def from_jsonl(cls, text: str) -> EventLog:
-        log = cls()
-        for line in text.splitlines():
-            if line.strip():
-                log.events.append(HandEvent(**json.loads(line)))
-        log.verify()
-        return log
 
 
 @dataclass(frozen=True, slots=True)
@@ -566,6 +429,13 @@ class HandEngine:
             for event in self.log.events
             if event.kind == "operator_adjustment"
         }
+        completed_versions = [
+            int(event.payload["device_state_version"])
+            for event in self.log.events
+            if event.kind == "dealer_command_completed"
+            and "device_state_version" in event.payload
+        ]
+        self._last_dealer_device_state_version = max(completed_versions, default=-1)
 
     @classmethod
     def setup_session(
@@ -694,13 +564,14 @@ class HandEngine:
         return self.snapshot()
 
     @classmethod
-    def start(
+    def start_predealt_fixture(
         cls,
         hand_id: str,
         button: Seat,
         stacks: Mapping[Seat, int] | None = None,
         rules: FixedLimitRules | None = None,
     ) -> HandEngine:
+        """Build the legacy pre-dealt oracle used only by deterministic tests."""
         if not hand_id.strip():
             raise ValueError("hand_id must not be empty")
         resolved_rules = rules or FixedLimitRules()
@@ -748,6 +619,18 @@ class HandEngine:
         return engine
 
     @classmethod
+    def start(
+        cls,
+        hand_id: str,
+        button: Seat,
+        stacks: Mapping[Seat, int] | None = None,
+        rules: FixedLimitRules | None = None,
+    ) -> HandEngine:
+        """Compatibility alias for tests; production must use setup/begin."""
+
+        return cls.start_predealt_fixture(hand_id, button, stacks, rules)
+
+    @classmethod
     def from_log(
         cls, rules: FixedLimitRules, log: EventLog
     ) -> HandEngine:
@@ -782,15 +665,12 @@ class HandEngine:
         )
 
     def record_dealer_ack(self, ack: DealerAck) -> None:
-        """Append received ACK evidence; coordinators still decide progression."""
-
-        if self.state.pending_command_id == ack.command_id:
-            self.state.pending_command_id = None
+        """Append raw device evidence without accepting or clearing the command."""
         self.log.append(
             kind="dealer_ack_received",
             event_id=f"ack:{ack.command_id}:{ack.device_state_version}",
             before_version=self.state.state_version,
-            accepted=ack.status is DealerAckStatus.SUCCEEDED,
+            accepted=False,
             payload={
                 "command_id": ack.command_id,
                 "command": ack.command.value,
@@ -798,12 +678,54 @@ class HandEngine:
                 "status": ack.status.value,
                 "device_state": ack.device_state.value,
                 "device_state_version": ack.device_state_version,
+                "device_reported_success": ack.status is DealerAckStatus.SUCCEEDED,
+                "sensor_evidence": self._dealer_sensor_payload(ack),
                 "error_code": ack.error_code.value if ack.error_code else None,
                 "reason": ack.reason,
             },
             state=self.state,
             observed_at_ns=ack.observed_at_ns,
         )
+
+    def record_dealer_completion(self, ack: DealerAck) -> None:
+        """Commit a coordinator-correlated ACK with monotonic device evidence."""
+
+        if ack.status is not DealerAckStatus.SUCCEEDED:
+            raise ValueError("only a successful ACK can complete a command")
+        if self.state.pending_command_id != ack.command_id:
+            raise ValueError("ACK does not match the pending dealer command")
+        if ack.device_state_version <= self._last_dealer_device_state_version:
+            raise ValueError("dealer device state version is stale or non-monotonic")
+        self.state.pending_command_id = None
+        self._last_dealer_device_state_version = ack.device_state_version
+        self.log.append(
+            kind="dealer_command_completed",
+            event_id=f"complete:{ack.command_id}:{ack.device_state_version}",
+            before_version=self.state.state_version,
+            accepted=True,
+            payload={
+                "command_id": ack.command_id,
+                "command": ack.command.value,
+                "target_slot": ack.target_slot.value if ack.target_slot else None,
+                "device_state": ack.device_state.value,
+                "device_state_version": ack.device_state_version,
+                "sensor_evidence": self._dealer_sensor_payload(ack),
+            },
+            state=self.state,
+            observed_at_ns=ack.observed_at_ns,
+        )
+
+    @staticmethod
+    def _dealer_sensor_payload(ack: DealerAck) -> dict[str, bool | int | None]:
+        evidence = ack.sensor_evidence
+        return {
+            "homed": evidence.homed,
+            "at_target": evidence.at_target,
+            "deck_present": evidence.deck_present,
+            "exit_pulses": evidence.exit_pulses,
+            "interlock_closed": evidence.interlock_closed,
+            "emergency_stop": evidence.emergency_stop,
+        }
 
     def mark_delivery_pending(
         self, event_id: str, slot: VisionSlot, observed_at_ns: int
@@ -1113,6 +1035,7 @@ class HandEngine:
                     True, "card_already_confirmed", self.snapshot()
                 )
             if existing_card is not None and existing_card != card:
+                self._capture_recovery_checkpoint()
                 self.state.slot_states[observation.slot_id] = SlotLifecycle.CONFLICT
                 self.state.phase = HandPhase.PAUSED_RECOVERY
                 self.state.paused_reason = "slot_card_identity_changed"
@@ -1136,6 +1059,7 @@ class HandEngine:
                 if confirmed == card and slot is not observation.slot_id
             )
             if duplicate_slots:
+                self._capture_recovery_checkpoint()
                 self.state.slot_states[observation.slot_id] = SlotLifecycle.CONFLICT
                 for slot in duplicate_slots:
                     self.state.slot_states[slot] = SlotLifecycle.CONFLICT
@@ -1358,6 +1282,7 @@ class HandEngine:
         if not reason.strip():
             raise ValueError("pause reason is required")
         before = self.state.state_version
+        self._capture_recovery_checkpoint()
         self.state.phase = HandPhase.PAUSED_RECOVERY
         self.state.paused_reason = reason
         self.state.pending_command_id = None
@@ -1374,6 +1299,104 @@ class HandEngine:
         )
         return self.snapshot()
 
+    def resume_from_recovery(
+        self,
+        event_id: str,
+        *,
+        operator_id: str,
+        reason: str,
+        physical_state_confirmed: bool,
+    ) -> HandState:
+        """Resume only after an audited human confirms physical/software parity."""
+
+        if self.state.phase is not HandPhase.PAUSED_RECOVERY:
+            raise ValueError("hand is not paused for recovery")
+        if not event_id.strip() or not operator_id.strip() or not reason.strip():
+            raise ValueError("recovery event, operator and reason are required")
+        if not physical_state_confirmed:
+            raise ValueError("physical/software state parity must be confirmed")
+        recovery_phase = self.state.recovery_phase
+        if recovery_phase is None or recovery_phase is HandPhase.PAUSED_RECOVERY:
+            raise ValueError("no resumable recovery checkpoint is available")
+        if self.state.pending_command_id is not None:
+            raise ValueError("cannot resume while a dealer command remains pending")
+        if any(
+            lifecycle is SlotLifecycle.CONFLICT
+            for lifecycle in self.state.slot_states.values()
+        ):
+            raise ValueError("card conflicts require void/reconciliation, not retry")
+        before = self.state.state_version
+        self.state.phase = recovery_phase
+        self.state.acting_seat = self.state.recovery_acting_seat
+        old_pending = self.state.recovery_pending_command_id
+        self.state.paused_reason = None
+        self.state.recovery_phase = None
+        self.state.recovery_acting_seat = None
+        self.state.recovery_pending_command_id = None
+        self.state.state_version += 1
+        self._refresh_legal_actions()
+        self.log.append(
+            kind="hand_recovery_resumed",
+            event_id=event_id,
+            before_version=before,
+            accepted=True,
+            payload={
+                "operator_id": operator_id,
+                "reason": reason,
+                "physical_state_confirmed": True,
+                "abandoned_command_id": old_pending,
+                "restored_phase": recovery_phase.value,
+            },
+            state=self.state,
+        )
+        return self.snapshot()
+
+    def reconcile_card_slot(
+        self,
+        event_id: str,
+        *,
+        slot: VisionSlot,
+        operator_id: str,
+        reason: str,
+        physical_slot_empty: bool,
+    ) -> HandState:
+        """Audit a manual card removal so the restored lane can re-observe it."""
+
+        if self.state.phase is not HandPhase.PAUSED_RECOVERY:
+            raise ValueError("card reconciliation requires a paused hand")
+        if not event_id.strip() or not operator_id.strip() or not reason.strip():
+            raise ValueError("reconciliation event, operator and reason are required")
+        if not physical_slot_empty:
+            raise ValueError("reconciled card slot must be physically confirmed empty")
+        if self.state.slot_states[slot] is not SlotLifecycle.CONFLICT:
+            raise ValueError("only a conflicting slot may be reconciled")
+        before = self.state.state_version
+        removed = self.state.confirmed_cards.pop(slot, None)
+        self.state.slot_states[slot] = SlotLifecycle.EXPECTED_EMPTY
+        self.state.state_version += 1
+        self.log.append(
+            kind="card_slot_reconciled",
+            event_id=event_id,
+            before_version=before,
+            accepted=True,
+            payload={
+                "slot_id": slot.value,
+                "operator_id": operator_id,
+                "reason": reason,
+                "physical_slot_empty": True,
+                "removed_card": _card_to_dict(removed) if removed else None,
+            },
+            state=self.state,
+        )
+        return self.snapshot()
+
+    def _capture_recovery_checkpoint(self) -> None:
+        if self.state.phase is HandPhase.PAUSED_RECOVERY:
+            return
+        self.state.recovery_phase = self.state.phase
+        self.state.recovery_acting_seat = self.state.acting_seat
+        self.state.recovery_pending_command_id = self.state.pending_command_id
+
     def void(self, event_id: str, reason: str) -> HandState:
         before = self.state.state_version
         for player in self.state.players.values():
@@ -1384,6 +1407,9 @@ class HandEngine:
         self.state.phase = HandPhase.VOIDED
         self.state.paused_reason = reason
         self.state.pending_command_id = None
+        self.state.recovery_phase = None
+        self.state.recovery_acting_seat = None
+        self.state.recovery_pending_command_id = None
         self.state.acting_seat = None
         self.state.legal_actions = ()
         self.state.state_version += 1

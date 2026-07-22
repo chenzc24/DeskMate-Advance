@@ -11,6 +11,7 @@ from poker_dealer.domain import (
     HandPhase,
     PlayerActionObservation,
     Seat,
+    VisionSlot,
 )
 from poker_dealer.game import (
     CardObservationResult,
@@ -43,6 +44,8 @@ class HandRuntime:
         visual_settle_timeout_ms: int = 5000,
         command_timeout_ms: int = 5000,
         visual_timeout_ms: int = 5000,
+        expected_player_by_seat: Mapping[Seat, str] | None = None,
+        minimum_attribution_confidence: float = 0.35,
     ) -> None:
         if not session_id.strip():
             raise ValueError("session_id is required")
@@ -53,6 +56,8 @@ class HandRuntime:
         self.visual_settle_timeout_ms = visual_settle_timeout_ms
         self.command_timeout_ms = command_timeout_ms
         self.visual_timeout_ms = visual_timeout_ms
+        self.expected_player_by_seat = dict(expected_player_by_seat or {})
+        self.minimum_attribution_confidence = minimum_attribution_confidence
         self.part_a: SequentialPartACoordinator | None = None
         self.part_b: SequentialPartBCoordinator | None = None
         self.last_showdown_ranks: Mapping[Seat, HandRank] | None = None
@@ -85,6 +90,8 @@ class HandRuntime:
         visual_settle_timeout_ms: int = 5000,
         command_timeout_ms: int = 5000,
         visual_timeout_ms: int = 5000,
+        expected_player_by_seat: Mapping[Seat, str] | None = None,
+        minimum_attribution_confidence: float = 0.35,
     ) -> HandRuntime:
         engine = HandEngine.setup_session(hand_id, button, stacks, rules)
         engine.begin_hand(f"{hand_id}:begin")
@@ -96,6 +103,8 @@ class HandRuntime:
             visual_settle_timeout_ms=visual_settle_timeout_ms,
             command_timeout_ms=command_timeout_ms,
             visual_timeout_ms=visual_timeout_ms,
+            expected_player_by_seat=expected_player_by_seat,
+            minimum_attribution_confidence=minimum_attribution_confidence,
         )
 
     @classmethod
@@ -111,6 +120,7 @@ class HandRuntime:
         visual_settle_timeout_ms: int = 5000,
         command_timeout_ms: int = 5000,
         visual_timeout_ms: int = 5000,
+        minimum_attribution_confidence: float = 0.35,
     ) -> HandRuntime:
         """Start the product path only from a frozen four-player roster."""
 
@@ -119,6 +129,9 @@ class HandRuntime:
         seats = {participant.seat for participant in roster.participants}
         if len(roster.participants) != 4 or seats != set(Seat):
             raise ValueError("the frozen roster must contain all four unique seats")
+        players = {participant.seat: participant.participant_id for participant in roster.participants}
+        if len(set(players.values())) != 4 or any(not value.strip() for value in players.values()):
+            raise ValueError("the frozen roster must contain four unique player IDs")
         return cls.new_hand(
             hand_id=hand_id,
             session_id=roster.session_id,
@@ -130,6 +143,8 @@ class HandRuntime:
             visual_settle_timeout_ms=visual_settle_timeout_ms,
             command_timeout_ms=command_timeout_ms,
             visual_timeout_ms=visual_timeout_ms,
+            expected_player_by_seat=players,
+            minimum_attribution_confidence=minimum_attribution_confidence,
         )
 
     @property
@@ -152,6 +167,8 @@ class HandRuntime:
                     require_actor_binding=self.require_actor_binding,
                     require_visual_settle=self.require_visual_settle,
                     visual_settle_timeout_ms=self.visual_settle_timeout_ms,
+                    expected_player_by_seat=self.expected_player_by_seat,
+                    minimum_attribution_confidence=self.minimum_attribution_confidence,
                 )
             return
         if phase in {
@@ -266,6 +283,40 @@ class HandRuntime:
 
     def void(self, event_id: str, reason: str) -> None:
         self.engine.void(event_id, reason)
+        self.sync()
+
+    def resume_from_recovery(
+        self,
+        event_id: str,
+        *,
+        operator_id: str,
+        reason: str,
+        physical_state_confirmed: bool,
+    ) -> None:
+        self.engine.resume_from_recovery(
+            event_id,
+            operator_id=operator_id,
+            reason=reason,
+            physical_state_confirmed=physical_state_confirmed,
+        )
+        self.sync()
+
+    def reconcile_card_slot(
+        self,
+        event_id: str,
+        *,
+        slot: VisionSlot,
+        operator_id: str,
+        reason: str,
+        physical_slot_empty: bool,
+    ) -> None:
+        self.engine.reconcile_card_slot(
+            event_id,
+            slot=slot,
+            operator_id=operator_id,
+            reason=reason,
+            physical_slot_empty=physical_slot_empty,
+        )
         self.sync()
 
 

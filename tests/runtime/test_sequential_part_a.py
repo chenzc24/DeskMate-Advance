@@ -189,6 +189,36 @@ def test_open_action_window_timeout_pauses_authoritative_hand() -> None:
     assert coordinator.engine.state.paused_reason == "player_action_timeout"
 
 
+def test_identity_verification_is_covered_by_attention_timeout() -> None:
+    coordinator, _dealer = ready_coordinator()
+    assert coordinator.phase is PartAPhase.VERIFYING_IDENTITY
+    assert coordinator.check_timeout(31_000_000_000)
+    assert coordinator.engine.state.paused_reason == "attention_window_timeout"
+
+
+def test_frozen_roster_player_id_mismatch_is_rejected() -> None:
+    coordinator = SequentialPartACoordinator(
+        HandEngine.start("roster-check", Seat.A),
+        "session",
+        require_actor_binding=False,
+        require_visual_settle=False,
+        expected_player_by_seat={Seat.D: "frozen-player-d"},
+    )
+    dealer = SimulatedDealer()
+    dealer.homed = True
+    command = coordinator.request_rotation(1)
+    assert coordinator.accept_rotation_ack(dealer.execute(command, 2))
+    assert not coordinator.accept_identity(
+        identity(
+            coordinator,
+            FaceIdentityState.MATCHED,
+            player_id="self-declared-other-player",
+            registered_seat=Seat.D,
+        )
+    )
+    assert coordinator.last_reason == "identity_player_not_in_frozen_roster"
+
+
 def test_illegal_action_does_not_advance_focus() -> None:
     coordinator, _dealer = ready_coordinator()
     coordinator.accept_identity(
@@ -301,6 +331,37 @@ def test_strict_coordinator_requires_matching_actor_binding() -> None:
     assert outcome.accepted
     assert coordinator.engine.state.state_version == 1
     assert coordinator.active_actor_binding is None
+
+
+def test_low_attribution_confidence_cannot_admit_action() -> None:
+    coordinator = SequentialPartACoordinator(
+        HandEngine.start("low-attribution", Seat.A),
+        "session",
+        require_actor_binding=True,
+        require_visual_settle=False,
+        minimum_attribution_confidence=0.5,
+    )
+    dealer = SimulatedDealer()
+    dealer.homed = True
+    command = coordinator.request_rotation(1)
+    assert coordinator.accept_rotation_ack(dealer.execute(command, 2))
+    matched = identity(
+        coordinator,
+        FaceIdentityState.MATCHED,
+        player_id="player_d",
+        registered_seat=Seat.D,
+    )
+    assert coordinator.accept_identity(matched)
+    binding = ActorBindingLease(lease_ms=2000).open(
+        matched, hand_id=coordinator.engine.state.hand_id, person_track_id="person:1"
+    )
+    coordinator.bind_actor(binding)
+    outcome = coordinator.accept_attributed_action(
+        AttributedActionCandidate(action(coordinator), binding, "pose_wrist", 0.1)
+    )
+    assert not outcome.accepted
+    assert outcome.reason == "attribution_confidence_below_threshold"
+    assert coordinator.engine.state.state_version == 0
 
 
 def test_strict_coordinator_rejects_another_binding_id() -> None:

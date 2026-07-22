@@ -20,6 +20,7 @@ from poker_dealer.runtime import (
     RuntimeEventWriter,
     ScriptedReplaySources,
     StepClock,
+    SessionRuntime,
     check_runtime_hand_log,
     default_replay_roster,
 )
@@ -75,6 +76,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     camera.add_argument("--camera-index", type=int)
     camera.add_argument("--stream-url")
     parser.add_argument("--max-seconds", type=float, default=10.0)
+    parser.add_argument(
+        "--registration-timeout-seconds",
+        type=float,
+        default=900.0,
+        help="registration-only deadline; independent of smoke/live step duration",
+    )
     parser.add_argument("--max-steps", type=int, default=1000)
     parser.add_argument("--session-id")
     parser.add_argument("--hand-id")
@@ -112,6 +119,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--card-config",
         type=Path,
     )
+    parser.add_argument("--card-geometry-config", type=Path)
     parser.add_argument(
         "--replay-log",
         type=Path,
@@ -138,8 +146,11 @@ def _load_profile(args: argparse.Namespace) -> RuntimeProfile:
         device_index=args.camera_index,
         stream_url=args.stream_url,
     )
-    if args.disable_speech:
-        profile = profile.with_speech_override(enabled=False)
+    if args.disable_speech or args.speech_device is not None:
+        profile = profile.with_speech_override(
+            enabled=not args.disable_speech,
+            device=args.speech_device,
+        )
     return profile
 
 
@@ -222,12 +233,8 @@ def _run_replay(
         button = source_state.button
         sources = RecordedReplaySources(source_log)
     roster = default_replay_roster(session_id, button)
-    runtime = HandRuntime.from_roster(
-        hand_id=hand_id,
-        roster=roster,
-        require_actor_binding=True,
-        require_visual_settle=True,
-    )
+    game_session = SessionRuntime(roster, app.game_config)
+    runtime = game_session.start_hand(hand_id)
     output_path = args.log_jsonl or app.event_log_path(
         session_id=session_id, hand_id=hand_id
     )
@@ -306,9 +313,11 @@ def _run_live(
                 event_sink=writer,
                 session_id=session_id,
                 button=Seat(args.button),
-                deadline_ns=time.monotonic_ns() + int(args.max_seconds * 1_000_000_000),
+                deadline_ns=time.monotonic_ns()
+                + int(args.registration_timeout_seconds * 1_000_000_000),
             )
-            runtime = app.create_hand(hand_id=hand_id, roster=roster)
+            game_session = app.create_session(roster=roster)
+            runtime = game_session.start_hand(hand_id)
             loop = HandRuntimeLoop(
                 runtime,
                 app.dealer,
@@ -316,6 +325,7 @@ def _run_live(
                 action_source=session,
                 card_source=session,
                 visual_settle_source=session,
+                control_source=controls,
                 frame_source=frame_source,
                 event_writer=writer,
             )
@@ -363,6 +373,10 @@ def _live_config(
             args.attribution_config or perception_paths["attribution_config"]
         ),
         card_config=args.card_config or perception_paths["card_config"],
+        card_geometry_config=(
+            args.card_geometry_config
+            or perception_paths["card_geometry_config"]
+        ),
         consent_confirmed=consent_confirmed,
         speech_enabled=profile.speech_enabled,
         speech_device=(
@@ -371,6 +385,9 @@ def _live_config(
             else profile.speech_device
         ),
         runtime_calibration_id=profile.perception.calibration_id,
+        target_geometry_validated=(
+            profile.perception.target_geometry_validated
+        ),
         operator_face_down_confirmation=args.development_operator_face_down,
     )
 

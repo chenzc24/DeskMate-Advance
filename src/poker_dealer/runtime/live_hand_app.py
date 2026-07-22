@@ -10,7 +10,7 @@ import time
 from typing import Mapping
 
 from poker_dealer.domain import DealerAck, DealerCommand, Seat
-from poker_dealer.game import FixedLimitRules
+from poker_dealer.game import CoreGameConfig, FixedLimitRules
 from poker_dealer.io.camera import CameraReadStatus, OpenCVCamera
 from poker_dealer.robotics.dealer import (
     DealerPort,
@@ -22,6 +22,7 @@ from poker_dealer.robotics.dealer import (
 from .hand_runtime import HandRuntime
 from .profile import DealerAdapterKind, RuntimeCameraKind, RuntimeProfile
 from .registration import FrozenSessionRoster
+from .session_runtime import SessionRuntime
 from .resource_lock import RuntimeResourceLocks
 
 
@@ -71,6 +72,9 @@ class LiveHandApplication:
     def __init__(self, project_root: Path, profile: RuntimeProfile) -> None:
         self.project_root = project_root.resolve()
         self.profile = profile
+        self.game_config = CoreGameConfig.from_json(
+            self.project_root / "configs" / "game" / "core_v1.json"
+        )
         self.camera = OpenCVCamera(profile.camera.to_camera_config())
         self.dealer = self._build_dealer(profile)
         self._locks = RuntimeResourceLocks(
@@ -212,9 +216,19 @@ class LiveHandApplication:
         return HandRuntime.from_roster(
             hand_id=hand_id,
             roster=roster,
-            stacks=stacks,
-            rules=rules,
+            stacks=stacks or self.game_config.default_stacks(),
+            rules=rules or self.game_config.rules,
         )
+
+    def create_session(
+        self,
+        *,
+        roster: FrozenSessionRoster,
+        stacks: Mapping[Seat, int] | None = None,
+    ) -> SessionRuntime:
+        if not self._opened:
+            raise RuntimeError("application must be open before starting a session")
+        return SessionRuntime(roster, self.game_config, stacks=stacks)
 
     def execute_dealer_command(self, command: DealerCommand) -> DealerAck:
         if not self._opened:

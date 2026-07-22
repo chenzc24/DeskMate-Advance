@@ -44,6 +44,8 @@ class LaptopControlAdapter:
 
     _KEYS = {
         ord("e"): ControlIntent.CONFIRM,
+        ord("c"): ControlIntent.CONFIRM,
+        ord("f"): ControlIntent.CONFIRM,
         13: ControlIntent.CONFIRM,
         ord("s"): ControlIntent.START,
         ord("x"): ControlIntent.CLEAR,

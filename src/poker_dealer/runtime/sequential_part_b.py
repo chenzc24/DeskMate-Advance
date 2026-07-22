@@ -216,6 +216,11 @@ class SequentialPartBCoordinator:
         if ack.status is not DealerAckStatus.SUCCEEDED:
             self._enter_recovery(f"dealer_ack_{ack.status.value}")
             return False
+        try:
+            self.engine.record_dealer_completion(ack)
+        except ValueError as exc:
+            self._enter_recovery(f"dealer_ack_not_committed:{exc}")
+            return False
         self._accepted_ack_ids.add(ack.command_id)
         self.pending_command = None
         return True

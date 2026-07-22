@@ -79,6 +79,16 @@ def test_voice_is_optional_but_can_be_recorded_in_roster() -> None:
     assert runtime.participants[0].voice_enrolled
 
 
+def test_next_previous_controls_navigate_roles_without_crashing() -> None:
+    runtime = RegistrationRuntime("session", Seat.A)
+    next_outcome = runtime.accept_control(control(1, ControlIntent.NEXT_OPTION))
+    assert next_outcome.accepted
+    assert runtime.focus_role is TableRole.SMALL_BLIND
+    previous = runtime.accept_control(control(2, ControlIntent.PREVIOUS_OPTION))
+    assert previous.accepted
+    assert runtime.focus_role is TableRole.BUTTON
+
+
 def test_frozen_roster_cannot_be_mutated_by_late_voice_enrollment() -> None:
     runtime = RegistrationRuntime("session", Seat.A)
     for sequence, role in enumerate(

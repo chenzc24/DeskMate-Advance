@@ -15,6 +15,7 @@ from .announcer import (
     WindowsSpeechAnnouncer,
 )
 from .hand_runtime import HandRuntime
+from .session_runtime import SessionAuditEvent, SessionRuntime
 from .hand_loop import HandLoopResult, HandRuntimeLoop
 from .event_log import (
     HandLogCheck,
@@ -81,6 +82,8 @@ __all__ = [
     "HandLogCheck",
     "HandLoopResult",
     "HandRuntime",
+    "SessionAuditEvent",
+    "SessionRuntime",
     "HandRuntimeLoop",
     "DealerAdapterKind",
     "LiveHandApplication",

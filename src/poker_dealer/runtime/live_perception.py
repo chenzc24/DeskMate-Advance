@@ -12,6 +12,7 @@ from poker_dealer.domain import (
     ActionEvidenceState,
     CardObservation,
     ControlIntent,
+    ControlObservation,
     FramePacket,
     HandPhase,
     ObservationStatus,
@@ -49,6 +50,7 @@ from poker_dealer.perception.attribution import (
 from poker_dealer.perception.cards import (
     CardObservationPromoter,
     CardPilotConfig,
+    CardSlotGeometryConfig,
     OpenCvCardRecognitionAdapter,
     crop_fixed_card_roi,
 )
@@ -98,10 +100,12 @@ class LivePerceptionConfig:
     speaker_config: Path
     attribution_config: Path
     card_config: Path
+    card_geometry_config: Path
     consent_confirmed: bool
     speech_enabled: bool
     speech_device: int | str | None
     runtime_calibration_id: str
+    target_geometry_validated: bool = False
     operator_face_down_confirmation: bool = True
 
     def __post_init__(self) -> None:
@@ -120,6 +124,11 @@ def validate_live_perception_assets(
     speaker = SpeakerVerificationConfig.from_json(config.speaker_config)
     attribution = ActorAttributionConfig.from_json(config.attribution_config)
     card = CardPilotConfig.from_json(config.card_config)
+    geometry = CardSlotGeometryConfig.from_json(config.card_geometry_config)
+    if config.target_geometry_validated and not geometry.target_geometry_validated:
+        raise ValueError(
+            "runtime profile cannot validate an unvalidated card-slot geometry"
+        )
     identity_hashes = identity.verify_assets()
     gesture_hash = gesture.verify_model_asset()
     attribution.verify_pose_asset()
@@ -133,6 +142,9 @@ def validate_live_perception_assets(
         "gesture_hash": gesture_hash,
         "pose_hash": attribution.pose_asset_sha256,
         "card_hashes": list(card_hashes),
+        "card_slot_count": len(geometry.slots),
+        "card_geometry_calibration_id": geometry.calibration_id,
+        "card_target_geometry_validated": geometry.target_geometry_validated,
         "speech_hash": speech_hash,
         "speaker_hash": speaker_hash,
         "runtime_calibration_id": config.runtime_calibration_id,
@@ -263,6 +275,16 @@ class LivePerceptionSession:
             config.attribution_config
         )
         self.card_config = CardPilotConfig.from_json(config.card_config)
+        self.card_geometry = CardSlotGeometryConfig.from_json(
+            config.card_geometry_config
+        )
+        if (
+            config.target_geometry_validated
+            and not self.card_geometry.target_geometry_validated
+        ):
+            raise ValueError(
+                "runtime profile cannot validate an unvalidated card-slot geometry"
+            )
         self.gesture_config = replace(
             self.gesture_config,
             model=replace(
@@ -290,6 +312,7 @@ class LivePerceptionSession:
         self.identity_temporal = FaceIdentityTemporalAdapter(self.identity_config)
         self.gesture_temporal = GestureTemporalAdapter(self.gesture_config)
         self.card_temporal = CardObservationPromoter(self.card_config)
+        self._runtime_controls: tuple[ControlObservation, ...] = ()
         self.actor_lease = ActorBindingLease(
             lease_ms=self.attribution_config.actor_lease_ms
         )
@@ -447,6 +470,14 @@ class LivePerceptionSession:
                     for sample in voice_samples:
                         sample.fill(0.0)
                     voice_samples = []
+                    last_sample_ns = None
+                if control.intent is ControlIntent.CANCEL and outcome.accepted:
+                    for sample in samples:
+                        embedding = getattr(sample, "embedding", None)
+                        if embedding is not None:
+                            embedding.fill(0.0)
+                    samples = []
+                    last_sample_ns = None
                 if outcome.roster is not None:
                     return outcome.roster
             if (
@@ -552,6 +583,21 @@ class LivePerceptionSession:
                 ),
             )
         raise TimeoutError("registration deadline expired")
+
+    def accept_runtime_controls(
+        self,
+        controls: tuple[ControlObservation, ...],
+        context: RuntimeObservationContext,
+    ) -> None:
+        del context
+        self._runtime_controls = controls
+
+    def _consume_runtime_intent(self, *intents: ControlIntent) -> bool:
+        matched = any(item.intent in intents for item in self._runtime_controls)
+        self._runtime_controls = tuple(
+            item for item in self._runtime_controls if item.intent not in intents
+        )
+        return matched
 
     def reset_visual_settle(self, context: RuntimeObservationContext) -> None:
         del context
@@ -779,7 +825,7 @@ class LivePerceptionSession:
                         speaker_confirmed = True
                     elif confirmation.status is SpeechConfirmationStatus.CANCELLED:
                         self.multimodal.cancel_pending_speech()
-        if self.frame_source.consume_key(ord("c")) is not None:
+        if self._consume_runtime_intent(ControlIntent.CONFIRM):
             pending = self._speech_confirmation.pending
             if (
                 pending is not None
@@ -802,7 +848,9 @@ class LivePerceptionSession:
                     )
                     self._speech_confirmation.clear()
                     speaker_confirmed = True
-        if self.frame_source.consume_key(8, ord("x")) is not None:
+        if self._consume_runtime_intent(
+            ControlIntent.CANCEL, ControlIntent.CLEAR
+        ):
             self.multimodal.cancel_pending_speech()
             self._speech_confirmation.clear()
             self._verified_speech_similarity = None
@@ -885,7 +933,7 @@ class LivePerceptionSession:
                 return self._unknown_card(
                     slot, observed_at_ns, "face_down_orientation_adapter_unavailable"
                 )
-            if self.frame_source.consume_key(ord("f")) is None:
+            if not self._consume_runtime_intent(ControlIntent.CONFIRM):
                 return None
             return CardObservation(
                 observation_id=f"live-hole-operator:{slot.value}:{observed_at_ns}",
@@ -907,7 +955,7 @@ class LivePerceptionSession:
             "place/reveal one card inside the active fixed ROI",
         )
         cropped, _pixel_roi = crop_fixed_card_roi(
-            frame, self.card_config.fixed_roi, slot
+            frame, self.card_geometry.roi_for(slot), slot
         )
         evidence = self.card_model.analyze(cropped)
         return self.card_temporal.process(slot, evidence)

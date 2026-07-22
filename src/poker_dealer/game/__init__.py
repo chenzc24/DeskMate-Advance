@@ -20,6 +20,7 @@ from .engine import (
     state_to_contract_snapshot,
     state_to_dict,
 )
+from .config import CoreGameConfig
 from .evaluator import (
     HandCategory,
     HandRank,
@@ -46,6 +47,7 @@ from .simulators import (
 )
 
 __all__ = [
+    "CoreGameConfig",
     "ActionPromoter",
     "ActionRequest",
     "ActionResult",

@@ -90,6 +90,7 @@ class RuntimePerceptionProfile:
     speaker_config: Path
     attribution_config: Path
     card_config: Path
+    card_geometry_config: Path
     calibration_id: str
     target_geometry_validated: bool
 
@@ -101,6 +102,7 @@ class RuntimePerceptionProfile:
             self.speaker_config,
             self.attribution_config,
             self.card_config,
+            self.card_geometry_config,
         ):
             if value.is_absolute() or not value.parts or ".." in value.parts:
                 raise ValueError("perception config paths must be safe project-relative paths")
@@ -118,6 +120,7 @@ class RuntimePerceptionProfile:
             "speaker_config": (root / self.speaker_config).resolve(),
             "attribution_config": (root / self.attribution_config).resolve(),
             "card_config": (root / self.card_config).resolve(),
+            "card_geometry_config": (root / self.card_geometry_config).resolve(),
         }
 
 
@@ -197,7 +200,7 @@ class RuntimeProfile:
             perception,
             {
                 "identity_config", "gesture_config", "speech_config", "speaker_config",
-                "attribution_config", "card_config", "calibration_id",
+                "attribution_config", "card_config", "card_geometry_config", "calibration_id",
                 "target_geometry_validated",
             },
             "perception",
@@ -249,6 +252,9 @@ class RuntimeProfile:
                 speaker_config=Path(str(perception.get("speaker_config", ""))),
                 attribution_config=Path(str(perception.get("attribution_config", ""))),
                 card_config=Path(str(perception.get("card_config", ""))),
+                card_geometry_config=Path(
+                    str(perception.get("card_geometry_config", ""))
+                ),
                 calibration_id=str(perception.get("calibration_id", "")),
                 target_geometry_validated=cls._bool(
                     perception.get("target_geometry_validated"),

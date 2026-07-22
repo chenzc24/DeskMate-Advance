@@ -51,7 +51,7 @@
     "perception": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["identity_config", "gesture_config", "speech_config", "speaker_config", "attribution_config", "card_config", "calibration_id", "target_geometry_validated"],
+      "required": ["identity_config", "gesture_config", "speech_config", "speaker_config", "attribution_config", "card_config", "card_geometry_config", "calibration_id", "target_geometry_validated"],
       "properties": {
         "identity_config": {"type": "string", "pattern": "^configs/perception/[^.].*\\.json$"},
         "gesture_config": {"type": "string", "pattern": "^configs/perception/[^.].*\\.json$"},
@@ -59,6 +59,7 @@
         "speaker_config": {"type": "string", "pattern": "^configs/perception/[^.].*\\.json$"},
         "attribution_config": {"type": "string", "pattern": "^configs/perception/[^.].*\\.json$"},
         "card_config": {"type": "string", "pattern": "^configs/perception/[^.].*\\.json$"},
+        "card_geometry_config": {"type": "string", "pattern": "^configs/perception/[^.].*\\.json$"},
         "calibration_id": {"type": "string", "minLength": 1},
         "target_geometry_validated": {"type": "boolean"}
       }

@@ -223,6 +223,10 @@ Stage 0/1 后分成两条并行轨道：
 - [Stage 5：验收演示](../stages/STAGE_5_DEMO_ACCEPTANCE.md)
 
 只有当 Stage 0–5 各自的证据和 Gate 全部通过，Core v1 才算完成。Plus 需求没有开始或没有完成，不影响 Core 的完成定义。
+## Runtime Review 记录
+
+- [2026-07-22 Runtime 全线 Review 收口](../reviews/2026-07-22-runtime-review-closure.md)：记录配置、roster、attention deadline、13 槽、ACK、Session、恢复和纵向 Replay 的软件收口，以及仍未通过的物理/模型 Gate。
+
 # S0-21 / Stage 2A 补充：本场玩家身份核验
 
 Core 允许把本场、显式同意的人脸注册作为可选核验证据：状态机先给出 `acting_seat`，机器人完成面向该席位，视觉再输出 `player_id` 或 `unknown`。身份模型永不决定轮到谁，也不改变动作、牌局或数字筹码。embedding 仅存在内存并在退出时销毁。此能力当前是 development Pilot，最终阈值、活体、目标相机/旋转证据和恢复 UX 均未冻结，不计作 Stage 2A Gate 已通过。

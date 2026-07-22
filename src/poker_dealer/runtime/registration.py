@@ -124,6 +124,19 @@ class RegistrationRuntime:
             self.phase = RegistrationPhase.READY_FOR_FACE
             self._roster_version += 1
             return RegistrationOutcome(True, "registration_cleared")
+        if observation.intent in {
+            ControlIntent.NEXT_OPTION,
+            ControlIntent.PREVIOUS_OPTION,
+        }:
+            if self.phase in {
+                RegistrationPhase.CAPTURING_FACE,
+                RegistrationPhase.STARTED,
+            }:
+                return RegistrationOutcome(False, "role_navigation_not_available")
+            offset = 1 if observation.intent is ControlIntent.NEXT_OPTION else -1
+            current = ROLE_ORDER.index(self.focus_role)
+            self.select_role(ROLE_ORDER[(current + offset) % len(ROLE_ORDER)])
+            return RegistrationOutcome(True, "registration_role_changed")
         if observation.intent is ControlIntent.START:
             if self.phase is not RegistrationPhase.READY_TO_START:
                 return RegistrationOutcome(False, "four_roles_required")
@@ -135,7 +148,7 @@ class RegistrationRuntime:
             )
             self.phase = RegistrationPhase.STARTED
             return RegistrationOutcome(True, "roster_frozen", roster)
-        raise AssertionError("unsupported control intent")
+        return RegistrationOutcome(False, "unsupported_control_intent")
 
     def complete_face_enrollment(self, sample_count: int) -> RegisteredParticipant:
         if self.phase is not RegistrationPhase.CAPTURING_FACE:

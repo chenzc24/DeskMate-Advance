@@ -26,6 +26,17 @@ def test_laptop_config_check_succeeds_without_opening_devices(capsys) -> None:
     assert output["full_live_hand_integrated"] is False
 
 
+def test_speech_device_override_is_applied_before_resource_lock_selection() -> None:
+    module = _load_script()
+    args = module.parse_args(
+        ["--profile", "laptop", "--speech-device", "test-microphone"]
+    )
+    profile = module._load_profile(args)
+    app = module.LiveHandApplication(module.ROOT, profile)
+    assert profile.speech_device == "test-microphone"
+    assert "microphone:test-microphone" in app.resource_ids
+
+
 def test_real_hardware_config_check_fails_closed(capsys) -> None:
     module = _load_script()
     assert module.main(["--profile", "robot_hardware", "--check-config"]) == 2

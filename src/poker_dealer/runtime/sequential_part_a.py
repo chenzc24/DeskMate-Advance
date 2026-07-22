@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import Mapping
 
 from poker_dealer.domain import (
     DealerAck,
@@ -48,11 +49,15 @@ class SequentialPartACoordinator:
         require_actor_binding: bool = True,
         require_visual_settle: bool = True,
         visual_settle_timeout_ms: int = 5000,
+        expected_player_by_seat: Mapping[Seat, str] | None = None,
+        minimum_attribution_confidence: float = 0.35,
     ) -> None:
         if not session_id.strip():
             raise ValueError("session_id is required")
         if visual_settle_timeout_ms <= 0:
             raise ValueError("visual settle timeout must be positive")
+        if not 0.0 <= minimum_attribution_confidence <= 1.0:
+            raise ValueError("minimum attribution confidence must be in [0, 1]")
         if (
             engine.state.phase is not HandPhase.AWAITING_ACTION
             or engine.state.acting_seat is None
@@ -63,6 +68,8 @@ class SequentialPartACoordinator:
         self.require_actor_binding = require_actor_binding
         self.require_visual_settle = require_visual_settle
         self.visual_settle_timeout_ms = visual_settle_timeout_ms
+        self.expected_player_by_seat = dict(expected_player_by_seat or {})
+        self.minimum_attribution_confidence = minimum_attribution_confidence
         self.phase = PartAPhase.WAITING_ROTATION_ACK
         self.pending_rotation: DealerCommand | None = None
         self.verified_player_id: str | None = None
@@ -71,6 +78,7 @@ class SequentialPartACoordinator:
         self._command_sequence = 0
         self._action_window_opened_at_ns: int | None = None
         self._visual_settle_opened_at_ns: int | None = None
+        self._attention_window_opened_at_ns: int | None = None
         self._accepted_rotation_ack_ids: set[str] = set()
 
     @property
@@ -120,8 +128,14 @@ class SequentialPartACoordinator:
         if ack.sensor_evidence.at_target is not True:
             self._enter_recovery("rotation_ack_missing_at_target_evidence")
             return False
+        try:
+            self.engine.record_dealer_completion(ack)
+        except ValueError as exc:
+            self._enter_recovery(f"rotation_ack_not_committed:{exc}")
+            return False
         self._accepted_rotation_ack_ids.add(ack.command_id)
         self.pending_rotation = None
+        self._attention_window_opened_at_ns = ack.observed_at_ns
         if self.require_visual_settle:
             self._visual_settle_opened_at_ns = ack.observed_at_ns
             self.phase = PartAPhase.WAITING_VISUAL_SETTLE
@@ -162,6 +176,10 @@ class SequentialPartACoordinator:
         if observation.registered_seat is not seat or observation.player_id is None:
             self.last_reason = "identity_registered_seat_mismatch"
             return False
+        expected_player = self.expected_player_by_seat.get(seat)
+        if expected_player is not None and observation.player_id != expected_player:
+            self.last_reason = "identity_player_not_in_frozen_roster"
+            return False
         self.verified_player_id = observation.player_id
         self.active_actor_binding = None
         self._action_window_opened_at_ns = observation.observed_at_ns
@@ -199,6 +217,10 @@ class SequentialPartACoordinator:
             return CoordinatorActionOutcome(
                 False, "actor_binding_mismatch", None, self.focus_seat
             )
+        if candidate.attribution_confidence < self.minimum_attribution_confidence:
+            return CoordinatorActionOutcome(
+                False, "attribution_confidence_below_threshold", None, self.focus_seat
+            )
         if not binding.is_valid_at(candidate.observation.observed_at_ns):
             return CoordinatorActionOutcome(
                 False, "actor_binding_expired", None, self.focus_seat
@@ -231,6 +253,7 @@ class SequentialPartACoordinator:
         self.verified_player_id = None
         self.active_actor_binding = None
         self._action_window_opened_at_ns = None
+        self._attention_window_opened_at_ns = None
         self.pending_rotation = None
         if (
             self.engine.state.phase is HandPhase.AWAITING_ACTION
@@ -267,6 +290,7 @@ class SequentialPartACoordinator:
         self.verified_player_id = None
         self.active_actor_binding = None
         self._action_window_opened_at_ns = None
+        self._attention_window_opened_at_ns = None
         self.phase = PartAPhase.ROUND_COMPLETE
         self.last_reason = f"pilot_complete:{reason}"
 
@@ -293,13 +317,22 @@ class SequentialPartACoordinator:
             self._enter_recovery("visual_settle_timeout")
             return True
         if (
-            self.phase is PartAPhase.WAITING_PLAYER_ACTION
-            and self._action_window_opened_at_ns is not None
+            self.phase
+            in {
+                PartAPhase.WAITING_VISUAL_SETTLE,
+                PartAPhase.VERIFYING_IDENTITY,
+                PartAPhase.WAITING_PLAYER_ACTION,
+            }
+            and self._attention_window_opened_at_ns is not None
             and now_ns
-            >= self._action_window_opened_at_ns
+            >= self._attention_window_opened_at_ns
             + self.engine.rules.action_timeout_seconds * 1_000_000_000
         ):
-            self._enter_recovery("player_action_timeout")
+            self._enter_recovery(
+                "player_action_timeout"
+                if self.phase is PartAPhase.WAITING_PLAYER_ACTION
+                else "attention_window_timeout"
+            )
             return True
         return False
 
@@ -310,6 +343,7 @@ class SequentialPartACoordinator:
         self.active_actor_binding = None
         self._action_window_opened_at_ns = None
         self._visual_settle_opened_at_ns = None
+        self._attention_window_opened_at_ns = None
         self.last_reason = reason
         if self.engine.state.phase is not HandPhase.PAUSED_RECOVERY:
             self.engine.pause(

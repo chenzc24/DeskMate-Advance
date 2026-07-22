@@ -22,6 +22,7 @@ from .hand_runtime import HandRuntime
 from .ports import (
     ActionSource,
     CardSource,
+    ControlSource,
     FrameRead,
     FrameReadState,
     FrameSource,
@@ -59,6 +60,7 @@ class HandRuntimeLoop:
         event_writer: RuntimeEventWriter,
         frame_source: FrameSource | None = None,
         visual_settle_source: VisualSettleSource | None = None,
+        control_source: ControlSource | None = None,
         clock_ns: Clock = time.monotonic_ns,
     ) -> None:
         self.runtime = runtime
@@ -69,6 +71,7 @@ class HandRuntimeLoop:
         self.event_writer = event_writer
         self.frame_source = frame_source
         self.visual_settle_source = visual_settle_source
+        self.control_source = control_source
         self.clock_ns = clock_ns
         self.steps = 0
         self._camera_epoch = 0
@@ -101,7 +104,31 @@ class HandRuntimeLoop:
                 return self._result(True, "hand_settled")
             if phase in {HandPhase.PAUSED_RECOVERY, HandPhase.VOIDED}:
                 return self._result(False, phase.value)
-            self.step()
+            try:
+                self.step()
+            except Exception as exc:
+                if self.runtime.phase not in {
+                    HandPhase.PAUSED_RECOVERY,
+                    HandPhase.SETTLED,
+                    HandPhase.VOIDED,
+                }:
+                    self.runtime.engine.pause(
+                        f"runtime:{self.runtime.engine.state.hand_id}:exception:{self.steps}",
+                        f"runtime_loop_exception:{type(exc).__name__}",
+                    )
+                    self.runtime.sync()
+                    self.event_writer.sync_engine(self.runtime.engine.log)
+                raise
+        if self.runtime.phase not in {
+            HandPhase.PAUSED_RECOVERY,
+            HandPhase.SETTLED,
+            HandPhase.VOIDED,
+        }:
+            self.runtime.engine.pause(
+                f"runtime:{self.runtime.engine.state.hand_id}:step-budget:{self.steps}",
+                "runtime_loop_step_budget_exhausted",
+            )
+            self.runtime.sync()
         return self._result(False, "max_steps_reached")
 
     def step(self) -> None:
@@ -151,6 +178,7 @@ class HandRuntimeLoop:
             if self.runtime.engine.state.slot_states[slot] is expected:
                 continue
             context = self.context()
+            self._dispatch_controls(now_ns, context)
             observation = self.card_source.observe_card(
                 frame, context, slot, now_ns
             )
@@ -186,8 +214,10 @@ class HandRuntimeLoop:
             frame = self._read_frame(now_ns)
             if self.runtime.phase is HandPhase.PAUSED_RECOVERY:
                 return
+            context = self.context()
+            self._dispatch_controls(now_ns, context)
             settled = self.visual_settle_source.visual_is_settled(
-                frame, self.context(), now_ns
+                frame, context, now_ns
             )
             if settled is True:
                 self.runtime.accept_visual_settle()
@@ -196,8 +226,10 @@ class HandRuntimeLoop:
             frame = self._read_frame(now_ns)
             if self.runtime.phase is HandPhase.PAUSED_RECOVERY:
                 return
+            context = self.context()
+            self._dispatch_controls(now_ns, context)
             observation = self.identity_source.observe_identity(
-                frame, self.context(), now_ns
+                frame, context, now_ns
             )
             if observation is None:
                 return
@@ -212,8 +244,10 @@ class HandRuntimeLoop:
             frame = self._read_frame(now_ns)
             if self.runtime.phase is HandPhase.PAUSED_RECOVERY:
                 return
+            context = self.context()
+            self._dispatch_controls(now_ns, context)
             evidence = self.action_source.observe_action(
-                frame, self.context(), now_ns
+                frame, context, now_ns
             )
             if evidence is None:
                 return
@@ -252,6 +286,36 @@ class HandRuntimeLoop:
             )
             return
         raise RuntimeError(f"unsupported Part A phase: {coordinator.phase.value}")
+
+    def _dispatch_controls(
+        self, observed_at_ns: int, context: RuntimeObservationContext
+    ) -> None:
+        controls = (
+            self.control_source.poll_controls(observed_at_ns)
+            if self.control_source is not None
+            else ()
+        )
+        for control in controls:
+            self.event_writer.emit(
+                "runtime_control",
+                observed_at_ns=control.observed_at_ns,
+                payload={
+                    "observation_id": control.observation_id,
+                    "intent": control.intent.value,
+                    "source": control.source.value,
+                    "control_id": control.control_id,
+                    "device_state_version": control.device_state_version,
+                    "hand_phase": context.hand_phase.value,
+                },
+            )
+        consumers = {
+            id(source): source
+            for source in (self.identity_source, self.action_source, self.card_source)
+        }
+        for source in consumers.values():
+            handler = getattr(source, "accept_runtime_controls", None)
+            if handler is not None:
+                handler(controls, context)
 
     def _read_frame(self, now_ns: int):
         if self.frame_source is None:

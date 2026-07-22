@@ -124,7 +124,8 @@ Use keys `1`–`4` to select the simulated focus seat, `E` to enroll its default
 player ID, `X` to clear the session gallery, and `Q`/`Esc` to exit. The pilot
 has no liveness protection and its thresholds are not release-calibrated.
 
-The sequential Part A pilot integrates simulated rotation acknowledgement,
+The following sequential Part A command is a legacy isolated perception pilot,
+not the product runtime. It integrates simulated rotation acknowledgement,
 session identity, gesture/English speech fusion, game legality and automatic
 advance to the next acting seat:
 
@@ -154,6 +155,19 @@ confirmation. The separate two-player fixture requires the explicit
 `--player-mode two_player_pilot` option. Rotation is simulated and the pilot
 stops at the Part A betting-round boundary rather than inventing card or
 physical-dealing acknowledgements.
+
+The only formal full-hand entry point is `scripts/runtime/run_hand.py`. A
+development Laptop live run uses unified registration, Part A, Part B,
+SessionRuntime, event logging and recovery contracts:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\runtime\run_hand.py --profile laptop --mode live --button seat_a --consent-confirmed --development-operator-face-down --registration-timeout-seconds 900
+```
+
+The operator face-down switch is explicitly non-Gate evidence. The shipped
+13-slot geometry is also an unvalidated development template; calibrate the
+selected target camera before claiming a Live card-perception pass. See the
+[Runtime review closure](docs/reviews/2026-07-22-runtime-review-closure.md).
 
 Before a four-participant acceptance session, run the read-only preflight,
 create one ignored pseudonymous session record, execute each `FPA-00` through

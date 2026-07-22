@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from poker_dealer.domain import HandPhase, Seat
+from poker_dealer.domain import HandPhase, PlayerActionType, Seat
 from poker_dealer.robotics.dealer import SimulatedDealerAdapter
 from poker_dealer.runtime import HandRuntime
 from poker_dealer.runtime.event_log import (
@@ -29,12 +29,14 @@ def _run_complete_hand(
     *,
     session_id: str = "replay-session",
     hand_id: str = "replayed-hand",
+    stacks=None,
 ) -> HandRuntime:
     runtime = HandRuntime.from_roster(
         hand_id=hand_id,
         roster=default_replay_roster(session_id, Seat.A),
         require_actor_binding=True,
         require_visual_settle=True,
+        stacks=stacks,
     )
     dealer = SimulatedDealerAdapter(f"sim:{hand_id}")
     dealer.open()
@@ -54,6 +56,46 @@ def _run_complete_hand(
     assert result.completed
     assert result.hand_phase is HandPhase.SETTLED
     return runtime
+
+
+def test_vertical_replay_fold_path_settles_uncontested(tmp_path: Path) -> None:
+    runtime = _run_complete_hand(
+        tmp_path / "fold.jsonl",
+        ScriptedReplaySources(
+            action_selector=lambda context: PlayerActionType.FOLD
+        ),
+        hand_id="fold-path",
+    )
+    assert sum(player.folded for player in runtime.engine.state.players.values()) == 3
+    assert runtime.engine.state.board == ()
+
+
+def test_vertical_replay_raise_and_short_all_in_path(tmp_path: Path) -> None:
+    raised = False
+
+    def choose(context):
+        nonlocal raised
+        if not raised and PlayerActionType.RAISE in context.legal_actions:
+            raised = True
+            return PlayerActionType.RAISE
+        if PlayerActionType.CALL in context.legal_actions:
+            return PlayerActionType.CALL
+        return PlayerActionType.CHECK
+
+    runtime = _run_complete_hand(
+        tmp_path / "all-in.jsonl",
+        ScriptedReplaySources(action_selector=choose),
+        hand_id="raise-all-in-path",
+        stacks={seat: 4 for seat in Seat},
+    )
+    assert raised
+    assert runtime.phase is HandPhase.SETTLED
+    assert runtime.engine.state.total_units() == 16
+    assert any(
+        event.kind == "action_applied"
+        and event.payload.get("action") == "raise"
+        for event in runtime.engine.log.events
+    )
 
 
 def test_complete_hand_is_logged_checked_and_replayed_exactly(tmp_path: Path) -> None:
@@ -135,3 +177,8 @@ def test_camera_disconnect_pauses_before_card_source_can_advance(tmp_path: Path)
     assert result.completed is False
     assert result.hand_phase is HandPhase.PAUSED_RECOVERY
     assert runtime.engine.state.paused_reason == "camera_disconnected"
+    log = RuntimeEventLog.from_path(tmp_path / "disconnect.jsonl")
+    strict = check_runtime_hand_log(log)
+    assert not strict.passed
+    assert "hand_not_settled:paused_recovery" in strict.issues
+    assert check_runtime_hand_log(log, require_settled=False).passed

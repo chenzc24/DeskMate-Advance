@@ -26,6 +26,7 @@
     "speaker_config": "configs/perception/speaker_verification_session.json",
     "attribution_config": "configs/perception/actor_binding_session.json",
     "card_config": "configs/perception/cards_lgd_pilot.json",
+    "card_geometry_config": "configs/perception/card_slots_development_v1.json",
     "calibration_id": "laptop-development-unfrozen-v1",
     "target_geometry_validated": false
   },
