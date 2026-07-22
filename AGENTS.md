@@ -77,8 +77,8 @@ Preserve this dependency direction:
 
 Git tracks source, configs, schemas, compact evaluation, manifests and model
 metadata. Raw/private images and video stay in ignored `data/raw/`; derived
-views in ignored `data/work/`; runs in ignored `runs/`; weights in ignored
-`models/assets/`. Never commit identity-bearing media, credentials, licenses,
+views in ignored `data/work/`; runs in ignored `runs/`. Never commit
+identity-bearing media, credentials, licenses,
 consent records or signed URLs. Never commit or persist face embeddings; clear
 the in-memory enrollment gallery at session end. Face enrollment requires
 explicit participant consent.
