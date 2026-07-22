@@ -12,8 +12,10 @@ advancing game state.
 Owned paths are `configs/perception/cards_lgd_pilot.json`,
 `src/poker_dealer/perception/cards/`, `scripts/perception/*card*`,
 `tests/perception/cards/`, `docs/evaluation/stage2b-*`, the development entry in
-`models/manifest.yaml`, and this plan. The ONNX asset stays ignored under
-`models/assets/card_recognition/lgd-cards-gen3/`.
+`models/manifest.yaml`, `.gitattributes`, the three pinned original model files
+under `models/assets/card_recognition/lgd-cards-gen3/`, and this plan. Following
+the 2026-07-22 artifact-policy update, the original ONNX and PyTorch weights are
+tracked through Git LFS while the small class mapping is tracked by Git.
 
 ## Dirty Paths Left Read-Only
 
@@ -29,6 +31,9 @@ policy; no model is promoted to candidate or release.
   `b2e9e89cc0138a70fc3ac5661922f99b4e3ae135`.
 - `model.onnx` and `model.classes.json`, downloaded once during setup and
   verified by SHA-256 before every load; runtime downloads remain prohibited.
+- Original upstream `best.pt`, retained as the non-runtime training-format
+  source asset and verified at SHA-256
+  `3513b77ab418ac2e86d3bf53be6566522666e656cbccb12678ba93feb6201004`.
 - AGPL-3.0 model weights inherited from Ultralytics YOLO11. The adapter uses
   the repository's existing OpenCV DNN runtime and records the license without
   claiming that ONNX changes the weight license.
@@ -50,15 +55,20 @@ or video persistence, robot connection or physical motion is authorized.
 
 ## Commit Intent
 
-Do not commit, push or merge unless the user explicitly requests it after
-reviewing the local test result.
+The user explicitly requested committing the original, non-fine-tuned model to
+`main` after the repository artifact policy was updated. Commit only the two
+original weights, class mapping, LFS attributes, manifest and this plan; leave
+all chip workspaces, datasets, runs and fine-tuned weights uncommitted.
 
 ## Completed Validation
 
-- Pinned and verified the ignored ONNX asset at
+- Pinned and verified the Git-LFS-tracked ONNX asset at
   `8b767cdfed2c8e954a9134013ac3d2f2c53be048768d559675be01277a8a8fd1`
   and its 52-class sidecar at
   `8a2d7e9dacf245aca5ef5a402cb404def919e9994e9142644d80c6d6248ee038`.
+- Verified the original upstream PyTorch weight at
+  `3513b77ab418ac2e86d3bf53be6566522666e656cbccb12678ba93feb6201004`;
+  it is retained for provenance and is not selected by the runtime config.
 - OpenCV DNN 5.0.0 loaded the model fully offline and produced the expected
   bounded `1x56x8400` output. A blank frame returned `unknown/no_detection`.
 - A public A-spades functional sample returned `A/spades` at
@@ -74,4 +84,10 @@ reviewing the local test result.
   1280x720. The deliberately empty ROI produced 20 `unknown/no_detection`
   observations; inference mean was 59.44 ms and P95 was 66.83 ms. No frames
   were saved and no game state was mutated.
-- No robot connection, physical motion, commit, push or merge occurs.
+- No robot connection or physical motion occurs. The scoped artifact commit and
+  direct `main` push are authorized by the user's 2026-07-22 request.
+- 2026-07-22 artifact upload revalidation: manifest/class parsing and the
+  original ONNX offline blank-frame smoke passed; the current card perception
+  suite passed `14/14` tests. The practical full suite reported `292 passed, 4
+  skipped, 4 failed`; all four failures are caused by the unrelated ignored
+  YuNet/SFace face assets being absent locally, and no card test failed.

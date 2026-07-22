@@ -246,14 +246,24 @@
         "path": "models/assets/card_recognition/lgd-cards-gen3/model.onnx",
         "bytes": 38233687,
         "sha256": "8b767cdfed2c8e954a9134013ac3d2f2c53be048768d559675be01277a8a8fd1",
-        "git_tracked": false
+        "git_tracked": true,
+        "storage": "git-lfs"
+      },
+      "training_source_asset": {
+        "path": "models/assets/card_recognition/lgd-cards-gen3/best.pt",
+        "bytes": 19217939,
+        "sha256": "3513b77ab418ac2e86d3bf53be6566522666e656cbccb12678ba93feb6201004",
+        "git_tracked": true,
+        "storage": "git-lfs",
+        "runtime_selected": false
       },
       "class_mapping": {
         "path": "models/assets/card_recognition/lgd-cards-gen3/model.classes.json",
         "bytes": 316,
         "sha256": "8a2d7e9dacf245aca5ef5a402cb404def919e9994e9142644d80c6d6248ee038",
         "classes": 52,
-        "git_tracked": false
+        "git_tracked": true,
+        "storage": "git"
       },
       "framework": {
         "name": "opencv-dnn",
