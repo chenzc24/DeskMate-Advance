@@ -38,6 +38,25 @@
 第二次同样以 `settled` 结束，并通过独立 Checker。Replay 模式不打开机器人 MJPEG、
 Laptop 摄像头或麦克风。
 
+## 20 手跨手资格运行
+
+执行：
+
+```powershell
+.\.venv\Scripts\python.exe scripts\runtime\run_hand.py `
+  --profile laptop --mode replay --max-hands 20 `
+  --session-id software-qualification-20260722-v1 `
+  --session-log-jsonl runs/runtime/validation/software-qualification-20260722-v1/session.jsonl
+
+.\.venv\Scripts\python.exe scripts\runtime\check_session_log.py `
+  runs/runtime/validation/software-qualification-20260722-v1/session.jsonl
+```
+
+结果：20 手全部 `settled`，每手 111 steps，20 份单手 Checker 全部通过；Session
+Checker 报告 `hands_started=20`、`hands_closed=20`、`ended=true`、`issues=[]`。
+Button 从 A 每手顺时针轮转，20 手后回到 A；Roster 只建立一次，筹码跨手连续且总量
+守恒。测试另外覆盖作废手 Button 不轮转、清台门、重买、重试及 Session 日志篡改拒绝。
+
 ## Live 资产与组合检查
 
 两个非物理 Profile 的 `live-preflight` 均成功校验：
@@ -50,14 +69,17 @@ Laptop 摄像头或麦克风。
 - 所有运行时下载关闭，frames/audio 不保存。
 
 Face、Gesture、Pose、Card 模型也在不打开设备的情况下完成同一
-`LivePerceptionSession` 构造/释放检查。
+`LivePerceptionSession` 构造/释放检查。Laptop Profile 已切换到独立
+`laptop-13-slot-development-v1`，解析得到完整 13 槽且保持
+`target_geometry_validated=false`；机器人占位几何未被修改或推断。
 
-最终仓库测试为 `284 passed`；runtime Profile Schema、全部 config JSON、相对文档
+最终仓库测试为 `309 passed`；runtime Profile Schema、全部 config JSON、相对文档
 链接、Python compileall 与 `git diff --check` 均通过。
 
 ## 尚未关闭的物理/数据 Gate
 
-- Laptop 和机器人目标桌面几何均标记 `target_geometry_validated=false`。
+- Laptop 和机器人目标桌面几何均标记 `target_geometry_validated=false`；Laptop 仅增加
+  独立开发配置和从固定截图框选 13 槽的工具，不构成视觉 Gate。
 - 机器人摄像头的 Face/Hand/Card ROI 与 calibration 尚未实测冻结。
 - Hole 牌占用与背面朝向没有 admitted model；开发 Live 只能使用显式操作员确认，
   因此不能计为 Gate 2B 或 I4.4 通过。

@@ -2,21 +2,14 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Mapping
 
-from poker_dealer.domain import HandPhase, SEAT_ORDER, Seat, role_seats
+from poker_dealer.domain import HandPhase, SEAT_ORDER, Seat, VisionSlot, role_seats
 from poker_dealer.game import CoreGameConfig
 
 from .hand_runtime import HandRuntime
 from .registration import FrozenSessionRoster, RegisteredParticipant
-
-
-@dataclass(frozen=True, slots=True)
-class SessionAuditEvent:
-    sequence: int
-    kind: str
-    payload: Mapping[str, object]
+from .session_log import SessionAuditEvent, SessionEventLog
 
 
 class SessionRuntime:
@@ -28,6 +21,7 @@ class SessionRuntime:
         game_config: CoreGameConfig,
         *,
         stacks: Mapping[Seat, int] | None = None,
+        log: SessionEventLog | None = None,
     ) -> None:
         if len(roster.participants) != 4:
             raise ValueError("session requires four registered participants")
@@ -42,24 +36,54 @@ class SessionRuntime:
         self.active_hand: HandRuntime | None = None
         self._table_cleared = True
         self._hand_ids: set[str] = set()
-        self._events: list[SessionAuditEvent] = []
+        self.log = log or SessionEventLog()
+        self._ended = False
+        self._append(
+            "session_started",
+            {
+                "session_id": roster.session_id,
+                "roster_version": roster.roster_version,
+                "button": self.button.value,
+                "rules_version": game_config.rules.rules_version,
+                "stacks": self._stack_payload(),
+                "players": {
+                    participant.seat.value: participant.participant_id
+                    for participant in roster.participants
+                },
+            },
+        )
 
     @property
     def events(self) -> tuple[SessionAuditEvent, ...]:
-        return tuple(self._events)
+        return tuple(self.log.events)
+
+    @property
+    def table_cleared(self) -> bool:
+        return self._table_cleared
+
+    @property
+    def ended(self) -> bool:
+        return self._ended
+
+    @property
+    def low_stack_seats(self) -> tuple[Seat, ...]:
+        minimum = self.game_config.minimum_stack_to_start_hand_units
+        return tuple(seat for seat in SEAT_ORDER if self.stacks[seat] < minimum)
+
+    @property
+    def next_hand_number(self) -> int:
+        return len(self._hand_ids) + 1
 
     def start_hand(self, hand_id: str) -> HandRuntime:
+        if self._ended:
+            raise ValueError("session has ended")
         if self.active_hand is not None:
             raise ValueError("the previous hand has not been closed")
         if not self._table_cleared:
             raise ValueError("table clearance must be confirmed before the next hand")
         if not hand_id.strip() or hand_id in self._hand_ids:
             raise ValueError("hand ID must be non-empty and unique in the session")
-        below_minimum = {
-            seat: stack
-            for seat, stack in self.stacks.items()
-            if stack < self.game_config.minimum_stack_to_start_hand_units
-        }
+        below_minimum = {seat: self.stacks[seat] for seat in self.low_stack_seats}
         if below_minimum:
             raise ValueError(
                 "all players must meet the configured minimum stack: "
@@ -75,10 +99,23 @@ class SessionRuntime:
         self.active_hand = runtime
         self._table_cleared = False
         self._hand_ids.add(hand_id)
-        self._append("hand_started", {"hand_id": hand_id, "button": self.button.value})
+        self._append(
+            "hand_started",
+            {
+                "hand_id": hand_id,
+                "button": self.button.value,
+                "starting_stacks": self._stack_payload(),
+            },
+        )
         return runtime
 
-    def close_terminal_hand(self) -> None:
+    def close_terminal_hand(
+        self,
+        *,
+        hand_log_path: str | None = None,
+        hand_log_sha256: str | None = None,
+        hand_log_check_passed: bool | None = None,
+    ) -> None:
         runtime = self.active_hand
         if runtime is None:
             raise ValueError("no active hand")
@@ -97,7 +134,10 @@ class SessionRuntime:
                 "terminal_phase": runtime.phase.value,
                 "button_before": old_button.value,
                 "button_after": self.button.value,
-                "stacks": {seat.value: self.stacks[seat] for seat in SEAT_ORDER},
+                "stacks": self._stack_payload(),
+                "hand_log_path": hand_log_path,
+                "hand_log_sha256": hand_log_sha256,
+                "hand_log_check_passed": hand_log_check_passed,
             },
         )
         self.active_hand = None
@@ -105,8 +145,12 @@ class SessionRuntime:
     def confirm_table_cleared(
         self, *, operator_id: str, reason: str = "all_cards_manually_returned"
     ) -> None:
+        if self._ended:
+            raise ValueError("session has ended")
         if self.active_hand is not None:
             raise ValueError("cannot clear the table while a hand is active")
+        if self._table_cleared:
+            raise ValueError("table is already confirmed clear")
         if not operator_id.strip() or not reason.strip():
             raise ValueError("table-clear operator and reason are required")
         self._table_cleared = True
@@ -124,6 +168,8 @@ class SessionRuntime:
         operator_id: str,
         reason: str,
     ) -> None:
+        if self._ended:
+            raise ValueError("session has ended")
         if self.active_hand is not None:
             raise ValueError("session stack adjustments are between-hand only")
         if not adjustment_id.strip() or not operator_id.strip() or not reason.strip():
@@ -131,7 +177,7 @@ class SessionRuntime:
         if any(
             event.kind == "stack_adjusted"
             and event.payload.get("adjustment_id") == adjustment_id
-            for event in self._events
+            for event in self.log.events
         ):
             return
         updated = self.stacks[seat] + amount_units
@@ -147,6 +193,109 @@ class SessionRuntime:
                 "operator_id": operator_id,
                 "reason": reason,
                 "stack_after": updated,
+            },
+        )
+
+    def retry_active_hand(
+        self,
+        *,
+        decision_id: str,
+        operator_id: str,
+        reason: str,
+        state_parity_confirmed: bool,
+    ) -> HandRuntime:
+        runtime = self._paused_hand()
+        runtime.resume_from_recovery(
+            decision_id,
+            operator_id=operator_id,
+            reason=reason,
+            physical_state_confirmed=state_parity_confirmed,
+        )
+        self._append(
+            "recovery_decision",
+            {
+                "decision_id": decision_id,
+                "hand_id": runtime.engine.state.hand_id,
+                "decision": "retry",
+                "operator_id": operator_id,
+                "reason": reason,
+                "state_parity_confirmed": state_parity_confirmed,
+            },
+        )
+        return runtime
+
+    def reconcile_active_slot(
+        self,
+        *,
+        decision_id: str,
+        slot: VisionSlot,
+        operator_id: str,
+        reason: str,
+        slot_empty_confirmed: bool,
+    ) -> HandRuntime:
+        runtime = self._paused_hand()
+        runtime.reconcile_card_slot(
+            decision_id,
+            slot=slot,
+            operator_id=operator_id,
+            reason=reason,
+            physical_slot_empty=slot_empty_confirmed,
+        )
+        self._append(
+            "recovery_decision",
+            {
+                "decision_id": decision_id,
+                "hand_id": runtime.engine.state.hand_id,
+                "decision": "reconcile_slot",
+                "slot_id": slot.value,
+                "operator_id": operator_id,
+                "reason": reason,
+                "slot_empty_confirmed": slot_empty_confirmed,
+            },
+        )
+        return runtime
+
+    def void_active_hand(
+        self, *, decision_id: str, operator_id: str, reason: str
+    ) -> HandRuntime:
+        runtime = self.active_hand
+        if runtime is None:
+            raise ValueError("no active hand")
+        if runtime.phase in {HandPhase.SETTLED, HandPhase.VOIDED}:
+            raise ValueError("terminal hand cannot be voided again")
+        if not decision_id.strip() or not operator_id.strip() or not reason.strip():
+            raise ValueError("void decision, operator and reason are required")
+        runtime.void(decision_id, reason)
+        self._append(
+            "recovery_decision",
+            {
+                "decision_id": decision_id,
+                "hand_id": runtime.engine.state.hand_id,
+                "decision": "void",
+                "operator_id": operator_id,
+                "reason": reason,
+            },
+        )
+        return runtime
+
+    def end_session(self, *, operator_id: str, reason: str) -> None:
+        if self._ended:
+            return
+        if self.active_hand is not None:
+            raise ValueError("cannot end session while a hand is active")
+        if not self._table_cleared:
+            raise ValueError("table must be confirmed clear before ending session")
+        if not operator_id.strip() or not reason.strip():
+            raise ValueError("session-end operator and reason are required")
+        self._ended = True
+        self._append(
+            "session_ended",
+            {
+                "operator_id": operator_id,
+                "reason": reason,
+                "hands": len(self._hand_ids),
+                "final_button": self.button.value,
+                "final_stacks": self._stack_payload(),
             },
         )
 
@@ -170,7 +319,16 @@ class SessionRuntime:
         )
 
     def _append(self, kind: str, payload: Mapping[str, object]) -> None:
-        self._events.append(SessionAuditEvent(len(self._events) + 1, kind, payload))
+        self.log.append(kind, payload)
+
+    def _paused_hand(self) -> HandRuntime:
+        runtime = self.active_hand
+        if runtime is None or runtime.phase is not HandPhase.PAUSED_RECOVERY:
+            raise ValueError("active hand is not paused for recovery")
+        return runtime
+
+    def _stack_payload(self) -> dict[str, int]:
+        return {seat.value: self.stacks[seat] for seat in SEAT_ORDER}
 
 
 __all__ = ["SessionAuditEvent", "SessionRuntime"]

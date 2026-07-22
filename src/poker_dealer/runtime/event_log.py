@@ -177,7 +177,10 @@ class HandLogCheck:
 
 
 def check_runtime_hand_log(
-    log: RuntimeEventLog, *, require_settled: bool = True
+    log: RuntimeEventLog,
+    *,
+    require_settled: bool = True,
+    allow_voided: bool = False,
 ) -> HandLogCheck:
     """Recompute invariants instead of trusting a claimed winner or balance."""
 
@@ -195,7 +198,10 @@ def check_runtime_hand_log(
             )
     initial = state_from_dict(events[0].state_after)
     final = engine_log.recover_state()
-    if require_settled and final.phase is not HandPhase.SETTLED:
+    terminal_phase_allowed = final.phase is HandPhase.SETTLED or (
+        allow_voided and final.phase is HandPhase.VOIDED
+    )
+    if require_settled and not terminal_phase_allowed:
         issues.append(f"hand_not_settled:{final.phase.value}")
     if initial.total_units() != final.total_units():
         issues.append("digital_ledger_not_conserved")

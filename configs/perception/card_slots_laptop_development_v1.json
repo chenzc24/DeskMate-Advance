@@ -1,0 +1,20 @@
+{
+  "schema_version": "1.0",
+  "calibration_id": "laptop-13-slot-development-v1",
+  "target_geometry_validated": false,
+  "slots": {
+    "board_flop_1": {"x_min": 0.28, "y_min": 0.43, "x_max": 0.36, "y_max": 0.58},
+    "board_flop_2": {"x_min": 0.38, "y_min": 0.43, "x_max": 0.46, "y_max": 0.58},
+    "board_flop_3": {"x_min": 0.48, "y_min": 0.43, "x_max": 0.56, "y_max": 0.58},
+    "board_turn": {"x_min": 0.58, "y_min": 0.43, "x_max": 0.66, "y_max": 0.58},
+    "board_river": {"x_min": 0.68, "y_min": 0.43, "x_max": 0.76, "y_max": 0.58},
+    "seat_a_hole_1": {"x_min": 0.43, "y_min": 0.77, "x_max": 0.50, "y_max": 0.94},
+    "seat_a_hole_2": {"x_min": 0.52, "y_min": 0.77, "x_max": 0.59, "y_max": 0.94},
+    "seat_b_hole_1": {"x_min": 0.05, "y_min": 0.43, "x_max": 0.13, "y_max": 0.60},
+    "seat_b_hole_2": {"x_min": 0.14, "y_min": 0.43, "x_max": 0.22, "y_max": 0.60},
+    "seat_c_hole_1": {"x_min": 0.43, "y_min": 0.05, "x_max": 0.50, "y_max": 0.22},
+    "seat_c_hole_2": {"x_min": 0.52, "y_min": 0.05, "x_max": 0.59, "y_max": 0.22},
+    "seat_d_hole_1": {"x_min": 0.78, "y_min": 0.43, "x_max": 0.86, "y_max": 0.60},
+    "seat_d_hole_2": {"x_min": 0.87, "y_min": 0.43, "x_max": 0.95, "y_max": 0.60}
+  }
+}

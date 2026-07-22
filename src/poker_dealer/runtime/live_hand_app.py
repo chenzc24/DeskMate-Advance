@@ -149,6 +149,19 @@ class LiveHandApplication:
             / f"{hand_id}.jsonl"
         )
 
+    def session_log_path(self, *, session_id: str) -> Path:
+        """Return the authoritative session audit path without creating it."""
+
+        if not re.fullmatch(r"[A-Za-z0-9_.-]+", session_id):
+            raise ValueError(
+                "session_id must contain only letters, digits, dot, dash or underscore"
+            )
+        return (
+            self.profile.resolved_log_root(self.project_root)
+            / session_id
+            / "session.jsonl"
+        )
+
     def reserve_event_log(self, *, session_id: str, hand_id: str) -> Path:
         """Create one new hand log exclusively; existing evidence is never overwritten."""
 

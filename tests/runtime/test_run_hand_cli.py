@@ -67,6 +67,51 @@ def test_replay_mode_completes_hand_without_opening_devices(tmp_path, capsys) ->
     assert path.exists()
 
 
+def test_replay_mode_qualifies_twenty_hand_session(tmp_path, capsys) -> None:
+    module = _load_script()
+    session_log = tmp_path / "session.jsonl"
+    assert module.main(
+        [
+            "--profile",
+            "laptop",
+            "--mode",
+            "replay",
+            "--max-hands",
+            "20",
+            "--session-id",
+            "qualification-session",
+            "--session-log-jsonl",
+            str(session_log),
+        ]
+    ) == 0
+    output = json.loads(capsys.readouterr().out)
+    assert output["type"] == "session_replay"
+    assert output["hands_completed"] == 20
+    assert output["session_log_check_passed"] is True
+    assert output["final_button"] == "seat_a"
+
+
+def test_replay_step_limit_returns_checked_incomplete_result(tmp_path, capsys) -> None:
+    module = _load_script()
+    hand_log = tmp_path / "incomplete.jsonl"
+    assert module.main(
+        [
+            "--profile",
+            "laptop",
+            "--mode",
+            "replay",
+            "--max-steps",
+            "1",
+            "--log-jsonl",
+            str(hand_log),
+        ]
+    ) == 4
+    output = json.loads(capsys.readouterr().out)
+    assert output["completed"] is False
+    assert output["log_check_passed"] is False
+    assert output["session_log_check_passed"] is False
+
+
 def test_exact_replay_rejects_context_override_before_output(
     tmp_path, capsys
 ) -> None:
