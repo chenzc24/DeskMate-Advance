@@ -1,10 +1,10 @@
 # 四人 Core v1 游戏规则合同
 
-状态：四人位置/发牌/行动、状态机控制的玩家注意力、模型证据、牌槽生命周期、多人底池、showdown 和数字账本语义已冻结为 `v1.2`；Fixed-Limit 是待产品确认的候选，1/2、2/4、cap 4、stack 80 和 30 秒均为配置默认值。机器可读权威为 `configs/game/core_v1.json`。
+状态：四人位置/发牌/行动、状态机控制的玩家注意力、模型证据、牌槽生命周期、多人底池、showdown、数字账本、Fixed-Limit 和无烧牌发牌流程已冻结为 `v1.3`；1/2、2/4、cap 4、stack 80 和 30 秒仍为可配置默认值。机器可读权威为 `configs/game/core_v1.json`。
 
 ## 玩家、Robot Dealer 与 Button
 
-Robot 是实体荷官，不下注、不占玩家座位。四名玩家固定坐在顺时针排列的 `seat_a, seat_b, seat_c, seat_d`；其中一席持有 Dealer Button。Button 决定盲注、发牌和行动顺序，但不是第五名玩家。
+Robot 是实体荷官，不下注、不占玩家座位。`seat_a, seat_b, seat_c, seat_d` 只作为顺时针排列的内部物理目标；玩家界面只需呈现 Button、Small Blind、Big Blind、UTG 等当前角色，不要求玩家姓名。首手 Button 由操作员或未来机器人控制输入明确选择，live runtime 不根据第一位注册者猜测 Button。Button 决定盲注、发牌和行动顺序，但不是第五名玩家。
 
 以 Button=`seat_a` 为例：
 
@@ -40,20 +40,19 @@ post-flop B -> C -> D -> A
 
 冻结的动作语义为 `fold/check/call/bet/raise`，每条请求携带 hand ID、action ID、expected state version、seat、source 和可选 `amount_units`。
 
-- Fixed-Limit 候选中，金额由配置推导，`amount_units=null`。
-- 若未来确认 No-Limit，bet/raise 必须带整数 `amount_units`。
+- Fixed-Limit Core 中，金额由配置推导，`amount_units=null`。
 - Laptop UI、实体按键、手势或语音都只是 adapter；game 必须再次检查 acting seat、版本和合法性。
 - 旧版本、重复 action ID、非当前玩家或非法动作不改变任何账本/状态。
 
 行为模型位于正式动作之前：game 输出唯一 `acting_seat`、合法动作和 state version，runtime 只激活机器人朝向的该席观察窗口；模型产生带时间窗口的 `PlayerActionObservation`，不能自行选择玩家或修改筹码。只有多帧/校准确认、seat/state 匹配且 game 复核合法后，动作与数字账本才原子提交；随后才切换到下一席。`ambiguous/occluded/out_of_roi/unknown`、非当前席活动和旧窗口都保持当前玩家。S0-21 允许显式同意后的本场人脸注册仅验证 `player_id ↔ seat_id`；人脸结果不能选择 acting seat、转移底牌/筹码或修改账本。
 
-## Fixed-Limit 候选默认值
+## Fixed-Limit Core 默认值
 
-当前用于 walkthrough 和 Stage 1 预研的默认值为：SB=1、BB=2、pre-flop/flop bet=2、turn/river bet=4、每条 street 最多四个 full bets。它们不是产品冻结；Fixed-Limit 本身也要获得产品确认后，Stage 1 betting reducer 才能冻结。
+Core v1 采用 Fixed-Limit。当前默认值为：SB=1、BB=2、pre-flop/flop bet=2、turn/river bet=4、每条 street 最多四个 full bets。下注结构已确认，但这些数字仍可由配置调整。
 
 ## All-in、Main Pot 与 Side Pots
 
-四人 Core 无论最终采用 Fixed-Limit 或 No-Limit，都必须支持 all-in、main pot 和多个 side pot。
+四人 Fixed-Limit Core 必须支持 all-in、main pot 和多个 side pot。
 
 例如最终投入为 A=10、B=20、C=40、D=40：
 
@@ -65,19 +64,19 @@ side pot2 = 20 * 2 = 40，eligible C/D
 
 Folded player 已投入的资金留在 pot，但没有任何 pot eligibility。超过所有对手可匹配总额的 excess 必须退回。每个 pot 独立筛选 eligible players、比较最佳五张并处理 tie；所有 pot 与 stack 之和必须守恒，不能出现负余额。
 
-Core 不识别实体筹码。数字账本是唯一权威；实体筹码若在桌面出现只能作为非权威道具。余额只允许由已验证动作或带 operator ID/reason 的人工调整事件改变，并与 state version 一起原子记录到 append-only hand log。
+Core 第一版不以实体筹码识别修改余额。数字账本是唯一权威；Laptop 或机器人按钮提交的合法 Fixed-Limit 动作更新线上筹码。后续 Plan A 可在固定下注区加入非权威视觉核对证据，识别不一致只会暂停/请求确认；让实体筹码成为权威的 Plan B 仍是后续研究。余额只允许由已验证动作或带 operator ID/reason 的人工调整事件改变，并与 state version 一起原子记录到 append-only hand log。
 
 ## 发牌与 Board Reveal
 
-Hole cards face-down。每张物理牌使用 `rotate_to -> success ACK -> dispense_one -> success ACK`；只有 success ACK 才推进数量。
+Core v1 采用 `robot_core_no_burn`：不在 Flop、Turn 或 River 前烧牌。Hole cards face-down。每张实际发出的物理牌使用 `rotate_to -> success ACK -> dispense_one -> success ACK`；只有 success ACK 才推进数量。
 
 ```text
-Flop: burn_tray, board_flop_1, board_flop_2, board_flop_3
-Turn: burn_tray, board_turn
-River: burn_tray, board_river
+Flop: board_flop_1, board_flop_2, board_flop_3
+Turn: board_turn
+River: board_river
 ```
 
-Board card 最终必须正面朝上才能视觉确认；hole/burn 必须保持背面。选择性翻转滑道、独立 reveal board 或明确的人工翻牌 fallback 尚属 S0-13，不能在机构证明前声称已实现全自动揭示。
+Board card 最终必须正面朝上才能视觉确认；hole cards 必须保持背面。选择性翻转滑道、独立 reveal board 或明确的人工翻牌 fallback 尚属 S0-13，不能在机构证明前声称已实现全自动揭示。完整发到 River 时共送出 13 张牌：8 张 hole cards 与 5 张 board cards。
 
 在任何玩家动作前发现 double-feed、错目标或数量错误，当前手 void，人工恢复完整牌副后同一 Button 重发。玩家已经实际行动后出现物理不确定性，进入 `PAUSED_RECOVERY`，软件不自动裁决。
 

@@ -14,11 +14,15 @@ import cv2
 
 from poker_dealer.domain import (
     ActionEvidenceState,
+    ControlIntent,
     DealerCommand,
     DealerCommandType,
+    LaptopControlAdapter,
     PlayerActionType,
     SEAT_ORDER,
     Seat,
+    TableRole,
+    role_for_seat,
 )
 from poker_dealer.game import (
     ActionPromoter,
@@ -65,10 +69,15 @@ from poker_dealer.perception.identity import (
     SessionFaceGallery,
 )
 from poker_dealer.runtime import (
+    ConsoleAnnouncer,
+    EventAnnouncer,
     PartAPhase,
+    RegistrationPhase,
+    RegistrationRuntime,
     SequentialPartACoordinator,
     VisualSettleGate,
     VisualSettleState,
+    WindowsSpeechAnnouncer,
 )
 
 try:
@@ -80,6 +89,24 @@ except ImportError:  # pragma: no cover - clear CLI diagnostic
 ROOT = Path(__file__).resolve().parents[2]
 SEAT_KEYS = {ord("1"): Seat.A, ord("2"): Seat.B, ord("3"): Seat.C, ord("4"): Seat.D}
 PLAYER_BY_SEAT = {seat: f"player_{seat.value[-1]}" for seat in SEAT_ORDER}
+ROLE_KEYS = {
+    ord("1"): TableRole.BUTTON,
+    ord("2"): TableRole.SMALL_BLIND,
+    ord("3"): TableRole.BIG_BLIND,
+    ord("4"): TableRole.UNDER_THE_GUN,
+}
+ROLE_LABELS = {
+    TableRole.BUTTON: "Button",
+    TableRole.SMALL_BLIND: "Small Blind",
+    TableRole.BIG_BLIND: "Big Blind",
+    TableRole.UNDER_THE_GUN: "Under the Gun",
+}
+VOICE_ENROLLMENT_PHRASES = (
+    "fold check call bet raise confirm cancel",
+    "check call raise bet fold cancel confirm",
+    "raise bet call check fold confirm cancel",
+)
+VOICE_PROMPT_GUARD_NS = 4_000_000_000
 _EVENT_CONTEXT: dict[str, object] = {}
 _EVENT_LOG_PATH: Path | None = None
 
@@ -143,7 +170,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--acceptance-case", default="UNASSIGNED")
     parser.add_argument("--acceptance-session-group", default="UNASSIGNED")
     parser.add_argument("--log-jsonl", type=Path)
-    parser.add_argument("--button", choices=tuple(seat.value for seat in Seat), default=Seat.A.value)
+    parser.add_argument(
+        "--button",
+        choices=tuple(seat.value for seat in Seat),
+        help="required in four-player Core; physical seat holding Button this hand",
+    )
+    parser.add_argument(
+        "--announcer",
+        choices=("off", "console", "windows"),
+        default="windows",
+        help="committed-event feedback; Windows mode speaks without blocking the camera loop",
+    )
     parser.add_argument("--headless", action="store_true")
     parser.add_argument("--emit-all", action="store_true")
     return parser.parse_args()
@@ -270,6 +307,22 @@ def _registered_player(
     return None
 
 
+def _role_label(button: Seat, seat: Seat | None) -> str:
+    if seat is None:
+        return "none"
+    return ROLE_LABELS[role_for_seat(button, seat)]
+
+
+def _registration_player_id(
+    registration: RegistrationRuntime | None, seat: Seat
+) -> str:
+    if registration is not None:
+        if registration.focus_seat is not seat:
+            raise ValueError("registration runtime focus does not match capture seat")
+        return registration.participant_id
+    return PLAYER_BY_SEAT[seat]
+
+
 def _resolve_start_plan(
     player_mode: str,
     enrolled_seats: set[Seat],
@@ -337,6 +390,11 @@ def _consume_pilot_action(
 
 def main() -> int:
     args = parse_args()
+    if args.player_mode == "four_player_core" and args.button is None:
+        raise SystemExit(
+            "--button is required for four_player_core; select the physical seat "
+            "that currently holds Button"
+        )
     if (
         args.max_seconds <= 0
         or args.rotation_delay_ms < 0
@@ -414,15 +472,29 @@ def main() -> int:
     now_ns = time.monotonic_ns()
     home = DealerCommand("part-a-sim-home", now_ns, DealerCommandType.HOME)
     dealer.execute(home, now_ns + 1)
+    announcer_port = None
+    if args.announcer == "console":
+        announcer_port = ConsoleAnnouncer()
+    elif args.announcer == "windows":
+        announcer_port = WindowsSpeechAnnouncer()
+    event_announcer = EventAnnouncer(announcer_port) if announcer_port is not None else None
+    laptop_controls = LaptopControlAdapter()
+    registration = (
+        RegistrationRuntime(args.session_id, Seat(args.button))
+        if args.player_mode == "four_player_core"
+        else None
+    )
     coordinator: SequentialPartACoordinator | None = None
     pending_rotation_due_ns: int | None = None
-    registration_target = Seat.A
+    registration_target = registration.focus_seat if registration is not None else Seat.A
     enrollment_active = False
     enrollment_samples = []
     last_enrollment_sample_ns: int | None = None
     speaker_enrollment_active = False
     speaker_enrollment_player_id: str | None = None
+    speaker_enrollment_role: str | None = None
     speaker_enrollment_samples = []
+    speaker_enrollment_listen_after_ns = 0
     identity_temporal = FaceIdentityTemporalAdapter(identity_config)
     gesture_temporal = GestureTemporalAdapter(gesture_config)
     actor_lease = ActorBindingLease(lease_ms=attribution_config.actor_lease_ms)
@@ -447,7 +519,11 @@ def main() -> int:
     rejected_actions = 0
     identity_matches = 0
     simulated_rotation_acks = 0
-    status_text = "SETUP: choose 1-4, E enroll, S start"
+    status_text = (
+        "SETUP: 1 Button, 2 Small Blind, 3 Big Blind, 4 UTG; E enroll; S start"
+        if registration is not None
+        else "SETUP: choose 1-4, E enroll, S start"
+    )
     last_gesture = "no hand"
     last_identity_log_key: tuple[object, ...] | None = None
     last_gesture_log_key: tuple[object, ...] | None = None
@@ -504,7 +580,16 @@ def main() -> int:
                     pilot_completion_actions_per_registered_player=(
                         1 if args.player_mode != "four_player_core" else None
                     ),
+                    initial_button=(registration.button.value if registration else None),
+                    public_identity_labels="roles_only",
+                    control_sources=["laptop_keyboard", "robot_button_interface"],
+                    announcer=args.announcer,
                 )
+                if event_announcer is not None and registration is not None:
+                    event_announcer.publish(
+                        "registration_focus_changed",
+                        role=registration.focus_role.value,
+                    )
 
                 while (time.monotonic_ns() - started_ns) / 1_000_000_000 < args.max_seconds:
                     if args.max_frames is not None and frames >= args.max_frames:
@@ -643,6 +728,9 @@ def main() -> int:
                         )
                         assert target is not None
                         if enrollment_active:
+                            registration_player_id = _registration_player_id(
+                                registration, target
+                            )
                             can_sample = (
                                 face_evidence.detected_face_count == 1
                                 and len(face_evidence.features) == 1
@@ -656,30 +744,54 @@ def main() -> int:
                                 enrollment_samples.append(face_evidence.features[0])
                                 last_enrollment_sample_ns = face_evidence.observed_at_ns
                             status_text = (
-                                f"ENROLL {PLAYER_BY_SEAT[target]} {len(enrollment_samples)}/"
+                                f"ENROLL {_role_label(registration.button, target) if registration else target.value} "
+                                f"{len(enrollment_samples)}/"
                                 f"{identity_config.minimum_samples}"
                             )
                             if len(enrollment_samples) >= identity_config.minimum_samples:
                                 try:
                                     gallery.enroll(
-                                        PLAYER_BY_SEAT[target],
+                                        registration_player_id,
                                         target,
                                         enrollment_samples,
                                         consent_granted=args.consent_confirmed,
                                     )
-                                    status_text = f"enrolled {PLAYER_BY_SEAT[target]} at {target.value}"
+                                    if registration is not None:
+                                        participant = registration.complete_face_enrollment(
+                                            len(enrollment_samples)
+                                        )
+                                        public_role = participant.initial_role.value
+                                        status_text = (
+                                            f"enrolled {ROLE_LABELS[participant.initial_role]}"
+                                        )
+                                    else:
+                                        public_role = target.value
+                                        status_text = f"enrolled {target.value}"
                                     _emit(
                                         "enrollment_completed",
-                                        player_id=PLAYER_BY_SEAT[target],
+                                        player_id=registration_player_id,
                                         seat=target.value,
+                                        role=public_role,
                                         sample_count=len(enrollment_samples),
                                         gallery_size=gallery.size,
                                     )
+                                    if event_announcer is not None:
+                                        event_announcer.publish(
+                                            "enrollment_completed", role=public_role
+                                        )
+                                        if gallery.size == required_player_count:
+                                            event_announcer.publish("roster_ready")
                                 except (PermissionError, ValueError) as exc:
+                                    if (
+                                        registration is not None
+                                        and registration.phase
+                                        is RegistrationPhase.CAPTURING_FACE
+                                    ):
+                                        registration.reject_face_enrollment()
                                     status_text = f"enrollment rejected: {exc}"
                                     _emit(
                                         "enrollment_rejected",
-                                        player_id=PLAYER_BY_SEAT[target],
+                                        player_id=registration_player_id,
                                         seat=target.value,
                                         reason=str(exc),
                                     )
@@ -729,9 +841,10 @@ def main() -> int:
                                     quality_flags=list(identity_observation.quality_flags),
                                 )
                                 last_identity_log_key = identity_log_key
-                            expected_player = _registered_player(
-                                gallery, coordinator.focus_seat
-                            ) or PLAYER_BY_SEAT[coordinator.focus_seat]  # type: ignore[index]
+                            expected_player = _role_label(
+                                coordinator.engine.state.button,
+                                coordinator.focus_seat,
+                            )
                             if opened:
                                 assert pose_evidence is not None
                                 if len(face_evidence.features) != 1:
@@ -770,9 +883,12 @@ def main() -> int:
                             if opened:
                                 status_text = coordinator.last_reason
                             elif identity_observation.identity_state is FaceIdentityState.SEAT_MISMATCH:
+                                observed_role = _role_label(
+                                    coordinator.engine.state.button,
+                                    identity_observation.registered_seat,
+                                )
                                 status_text = (
-                                    f"MISMATCH saw {identity_observation.player_id} at "
-                                    f"{identity_observation.registered_seat.value if identity_observation.registered_seat else '?'}; "
+                                    f"MISMATCH saw {observed_role}; "
                                     f"expected {expected_player}"
                                 )
                             elif identity_observation.identity_state is FaceIdentityState.ENROLLMENT_REQUIRED:
@@ -782,7 +898,7 @@ def main() -> int:
                                 is FaceIdentityState.EXPECTED_SEAT_UNENROLLED
                             ):
                                 status_text = (
-                                    f"EXPECTED SEAT UNENROLLED: {coordinator.focus_seat.value}"
+                                    f"EXPECTED ROLE UNENROLLED: {expected_player}"
                                 )
                             elif identity_observation.identity_state is FaceIdentityState.MATCHED:
                                 status_text = coordinator.last_reason
@@ -1159,6 +1275,9 @@ def main() -> int:
                         if fused is not None:
                             before_version = coordinator.engine.state.state_version
                             acted_seat = fused.focus_seat
+                            before_stack_units = coordinator.engine.state.players[
+                                acted_seat
+                            ].stack_units
                             fusion_source_flag = next(
                                 (
                                     flag
@@ -1255,6 +1374,26 @@ def main() -> int:
                             if outcome is not None and outcome.accepted:
                                 accepted_actions += 1
                                 status_text = coordinator.last_reason
+                                if event_announcer is not None:
+                                    after_stack_units = coordinator.engine.state.players[
+                                        acted_seat
+                                    ].stack_units
+                                    contribution = max(
+                                        0, before_stack_units - after_stack_units
+                                    )
+                                    event_announcer.publish(
+                                        "action_committed",
+                                        role=role_for_seat(
+                                            coordinator.engine.state.button,
+                                            acted_seat,
+                                        ).value,
+                                        action=(
+                                            fused.candidate_action.value
+                                            if fused.candidate_action
+                                            else "action"
+                                        ),
+                                        amount_units=(contribution or None),
+                                    )
                                 if args.player_mode in {
                                     "single_player_pilot",
                                     "two_player_pilot",
@@ -1312,6 +1451,14 @@ def main() -> int:
                                     pending_rotation_due_ns = (
                                         now_ns + args.rotation_delay_ms * 1_000_000
                                     )
+                                    if event_announcer is not None:
+                                        event_announcer.publish(
+                                            "turn_started",
+                                            role=role_for_seat(
+                                                coordinator.engine.state.button,
+                                                coordinator.focus_seat,  # type: ignore[arg-type]
+                                            ).value,
+                                        )
                             else:
                                 rejected_actions += 1
                                 status_text = (
@@ -1321,7 +1468,9 @@ def main() -> int:
                                 )
                     else:
                         if speaker_enrollment_active and speech_recognizer is not None:
-                            while True:
+                            if now_ns < speaker_enrollment_listen_after_ns:
+                                _clear_queue(audio_queue)
+                            while now_ns >= speaker_enrollment_listen_after_ns:
                                 try:
                                     pcm = audio_queue.get_nowait()
                                 except queue.Empty:
@@ -1341,30 +1490,80 @@ def main() -> int:
                                     speaker_enrollment_samples.append(
                                         evidence.speaker_embedding.copy()
                                     )
+                                accepted_count = len(speaker_enrollment_samples)
                                 _emit(
                                     "speaker_enrollment_sample",
                                     player_id=speaker_enrollment_player_id,
                                     accepted=accepted_sample,
-                                    sample_count=len(speaker_enrollment_samples),
+                                    sample_count=accepted_count,
                                     required_samples=speaker_config.minimum_samples,
                                     speaker_frames=evidence.speaker_frames,
                                     transcript=evidence.canonical_transcript,
                                 )
+                                if not accepted_sample:
+                                    if evidence.canonical_transcript:
+                                        phrase_number = min(
+                                            accepted_count + 1,
+                                            speaker_config.minimum_samples,
+                                        )
+                                        status_text = (
+                                            f"VOICE NOT ACCEPTED | {accepted_count}/"
+                                            f"{speaker_config.minimum_samples} | too short "
+                                            f"({evidence.speaker_frames}/"
+                                            f"{speaker_config.minimum_speaker_frames} frames) | "
+                                            f"repeat phrase {phrase_number} slowly"
+                                        )
+                                        if event_announcer is not None:
+                                            event_announcer.publish(
+                                                "voice_enrollment_retry",
+                                                role=speaker_enrollment_role,
+                                                phrase_number=phrase_number,
+                                            )
+                                        speech_recognizer.reset_window()
+                                        _clear_queue(audio_queue)
+                                        speaker_enrollment_listen_after_ns = (
+                                            time.monotonic_ns() + VOICE_PROMPT_GUARD_NS
+                                        )
+                                        break
+                                    continue
+                                if event_announcer is not None:
+                                    event_announcer.publish(
+                                        "voice_enrollment_sample_accepted",
+                                        role=speaker_enrollment_role,
+                                        sample_number=accepted_count,
+                                        total_samples=speaker_config.minimum_samples,
+                                    )
                                 if (
-                                    len(speaker_enrollment_samples)
-                                    >= speaker_config.minimum_samples
+                                    accepted_count >= speaker_config.minimum_samples
                                 ):
                                     assert speaker_enrollment_player_id is not None
                                     speaker_gallery.enroll(
                                         speaker_enrollment_player_id,
                                         speaker_enrollment_samples,
                                     )
+                                    if registration is not None:
+                                        registered_participant = next(
+                                            item
+                                            for item in registration.participants
+                                            if item.participant_id
+                                            == speaker_enrollment_player_id
+                                        )
+                                        registration.mark_voice_enrolled(
+                                            registered_participant.seat
+                                        )
+                                        voice_label = ROLE_LABELS[
+                                            registered_participant.initial_role
+                                        ]
+                                    else:
+                                        voice_label = speaker_enrollment_player_id
                                     for sample in speaker_enrollment_samples:
                                         sample.fill(0.0)
                                     speaker_enrollment_samples = []
                                     speaker_enrollment_active = False
                                     status_text = (
-                                        f"voice enrolled {speaker_enrollment_player_id}"
+                                        f"VOICE COMPLETE | {voice_label} | "
+                                        f"{speaker_config.minimum_samples}/"
+                                        f"{speaker_config.minimum_samples} accepted"
                                     )
                                     _emit(
                                         "speaker_enrollment_completed",
@@ -1373,9 +1572,33 @@ def main() -> int:
                                         embeddings_persisted=False,
                                         audio_saved=False,
                                     )
+                                    if event_announcer is not None:
+                                        event_announcer.publish(
+                                            "voice_enrollment_completed",
+                                            role=speaker_enrollment_role,
+                                        )
                                     speaker_enrollment_player_id = None
+                                    speaker_enrollment_role = None
+                                    speaker_enrollment_listen_after_ns = 0
                                     speech_recognizer.reset_window()
                                     break
+                                next_phrase_number = accepted_count + 1
+                                next_phrase = VOICE_ENROLLMENT_PHRASES[
+                                    (next_phrase_number - 1)
+                                    % len(VOICE_ENROLLMENT_PHRASES)
+                                ]
+                                status_text = (
+                                    f"VOICE ACCEPTED {accepted_count}/"
+                                    f"{speaker_config.minimum_samples} | next "
+                                    f"{next_phrase_number}/"
+                                    f"{speaker_config.minimum_samples}: {next_phrase}"
+                                )
+                                speech_recognizer.reset_window()
+                                _clear_queue(audio_queue)
+                                speaker_enrollment_listen_after_ns = (
+                                    time.monotonic_ns() + VOICE_PROMPT_GUARD_NS
+                                )
+                                break
                         else:
                             _clear_queue(audio_queue)
 
@@ -1405,28 +1628,29 @@ def main() -> int:
                             2,
                         )
                     if coordinator is None:
-                        phase_text = "SETUP"
-                        focus_text = registration_target.value
-                        expected_player = _registered_player(
-                            gallery, registration_target
-                        ) or PLAYER_BY_SEAT[registration_target]
+                        phase_text = (
+                            registration.phase.value if registration else "SETUP"
+                        )
+                        focus_text = (
+                            ROLE_LABELS[registration.focus_role]
+                            if registration
+                            else registration_target.value
+                        )
+                        expected_player = focus_text
                         legal_text = "press S after enrollment"
                     else:
                         phase_text = coordinator.phase.value
-                        focus_text = coordinator.focus_seat.value if coordinator.focus_seat else "none"
-                        expected_player = _registered_player(
-                            gallery, coordinator.focus_seat
-                        ) or (
-                            PLAYER_BY_SEAT[coordinator.focus_seat]
-                            if coordinator.focus_seat is not None
-                            else "none"
+                        focus_text = _role_label(
+                            coordinator.engine.state.button,
+                            coordinator.focus_seat,
                         )
+                        expected_player = focus_text
                         legal_text = ",".join(
                             action.value for action in coordinator.engine.state.legal_actions
                         ) or "Part A boundary reached"
                     cv2.putText(
                         display,
-                        f"{args.player_mode} | {phase_text} | focus {focus_text} | expected {expected_player} | gallery {gallery.size}/{required_player_count}",
+                        f"{args.player_mode} | {phase_text} | role {focus_text} | gallery {gallery.size}/{required_player_count}",
                         (18, 32),
                         cv2.FONT_HERSHEY_SIMPLEX,
                         0.68,
@@ -1442,6 +1666,36 @@ def main() -> int:
                         (255, 255, 255),
                         2,
                     )
+                    if speaker_enrollment_active:
+                        accepted_voice_samples = len(speaker_enrollment_samples)
+                        phrase_number = min(
+                            accepted_voice_samples + 1,
+                            speaker_config.minimum_samples,
+                        )
+                        phrase = VOICE_ENROLLMENT_PHRASES[
+                            (phrase_number - 1) % len(VOICE_ENROLLMENT_PHRASES)
+                        ]
+                        listening_state = (
+                            "PROMPT - WAIT"
+                            if now_ns < speaker_enrollment_listen_after_ns
+                            else "LISTENING"
+                        )
+                        voice_progress_text = (
+                            f"VOICE {listening_state} | accepted "
+                            f"{accepted_voice_samples}/{speaker_config.minimum_samples} | "
+                            f"phrase {phrase_number} in one breath: {phrase}"
+                        )
+                    else:
+                        voice_progress_text = "VOICE idle | V starts enrollment after face registration"
+                    cv2.putText(
+                        display,
+                        voice_progress_text,
+                        (18, 96),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.52,
+                        (80, 220, 255),
+                        2,
+                    )
                     cv2.putText(
                         display,
                         status_text,
@@ -1453,7 +1707,11 @@ def main() -> int:
                     )
                     cv2.putText(
                         display,
-                        "1-4 target | E face | V voice | S start | C UI confirm | X clear | Q quit",
+                        (
+                            "1 Button | 2 Small Blind | 3 Big Blind | 4 UTG | E face | V voice start/cancel | S start | X clear"
+                            if registration is not None and coordinator is None
+                            else "E/robot confirm | V voice | S start | C UI confirm | X clear | Q quit"
+                        ),
                         (18, height - 18),
                         cv2.FONT_HERSHEY_SIMPLEX,
                         0.52,
@@ -1465,15 +1723,44 @@ def main() -> int:
                     if key in (ord("q"), 27):
                         break
                     if coordinator is None and key in SEAT_KEYS:
-                        registration_target = SEAT_KEYS[key]
+                        if registration is not None:
+                            if registration.phase is RegistrationPhase.CAPTURING_FACE:
+                                registration.reject_face_enrollment()
+                            registration.select_role(ROLE_KEYS[key])
+                            registration_target = registration.focus_seat
+                        else:
+                            registration_target = SEAT_KEYS[key]
                         enrollment_active = False
                         enrollment_samples = []
+                        cancelled_voice_role = (
+                            speaker_enrollment_role
+                            if speaker_enrollment_active
+                            else None
+                        )
                         speaker_enrollment_active = False
                         for sample in speaker_enrollment_samples:
                             sample.fill(0.0)
                         speaker_enrollment_samples = []
                         speaker_enrollment_player_id = None
-                        status_text = f"registration target {registration_target.value}"
+                        speaker_enrollment_role = None
+                        speaker_enrollment_listen_after_ns = 0
+                        if speech_recognizer is not None:
+                            speech_recognizer.reset_window()
+                        if cancelled_voice_role is not None and event_announcer is not None:
+                            event_announcer.publish(
+                                "voice_enrollment_cancelled",
+                                role=cancelled_voice_role,
+                            )
+                        status_text = (
+                            f"registration role {ROLE_LABELS[registration.focus_role]}"
+                            if registration is not None
+                            else f"registration target {registration_target.value}"
+                        )
+                        if event_announcer is not None and registration is not None:
+                            event_announcer.publish(
+                                "registration_focus_changed",
+                                role=registration.focus_role.value,
+                            )
                     elif key == ord("e"):
                         target = (
                             registration_target
@@ -1489,14 +1776,33 @@ def main() -> int:
                         elif coordinator is not None and coordinator.phase is not PartAPhase.VERIFYING_IDENTITY:
                             status_text = "active enrollment only allowed during identity verification"
                         else:
+                            if registration is not None:
+                                control = laptop_controls.process_key(key, now_ns)
+                                assert control is not None
+                                registration_outcome = registration.accept_control(control)
+                                if not registration_outcome.accepted:
+                                    status_text = registration_outcome.reason
+                                    continue
                             enrollment_active = True
                             enrollment_samples = []
                             last_enrollment_sample_ns = None
-                            status_text = f"ENROLL {PLAYER_BY_SEAT[target]}: one face only"
+                            registration_player_id = _registration_player_id(
+                                registration, target
+                            )
+                            status_text = (
+                                f"ENROLL {ROLE_LABELS[registration.focus_role]}: one face only"
+                                if registration is not None
+                                else f"ENROLL {target.value}: one face only"
+                            )
                             _emit(
                                 "enrollment_started",
-                                player_id=PLAYER_BY_SEAT[target],
+                                player_id=registration_player_id,
                                 seat=target.value,
+                                role=(
+                                    registration.focus_role.value
+                                    if registration is not None
+                                    else target.value
+                                ),
                                 player_mode=args.player_mode,
                             )
                     elif key == ord("v"):
@@ -1505,7 +1811,13 @@ def main() -> int:
                             if coordinator is None
                             else coordinator.focus_seat
                         )
-                        player_id = PLAYER_BY_SEAT[target] if target is not None else None
+                        player_id = (
+                            _registered_player(gallery, target)
+                            if target is not None
+                            else None
+                        )
+                        if player_id is None and target is not None and registration is None:
+                            player_id = PLAYER_BY_SEAT[target]
                         face_registered = (
                             target is not None
                             and any(
@@ -1513,7 +1825,36 @@ def main() -> int:
                                 for item in gallery.metadata()
                             )
                         )
-                        if args.disable_speech or speech_recognizer is None:
+                        voice_label = (
+                            ROLE_LABELS[registration.focus_role]
+                            if registration is not None
+                            else player_id
+                        )
+                        if speaker_enrollment_active:
+                            cancelled_sample_count = len(speaker_enrollment_samples)
+                            for sample in speaker_enrollment_samples:
+                                sample.fill(0.0)
+                            speaker_enrollment_samples = []
+                            speaker_enrollment_active = False
+                            cancelled_role = speaker_enrollment_role
+                            cancelled_player_id = speaker_enrollment_player_id
+                            speaker_enrollment_player_id = None
+                            speaker_enrollment_role = None
+                            speaker_enrollment_listen_after_ns = 0
+                            _clear_queue(audio_queue)
+                            speech_recognizer.reset_window()
+                            status_text = f"VOICE CANCELLED | {voice_label}"
+                            _emit(
+                                "speaker_enrollment_cancelled",
+                                player_id=cancelled_player_id,
+                                accepted_samples=cancelled_sample_count,
+                            )
+                            if event_announcer is not None:
+                                event_announcer.publish(
+                                    "voice_enrollment_cancelled",
+                                    role=cancelled_role,
+                                )
+                        elif args.disable_speech or speech_recognizer is None:
                             status_text = "voice enrollment blocked: speech is disabled"
                         elif target is None:
                             status_text = "voice enrollment blocked: no focus seat"
@@ -1522,19 +1863,29 @@ def main() -> int:
                         elif not face_registered:
                             status_text = "enroll the player's face before voice"
                         elif speaker_gallery.is_enrolled(player_id):
-                            status_text = f"voice already enrolled for {player_id}"
+                            status_text = f"voice already enrolled for {voice_label}"
                         elif coordinator is not None:
                             status_text = "voice enrollment is setup-only"
                         else:
                             speaker_enrollment_active = True
                             speaker_enrollment_player_id = player_id
+                            speaker_enrollment_role = (
+                                registration.focus_role.value
+                                if registration is not None
+                                else "player"
+                            )
                             for sample in speaker_enrollment_samples:
                                 sample.fill(0.0)
                             speaker_enrollment_samples = []
                             _clear_queue(audio_queue)
                             speech_recognizer.reset_window()
+                            speaker_enrollment_listen_after_ns = (
+                                now_ns + VOICE_PROMPT_GUARD_NS
+                            )
+                            first_phrase = VOICE_ENROLLMENT_PHRASES[0]
                             status_text = (
-                                f"VOICE {player_id}: say 3 short English commands"
+                                f"VOICE STARTED | {voice_label} | phrase 1/"
+                                f"{speaker_config.minimum_samples}: {first_phrase}"
                             )
                             _emit(
                                 "speaker_enrollment_started",
@@ -1543,7 +1894,17 @@ def main() -> int:
                                 consent_confirmed=True,
                                 embeddings_persisted=False,
                                 audio_saved=False,
+                                required_samples=speaker_config.minimum_samples,
+                                minimum_speaker_frames=(
+                                    speaker_config.minimum_speaker_frames
+                                ),
+                                phrase=first_phrase,
                             )
+                            if event_announcer is not None:
+                                event_announcer.publish(
+                                    "voice_enrollment_started",
+                                    role=speaker_enrollment_role,
+                                )
                     elif key == ord("x"):
                         if (
                             coordinator is not None
@@ -1551,6 +1912,13 @@ def main() -> int:
                         ):
                             status_text = "gallery clear blocked while an action window is open"
                         else:
+                            if registration is not None:
+                                control = laptop_controls.process_key(key, now_ns)
+                                assert control is not None
+                                registration_outcome = registration.accept_control(control)
+                                if not registration_outcome.accepted:
+                                    status_text = registration_outcome.reason
+                                    continue
                             gallery.clear()
                             speaker_gallery.clear()
                             enrollment_active = False
@@ -1560,6 +1928,10 @@ def main() -> int:
                                 sample.fill(0.0)
                             speaker_enrollment_samples = []
                             speaker_enrollment_player_id = None
+                            speaker_enrollment_role = None
+                            speaker_enrollment_listen_after_ns = 0
+                            if speech_recognizer is not None:
+                                speech_recognizer.reset_window()
                             speech_confirmation.clear()
                             status_text = "session gallery cleared"
                             _emit("gallery_cleared", player_mode=args.player_mode)
@@ -1581,9 +1953,18 @@ def main() -> int:
                             _resolve_start_plan(
                                 args.player_mode,
                                 enrolled_seats,
-                                Seat(args.button),
+                                registration.button if registration is not None else Seat.A,
                             )
                         )
+                        frozen_roster = None
+                        if start_block_reason is None and registration is not None:
+                            control = laptop_controls.process_key(key, now_ns)
+                            assert control is not None
+                            registration_outcome = registration.accept_control(control)
+                            if not registration_outcome.accepted:
+                                start_block_reason = registration_outcome.reason
+                            else:
+                                frozen_roster = registration_outcome.roster
                         start_mode = args.player_mode
                         if start_block_reason is not None:
                             status_text = start_block_reason
@@ -1632,23 +2013,52 @@ def main() -> int:
                             pending_rotation_due_ns = (
                                 now_ns + args.rotation_delay_ms * 1_000_000
                             )
+                            if event_announcer is not None:
+                                event_announcer.publish(
+                                    "blind_posted",
+                                    role=TableRole.SMALL_BLIND.value,
+                                    amount_units=engine.rules.small_blind_units,
+                                )
+                                event_announcer.publish(
+                                    "blind_posted",
+                                    role=TableRole.BIG_BLIND.value,
+                                    amount_units=engine.rules.big_blind_units,
+                                )
+                                event_announcer.publish(
+                                    "turn_started",
+                                    role=role_for_seat(
+                                        engine.state.button,
+                                        coordinator.focus_seat,  # type: ignore[arg-type]
+                                    ).value,
+                                )
                             enrollment_active = False
                             speaker_enrollment_active = False
                             for sample in speaker_enrollment_samples:
                                 sample.fill(0.0)
                             speaker_enrollment_samples = []
                             speaker_enrollment_player_id = None
+                            speaker_enrollment_role = None
+                            speaker_enrollment_listen_after_ns = 0
                             if speech_recognizer is not None:
                                 speech_recognizer.reset_window()
                             status_text = (
-                                f"{start_mode}: Button {button.value}, first "
-                                f"{coordinator.focus_seat.value}"
+                                f"{start_mode}: first "
+                                f"{_role_label(button, coordinator.focus_seat)}"
                             )
                             _emit(
                                 "hand_started",
                                 mode=start_mode,
                                 button=button.value,
+                                button_role=TableRole.BUTTON.value,
                                 first_acting_seat=coordinator.focus_seat.value,
+                                first_acting_role=role_for_seat(
+                                    button, coordinator.focus_seat  # type: ignore[arg-type]
+                                ).value,
+                                roster_version=(
+                                    frozen_roster.roster_version
+                                    if frozen_roster is not None
+                                    else None
+                                ),
                                 enrolled_seats=sorted(
                                     seat.value for seat in enrolled_seats
                                 ),
@@ -1660,6 +2070,9 @@ def main() -> int:
         for sample in speaker_enrollment_samples:
             sample.fill(0.0)
         speaker_enrollment_samples = []
+        close_announcer = getattr(announcer_port, "close", None)
+        if close_announcer is not None:
+            close_announcer()
         if not args.headless:
             cv2.destroyAllWindows()
 

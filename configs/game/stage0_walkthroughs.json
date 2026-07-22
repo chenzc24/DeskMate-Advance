@@ -1,7 +1,7 @@
 {
   "$schema": "../contracts/walkthroughs.schema.json",
   "schema_version": "1.0",
-  "rules_version": "1.2",
+  "rules_version": "1.3",
   "scenarios": [
     {
       "id": "WT-01-three-folds-preflop",
@@ -28,7 +28,7 @@
         {"kind": "player_action", "value": "seat_a_call_2", "seat": "seat_a"},
         {"kind": "player_action", "value": "seat_b_call_to_2", "seat": "seat_b"},
         {"kind": "player_action", "value": "seat_c_check", "seat": "seat_c"},
-        {"kind": "board_sequence", "value": "burn,flop1,flop2,flop3,burn,turn,burn,river"},
+        {"kind": "board_sequence", "value": "flop1,flop2,flop3,turn,river"},
         {"kind": "player_action", "value": "clockwise_check_all_postflop"},
         {"kind": "card_observation", "value": "thirteen_unique_slots_confirmed"}
       ],
@@ -56,7 +56,7 @@
       "starting_stacks": {"seat_a": 80, "seat_b": 80, "seat_c": 80, "seat_d": 80},
       "steps": [
         {"kind": "player_action", "value": "four_way_preflop_call_check"},
-        {"kind": "board_sequence", "value": "burn,flop1,flop2,flop3"},
+        {"kind": "board_sequence", "value": "flop1,flop2,flop3"},
         {"kind": "player_action", "value": "bet_2", "seat": "seat_b"},
         {"kind": "player_action", "value": "fold", "seat": "seat_c"},
         {"kind": "player_action", "value": "call_2", "seat": "seat_d"},

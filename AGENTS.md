@@ -12,8 +12,9 @@ weights, configs, package interfaces, or runtime assumptions.
    they may not silently expand Core scope.
 3. `configs/game/core_v1.json` freezes the four-player position, state-owned
    action attention, perception evidence, table-slot lifecycle, ledger, pot,
-   showdown and safety semantics. Its Fixed-Limit structure is still a candidate and its
-   numeric values are defaults exactly as S0-07 states. Hardware/geometry facts
+   showdown and safety semantics. Its Fixed-Limit structure and no-burn dealing
+   profile are confirmed for Core v1; numeric values remain configurable defaults
+   exactly as S0-07 states. Hardware/geometry facts
    remain pending in the decision register and Gate audit; partial software
    freeze must not be misrepresented as product or physical validation.
 4. DeskMate history is read-only at the branch/commit named in
@@ -33,12 +34,12 @@ physical-motion status and commit intent. Avoid overlapping policy documents.
 ## Core Product Boundary
 
 Core v1 is a fixed four-seat/four-player Texas Hold'em table with manual shuffle
-and deck loading, automatic single-card dealing, manual card return,
+and deck loading, automatic single-card no-burn dealing, manual card return,
 state-controlled fixed-seat player-behaviour evidence, face-up card recognition,
 deterministic rules/evaluation, multi-pot digital accounting, and an
 authoritative digital chip ledger.
-Fixed-Limit is the current candidate but remains a human product decision;
-stakes, stack, cap and timeout values are defaults. Physical chip handling,
+Fixed-Limit is confirmed for Core v1; stakes, stack, cap and timeout values remain
+configurable defaults. Physical chip handling,
 free-space card collection, 5–6 player expansion, unconstrained table vision,
 autonomous shuffling and treating gesture/voice as game logic are Plus work.
 

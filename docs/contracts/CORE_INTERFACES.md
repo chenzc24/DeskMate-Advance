@@ -1,10 +1,10 @@
 # Core 共享接口
 
-本文冻结 Stage 0A 语义，不冻结 MCU 的 JSON/二进制 framing；wire encoding 由 Stage 3 在保持 schema 语义兼容的前提下确定。机器 schema 位于 `configs/contracts/`。
+本文冻结 Stage 0A 语义，不冻结 MCU 的 JSON/二进制 framing；wire encoding 由 Stage 3 在保持 schema 语义兼容的前提下确定。机器 schema 位于 `configs/contracts/`。移除 `burn_tray` 是目标词汇的破坏性变化，当前 dealer message schema 为 v2.0；v1.0 adapter 必须在运动前因版本不匹配而拒绝连接。
 
 ## 逻辑槽位
 
-机械目标已经迁移为 10 个：`seat_a…seat_d`、`burn_tray`、`board_flop_1…3`、`board_turn`、`board_river`。牌面视觉槽为 13 个：五个 board ID 加四席各两个 hole IDs；玩家行为另有 `seat_a_action…seat_d_action` 四个固定 region。毫米位置、角度和 ROI polygon 尚未冻结，不得写入 release config。
+机械目标为 9 个：`seat_a…seat_d`、`board_flop_1…3`、`board_turn`、`board_river`。Core v1 不烧牌，也没有 `burn_tray` 目标。牌面视觉槽仍为 13 个：五个 board ID 加四席各两个 hole IDs；玩家行为另有 `seat_a_action…seat_d_action` 四个固定 region。毫米位置、角度和 ROI polygon 尚未冻结，不得写入 release config。
 
 ## 发牌命令
 
@@ -47,11 +47,20 @@
 
 Stage 1 的语义动作固定为 `fold`、`check`、`call`、`bet`、`raise`。输入实现可来自 Laptop UI、physical controls、gesture/voice adapter 或 simulator。UI 只展示 game 返回的 `legal_actions`，但 game 仍需再次验证请求，非法请求不得改变任何状态或账本。
 
-Action schema 保留 `amount_units`：Fixed-Limit candidate 中必须为空；若确认 No-Limit，bet/raise 必须给出整数金额。动作记录包含 hand ID、seat、action ID、动作、source、接收时间、应用前后的 state version。
+Action schema 保留 `amount_units`：Fixed-Limit Core 中必须为空，金额由街道和配置推导。动作记录包含 hand ID、seat、action ID、动作、source、接收时间、应用前后的 state version。
+
+## Laptop 与机器人控制
+
+`ControlObservation` 是 Laptop fallback 与未来机器人按钮的共享语义：`confirm|cancel|start|clear|next_option|previous_option`，并携带 observation/control ID、单调时间、source 和 device state version。注册 runtime 与下注 runtime 消费同一合同；机器人 wire transport 不得直接调用 gallery 或 game reducer。
+
+- 注册阶段：`confirm` 开始当前角色人脸采集，`start` 只在 Button/SB/BB/UTG 均已注册时冻结 roster。
+- Fixed-Limit 下注阶段：`next_option/previous_option` 只能在 game 返回的 `legal_actions` 内循环，`confirm` 生成当前 hand/state/acting seat 的正式动作请求。独立 Laptop pilot 只测试规则/账本；最终集成必须先通过 Part A 当前角色身份/actor gate 才打开按钮下注窗口。
+- Laptop 键盘和机器人按钮只更换 adapter；状态、合法动作和数字账本仍由 runtime/game 持有。
+- 旧 action window、重复 control ID 或倒退的 device state version 不得改变账本。
 
 ## 数字筹码与审计
 
-数字账本是 Core 唯一余额权威。实体筹码不识别、不收取、不支付，也不能覆盖账本。余额只能由经过验证的玩家动作或带 operator ID/reason 的显式人工调整改变；动作、每席 street/hand contribution、main/side pots、余额和新 `state_version` 必须原子提交。Rebuy/补充筹码是独立审计事件，否则结束该玩家会话，不能静默修改初始 stack。
+数字账本是 Core 唯一余额权威。第一版由 Laptop 或机器人按钮/其他已验证 adapter 提交 Fixed-Limit 动作并保留线上筹码。Plan A 可增加固定下注区视觉核对，但 `observed_chip_units` 只能验证，不能覆盖账本；Plan B 的权威实体筹码仍是后续研究。余额只能由经过验证的玩家动作或带 operator ID/reason 的显式人工调整改变；动作、每席 street/hand contribution、main/side pots、余额和新 `state_version` 必须原子提交。Rebuy/补充筹码是独立审计事件，否则结束该玩家会话，不能静默修改初始 stack。
 
 ## 牌局快照与恢复
 

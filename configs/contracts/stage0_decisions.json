@@ -1,13 +1,13 @@
 {
   "$schema": "stage0_decisions.schema.json",
-  "schema_version": "1.2",
+  "schema_version": "1.3",
   "stage_status": "four_player_perception_state_contract_partial_evidence_open",
   "decisions": [
     {
       "id": "S0-01",
       "title": "single-card feeder mechanism",
       "status": "evidence_required",
-      "frozen": "Core uses one stationary central dealer serving four fixed player seats and board/burn targets.",
+      "frozen": "Core uses one stationary central dealer serving four fixed player seats and five board targets under the robot_core_no_burn dealing profile.",
       "open": "Feeder, separation and selectable face orientation implementation.",
       "owner": "robotics",
       "required_evidence": "Real-card prototype across multiple decks with no unobserved double-feed.",
@@ -27,7 +27,7 @@
       "id": "S0-03",
       "title": "mechanical target geometry",
       "status": "partially_frozen",
-      "frozen": "Ten target IDs in logical_layout_v1.json: four seats, burn tray and five board positions.",
+      "frozen": "Nine target IDs in logical_layout_v1.json: four seats and five board positions; Core has no burn target.",
       "open": "Angles, distances, drop polygons and tolerances.",
       "owner": "robotics",
       "required_evidence": "Dimensioned tabletop drawing and repeated delivery test per target.",
@@ -97,7 +97,7 @@
       "id": "S0-10",
       "title": "host-controller protocol",
       "status": "partially_frozen",
-      "frozen": "Versioned command/ACK semantics, ten target IDs, correlation ID, error codes, idempotency, heartbeat and status query.",
+      "frozen": "Versioned command/ACK semantics, nine target IDs, correlation ID, error codes, idempotency, heartbeat and status query.",
       "open": "USB serial framing, CRC representation and MCU parser constraints.",
       "owner": "joint",
       "required_evidence": "Cross-language mock parses valid, invalid, duplicate and interrupted messages.",
@@ -127,7 +127,7 @@
       "id": "S0-13",
       "title": "automatic board-card reveal",
       "status": "evidence_required",
-      "frozen": "Board cards must end face-up in their fixed slots before visual confirmation; hole and burn cards remain face-down.",
+      "frozen": "Board cards must end face-up in their fixed slots before visual confirmation; hole cards remain face-down. Core does not deal burn cards.",
       "open": "Selective flip chute, independent reveal board or explicit manual-flip fallback and its impact on product claim.",
       "owner": "joint",
       "required_evidence": "Robotics comparison prototype with orientation success, jam and landing-position results.",
@@ -212,6 +212,16 @@
       "owner": "joint",
       "required_evidence": "Held-out participant/session evaluation covering false match, false non-match, unknown people, multiple faces, pose, lighting, replay/spoof attempts, consent and verified memory-only cleanup.",
       "blocks": ["stage2_identity_model_admission", "stage4_identity_verification_freeze"]
+    },
+    {
+      "id": "S0-22",
+      "title": "no-burn robot dealing profile",
+      "status": "frozen",
+      "frozen": "Core v1 uses robot_core_no_burn: no card is burned before Flop, Turn or River; a complete river hand dispenses eight hole cards and five board cards through nine mechanical targets.",
+      "open": "None. Reintroducing burn cards requires an explicit product decision and a new dealer protocol version.",
+      "owner": "joint",
+      "required_evidence": "Rules/schema parity, exact no-burn target-order tests, protocol rejection of burn_tray and a thirteen-dispense simulator sequence.",
+      "blocks": []
     }
   ]
 }

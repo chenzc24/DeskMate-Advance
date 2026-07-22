@@ -63,18 +63,12 @@ def test_every_seat_is_present_exactly_once_per_clockwise_round() -> None:
         assert order[-1] is button
 
 
-def test_board_deal_includes_one_burn_before_each_street() -> None:
+def test_board_deal_uses_no_burn_targets() -> None:
     assert board_deal_targets(Street.FLOP) == (
-        DealerTargetSlot.BURN_TRAY,
         DealerTargetSlot.BOARD_FLOP_1,
         DealerTargetSlot.BOARD_FLOP_2,
         DealerTargetSlot.BOARD_FLOP_3,
     )
-    assert board_deal_targets(Street.TURN) == (
-        DealerTargetSlot.BURN_TRAY,
-        DealerTargetSlot.BOARD_TURN,
-    )
-    assert board_deal_targets(Street.RIVER) == (
-        DealerTargetSlot.BURN_TRAY,
-        DealerTargetSlot.BOARD_RIVER,
-    )
+    assert board_deal_targets(Street.TURN) == (DealerTargetSlot.BOARD_TURN,)
+    assert board_deal_targets(Street.RIVER) == (DealerTargetSlot.BOARD_RIVER,)
+    assert sum(len(board_deal_targets(street)) for street in (Street.FLOP, Street.TURN, Street.RIVER)) == 5

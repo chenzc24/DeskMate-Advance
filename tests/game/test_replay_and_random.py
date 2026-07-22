@@ -38,7 +38,7 @@ def test_no_device_demo_cli_completes_a_visible_four_player_hand() -> None:
         text=True,
     )
     result = json.loads(completed.stdout)
-    assert result["betting_product_status"] == "candidate_pending_confirmation"
+    assert result["betting_product_status"] == "confirmed_core_v1"
     assert result["final_snapshot"]["phase"] == "settled"
     assert result["final_snapshot"]["pot_units"] == 0
     assert len(result["final_snapshot"]["confirmed_cards"]) == 13

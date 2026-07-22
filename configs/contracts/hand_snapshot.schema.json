@@ -12,7 +12,7 @@
   ],
   "properties": {
     "schema_version": {"const": "1.1"},
-    "rules_version": {"const": "1.2"},
+    "rules_version": {"const": "1.3"},
     "hand_id": {"type": "string", "minLength": 1},
     "state_version": {"type": "integer", "minimum": 0},
     "phase": {"enum": ["setup", "posting_blinds", "dealing_hole", "awaiting_action", "dealing_board", "showdown", "settled", "paused_recovery", "voided"]},

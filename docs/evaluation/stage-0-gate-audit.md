@@ -8,14 +8,14 @@
 
 | 要求 | 当前证据 | 结论 |
 | --- | --- | --- |
-| 四人产品范围 | Master、Stage 0、AGENTS、rules v1.2 | 已迁移 |
+| 四人产品范围 | Master、Stage 0、AGENTS、rules v1.3 | 已迁移 |
 | Button/SB/BB/UTG 分离 | 四座顺时针 domain functions + 每个 Button 测试 | 软件通过 |
 | 8 张 hole deal order | 每个 Button 两轮顺序测试，Button 每轮最后 | 软件通过 |
 | Pre/post-flop 与 skip | UTG/post-flop first、folded/all-in skip tests | 软件通过 |
 | 多人 main/side pot 语义 | Rules + WT-05/06；Stage 1 builder 尚未实现 | 合同通过、执行开放 |
 | S0-05 | 13 vision slots 与所有 live players showdown | 冻结 |
 | S0-06 | action schema 含五种语义、replaceable source、可选 amount | 按用户决定调整 |
-| S0-07 | Fixed-Limit candidate + configurable defaults | 产品确认开放 |
+| S0-07 | Fixed-Limit Core v1 + configurable defaults | 2026-07-22 产品确认关闭 |
 | S0-12 | 20 hands 只在 acceptance contract | 冻结 QA 策略 |
 | S0-16 行为 evidence | `PlayerActionObservation` schema/domain；手势/阈值未定 | 接口通过、模型开放 |
 | S0-17 attention | acting seat 唯一权威、提交后切换、非当前席不推进 | 冻结 |
@@ -29,7 +29,7 @@
 
 ## 明确未完成
 
-- Fixed-Limit 尚未获得产品确认，因此 Stage 1 可以实现位置、pot builder 和 evaluator，但不能冻结最终 betting reducer。
+- Fixed-Limit 已于 2026-07-22 获得产品确认；Stage 1 的配置驱动 betting reducer 现为 Core v1，数值仍为可配置默认值。
 - S0-13 尚未决定 Robot 如何让 board face-up；“全自动公共牌揭示”不能写成已实现能力。
 - 四座桌面毫米几何、相机视场、四个牌面方向、运动禁手区、传感器与急停均未实测。
 - 18 个 walkthrough 是合同案例；Stage 1 必须转成可执行 replay。
@@ -38,13 +38,13 @@
 
 ## 关闭 Gate 所需证据
 
-确认 S0-07；用真实牌完成 feeder/reveal 和 10 target paper/prototype tests；提交 13-slot 与四个 action ROI 的 target-camera sample，包含 held-out participant/session、no-action、邻席干扰、遮挡/取消动作与完整牌槽 lifecycle；冻结行为交互/阈值、安全/传感器和 MCU framing；完成四玩家完整纸模、role indication、reset 及 schema 互解析。此前允许纯软件工作和受控小样，不允许模型录取、CAD release 或物理集成。
+S0-07 与 S0-22 已关闭。其余 Gate 仍需：用真实牌完成 feeder/reveal 和 9 target paper/prototype tests；提交 13-slot 与四个 action ROI 的 target-camera sample，包含 held-out participant/session、no-action、邻席干扰、遮挡/取消动作与完整牌槽 lifecycle；冻结行为交互/阈值、安全/传感器和 MCU framing；完成四玩家完整纸模、role indication、reset 及 schema 互解析。此前允许纯软件工作和受控小样，不允许模型录取、CAD release 或物理集成。
 
 ## 下游阶段就绪度
 
 | 下游 | 当前允许 | 当前禁止/阻塞 |
 | --- | --- | --- |
-| Stage 1 | contract harness、state/event、attention、ledger/pots、evaluator、三类 simulator | betting reducer release 等 S0-07 |
+| Stage 1 | contract harness、state/event、attention、ledger/pots、evaluator、三类 simulator、Fixed-Limit reducer | S0-07 已关闭；其余设备 Gate 不在 Stage 1 内 |
 | Stage 2A | 采集工具、纸模、少量 feasibility pilot | 模型录取等 S0-02/16/18 与 participant/session plan |
 | Stage 2B | ROI/图像质量工具、少量 feasibility pilot | 模型录取等 S0-02/04/11/13/19 与 deck/session plan |
 | Stage 3 | 有操作员/保护的 feeder/reveal/protocol bench | CAD/firmware release、牌局驱动和无人运动 |

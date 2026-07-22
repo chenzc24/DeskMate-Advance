@@ -7,7 +7,7 @@
   "properties": {
     "$schema": {"type": "string"},
     "schema_version": {"const": "1.0"},
-    "rules_version": {"const": "1.2"},
+    "rules_version": {"const": "1.3"},
     "scenarios": {
       "type": "array",
       "minItems": 10,

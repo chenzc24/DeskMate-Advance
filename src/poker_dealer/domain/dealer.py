@@ -20,7 +20,6 @@ class DealerTargetSlot(StrEnum):
     SEAT_B = "seat_b"
     SEAT_C = "seat_c"
     SEAT_D = "seat_d"
-    BURN_TRAY = "burn_tray"
     BOARD_FLOP_1 = "board_flop_1"
     BOARD_FLOP_2 = "board_flop_2"
     BOARD_FLOP_3 = "board_flop_3"

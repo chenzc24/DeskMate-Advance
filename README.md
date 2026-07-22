@@ -25,9 +25,9 @@ namespace is `poker_dealer`; DeskMate is available only through the immutable
 .\.venv\Scripts\python.exe scripts\game\random_stage1.py --hands 10000 --seed 20260721
 ```
 
-Stage 1's software oracle and tests are complete. Fixed-Limit remains a tested
-candidate until the S0-07 product decision is signed; passing Stage 1 does not
-silently freeze that product choice.
+Stage 1's software oracle and tests are complete. Fixed-Limit was confirmed for
+Core v1 by the 2026-07-22 S0-07 product decision; passing Stage 1 still does not
+close the separate model, camera, mechanism, protocol, or safety gates.
 
 The development-only Stage 2A Laptop gesture pilot can be installed and run
 without recording frames:

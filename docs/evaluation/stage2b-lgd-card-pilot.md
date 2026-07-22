@@ -90,6 +90,34 @@ For a bounded, non-visual pipeline check, add `--headless --max-frames 20`.
 The default live session is capped at 300 seconds even if no exit key is
 pressed.
 
+## Raspberry Pi MJPEG Use
+
+The same pilot can consume the existing Raspberry Pi HTTP(S) MJPEG stream
+through the project camera boundary. The stream URL and local camera index are
+mutually exclusive; network streams use OpenCV FFmpeg with bounded open/read
+timeouts, latest-frame buffering and reconnect handling:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\perception\live_card_pilot.py `
+  --stream-url http://100.80.46.54:5000/video_feed `
+  --max-seconds 300
+```
+
+For a short non-visual connectivity and recognition smoke:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\perception\live_card_pilot.py `
+  --stream-url http://100.80.46.54:5000/video_feed `
+  --headless `
+  --max-frames 20 `
+  --emit-all
+```
+
+The endpoint is used only at runtime and is not echoed in the summary. The
+central normalized ROI remains a development fixture until target-table slot
+geometry is measured; receiving Raspberry Pi frames does not close Gate 2B or
+authorize robot motion.
+
 ## Local Validation
 
 - Asset and class hashes verified; all 52 codes map uniquely into the project
@@ -106,6 +134,11 @@ pressed.
   1280x720 with no persistence. With no card deliberately presented, all 20
   observations were `unknown/no_detection`; model inference averaged 59.44 ms
   with P95 66.83 ms on this laptop CPU.
+- A bounded Raspberry Pi MJPEG smoke read 20/20 frames at 640x480 with a
+  reported 25 FPS and zero missing reads. With no card in the central fixture
+  ROI, all 20 observations remained `unknown/no_detection`; inference averaged
+  83.28 ms with P95 90.00 ms. No frames were saved and no robot-control
+  endpoint was contacted.
 
 The public sample and empty live-camera run are only functional smoke inputs.
 No target-camera frame was saved and no private media, dataset snapshot or

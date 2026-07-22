@@ -88,8 +88,8 @@ class FixedLimitRules:
     big_bet_units: int = 4
     max_full_bets_per_street: int = 4
     action_timeout_seconds: int = 30
-    rules_version: str = "1.2"
-    product_status: str = "candidate_pending_confirmation"
+    rules_version: str = "1.3"
+    product_status: str = "confirmed_core_v1"
 
     def __post_init__(self) -> None:
         numeric = (
@@ -110,6 +110,10 @@ class FixedLimitRules:
         config = json.loads(Path(path).read_text(encoding="utf-8"))
         betting = config["betting"]
         blinds = config["blinds_defaults"]
+        if betting.get("structure") != "fixed_limit":
+            raise ValueError("Core v1 requires betting.structure=fixed_limit")
+        if betting.get("product_decision_status") != "confirmed_core_v1":
+            raise ValueError("Core v1 Fixed-Limit product decision is not confirmed")
         return cls(
             small_blind_units=blinds["small_blind_units"],
             big_blind_units=blinds["big_blind_units"],
@@ -120,6 +124,7 @@ class FixedLimitRules:
             ],
             action_timeout_seconds=betting["action_timeout_seconds_default"],
             rules_version=config["schema_version"],
+            product_status=betting["product_decision_status"],
         )
 
     def bet_size(self, street: Street) -> int:
@@ -172,7 +177,7 @@ class HandState:
     awards: dict[Seat, int] = field(default_factory=dict)
     paused_reason: str | None = None
     pending_command_id: str | None = None
-    rules_version: str = "1.2"
+    rules_version: str = "1.3"
 
     def live_seats(self) -> tuple[Seat, ...]:
         return tuple(seat for seat in SEAT_ORDER if not self.players[seat].folded)

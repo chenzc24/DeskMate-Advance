@@ -1,6 +1,6 @@
 {
   "schema_version": "1.1",
-  "rules_version": "1.2",
+  "rules_version": "1.3",
   "hand_id": "hand-0001",
   "state_version": 8,
   "phase": "awaiting_action",

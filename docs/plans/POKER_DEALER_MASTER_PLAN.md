@@ -1,6 +1,6 @@
 # Poker Dealer Core v1 总体计划
 
-状态：`Stage 1 软件 oracle 工程与测试完成 / Fixed-Limit 产品确认、模型阈值与硬件证据开放`
+状态：`Stage 1 软件 oracle 工程与测试完成 / Fixed-Limit 已确认 / 模型阈值与硬件证据开放`
 
 产品负责人：团队共同确认
 
@@ -12,70 +12,85 @@
 
 Poker Dealer 是一个真正依赖物理执行的德州扑克机器人荷官，而不是“摄像头软件加一个外壳”。它必须同时维护牌局规则、观察桌面、控制每一次发牌动作，并在不确定时停下来让人恢复。
 
-Core v1 的一句话目标：四名玩家围绕固定桌面，由 Robot Dealer 完成 hole/burn/board 发牌；确定性状态机控制当前玩家注意窗口，行为模型确认玩家动作证据，牌面模型确认桌面牌槽，系统维护多层数字底池并确定性结算胜负。
+Core v1 的一句话目标：四名玩家围绕固定桌面，由 Robot Dealer 按无烧牌流程完成 hole/board 发牌；确定性状态机控制当前玩家注意窗口，行为模型确认玩家动作证据，牌面模型确认桌面牌槽，系统维护多层数字底池并确定性结算胜负。
 
 ## 2. Core 与 Plus 边界
 
 | Core v1 必须完成 | Plus，不能阻塞 Core |
 | --- | --- |
 | 4 个固定玩家席位，Button/SB/BB/UTG 分离 | 2/3 人动态缩桌或 5–6 人扩展 |
-| 冻结一种数字下注结构；当前候选 Fixed-Limit | 第二种下注模式与实体筹码计数 |
+| Fixed-Limit 数字下注结构 | 第二种下注模式与权威实体筹码计数 |
 | 人工洗牌、装牌 | 自动洗牌 |
-| 自动单张发底牌、burn、公共牌；reveal 方式待 S0-13 | 自由空间收牌、整理牌 |
+| 按无烧牌流程自动单张发底牌和公共牌；reveal 方式待 S0-13 | 自由空间收牌、整理牌 |
 | 冻结 fold/check/call/bet/raise 语义；状态机选当前席 ROI，时序模型只发 evidence | 让模型决定轮到谁、动作合法性或账本变化 |
 | 固定座位和固定牌槽 | 无约束桌面检测/跟踪 |
 | 识别正面朝上的公共牌和摊牌 | 读取仍盖住的底牌 |
 | 确定性规则、牌型和胜负 | 用模型“判断”规则或胜负 |
-| 数字筹码账本唯一权威；实体筹码若摆放仅为非权威道具 | 实体筹码识别、自动收取、分拣和支付 |
+| 数字筹码账本唯一权威；近期可增加固定下注区的非权威视觉核对 | 权威实体筹码识别、自动收取、分拣和支付 |
 | 人工回收上一手牌 | 自动回收牌 |
 
 ## 3. 核心闭环
 
 ```mermaid
-flowchart LR
-    G["确定性牌局引擎：acting seat / legal actions / state version"] --> F["当前席 action ROI"]
-    F --> A["行为模型 + 时序确认"]
+flowchart TD
+    I["显式初始 Button"] --> REG["RegistrationRuntime：匿名四角色"]
+    REG --> S["Frozen SessionRoster"]
+    S --> G["确定性牌局引擎：acting seat / legal actions / Fixed-Limit / ledger"]
+    G --> ROT["rotate_to 当前角色"]
+    ROT --> F["ACK + 画面稳定后的单一活动玩家窗口"]
+    F --> A["人脸核验 + 手势/英文语音 evidence"]
     A --> E["PlayerActionObservation"]
     E --> G
-    C["桌面摄像头"] --> V["阶段驱动牌槽 + 牌面识别"]
+    L["Laptop keyboard"] --> CTRL["ControlObservation"]
+    B["Robot buttons"] --> CTRL
+    CTRL --> REG
+    G --> X["ButtonBettingRuntime：只选择 legal actions"]
+    CTRL --> X
+    X --> G
+    CAM["桌面摄像头"] --> V["阶段驱动牌槽 + 牌面识别"]
     V --> O["CardObservation + unknown"]
     O --> G
     G --> D["语义发牌命令"]
-    D --> R["安全控制器与发牌机构"]
-    R --> K["完成/失败/超时 ACK"]
+    D --> ROBOT["安全控制器与发牌机构"]
+    ROBOT --> K["完成/失败/超时 ACK"]
     K --> G
-    G --> U["牌局状态、轮到谁、数字筹码、胜负"]
+    G --> U["角色、牌局状态、线上筹码、底池、胜负"]
+    G --> N["已提交事件"]
+    N --> P["UI + English announcer"]
+    Q["Plan A 实体筹码观察"] -. "核对，不改账本" .-> U
 ```
 
-只有当前席位行为 evidence 经时序/校准确认、版本和合法性复核并与账本原子提交后，状态机才切换到下一席 ROI。牌桌阶段只在所需视觉证据和 ACK 到齐后推进。行为 `ambiguous/occluded/unknown`、牌面 `unknown`、重复牌、非法动作、发牌超时、卡牌堵塞、断连或状态不一致都保持当前预期或进入 `PAUSED_RECOVERY`，不允许猜测后继续。
+只有当前角色行为 evidence 经身份/归属、时序/校准、版本和合法性复核并与账本原子提交后，状态机才计算下一角色并请求机器人转向。牌桌阶段只在所需视觉证据和 ACK 到齐后推进。行为 `ambiguous/occluded/unknown`、牌面 `unknown`、重复牌、非法动作、发牌超时、卡牌堵塞、断连或状态不一致都保持当前预期或进入 `PAUSED_RECOVERY`，不允许猜测后继续。
 
 ## 4. 技术职责边界
 
 | 模块 | 唯一职责 | 明确不负责 |
 | --- | --- | --- |
 | `game` | 规则、轮次、合法动作、下注账本、牌型与奖池分配 | 摄像头、模型、马达 |
-| `perception/actions` | 当前席固定 ROI、行为特征/时序证据、校准与拒识 | 选择 acting seat、动作合法性、筹码 |
+| `perception/identity` | 本场匿名人脸/声纹注册，只核验已选角色 | 选择 acting seat、持久化 embedding、玩家命名 |
+| `perception/actions` | 机器人转向后的单一活动玩家窗口、行为特征/时序证据、校准与拒识 | 选择 acting seat、动作合法性、筹码 |
 | `perception/cards` | 牌槽占用、rank/suit、置信度、unknown、证据 | 胜负、下注、发牌 |
 | `robotics/dealer` | 语义命令传输、ACK、超时、模拟器 | 牌局规则、模型 |
 | Robotics MCU | homing、角度/速度、传感器、互锁、急停、堵塞保护 | 牌局推进 |
-| `runtime` | 协调模块、持久化 hand log、暂停与恢复 | 偷改各模块判定 |
-| UI/action input | 展示状态、提交玩家动作、人工恢复确认 | 直接驱动马达 |
+| `runtime` | 注册、角色投影、控制路由、模块协调、hand log、暂停与恢复 | 偷改各模块判定 |
+| UI/announcer | 展示/播报角色、进度与已提交事件 | 把 candidate 播报成事实、推进 game |
+| Laptop/robot controls | 产生统一 `ControlObservation` 玩家意图 | 直接改账本、调用 gallery 或驱动马达 |
 
 ## 5. 为什么第一步不是选预训练模型
 
-行为模型输入取决于手势语法、当前席 action ROI、玩家距离/遮挡和确认交互；牌面模型输入取决于摄像头位置、牌槽、牌面尺寸、光照、牌副设计和摊牌方式。机械输出又取决于发牌机构和传感器。如果先选模型，数据和接口很可能在硬件/交互冻结后重做。因此顺序是：
+行为模型输入取决于手势语法、机器人转向后的活动玩家捕获区、玩家距离/遮挡和确认交互；牌面模型输入取决于摄像头位置、牌槽、牌面尺寸、光照、牌副设计和摊牌方式。机械输出又取决于发牌机构和传感器。如果先选模型，数据和接口很可能在硬件/交互冻结后重做。因此顺序是：
 
 1. Stage 0 冻结游戏与机械/视觉契约。
 2. Stage 1 先建立无摄像头、无机器人的规则 oracle 与模拟闭环。
 3. Stage 2 才在目标相机和目标牌桌证据上选择/训练模型。
 
-预选方向不是最终录取：玩家行为先比较固定 ROI 上的规则基线、hand/upper-body landmarks + compact TCN，只有 landmark 失败证据充分才比较小型 RGB 时序模型；具体手势尚未冻结。牌面使用固定 ROI + 几何归一化找牌角，并预选 ImageNet 预训练 MobileNetV3-Small 双头分类器输出 13 个 rank 和 4 个 suit；固定槽定位实测失败后才启动轻量 detector。
+预选方向不是最终录取：玩家行为先比较转向稳定后的单一活动玩家捕获区上的规则基线、hand/upper-body landmarks + compact TCN，只有 landmark 失败证据充分才比较小型 RGB 时序模型；具体手势尚未冻结。牌面使用固定牌槽 ROI + 几何归一化找牌角，并预选 ImageNet 预训练 MobileNetV3-Small 双头分类器输出 13 个 rank 和 4 个 suit；固定槽定位实测失败后才启动轻量 detector。
 
 ## 6. 阶段总览
 
 | 阶段 | 主要产物 | Deep Learning 侧 | Robotics 侧 | Gate |
 | --- | --- | --- | --- | --- |
-| 0 合约冻结 | 四人、行为 evidence、牌槽 lifecycle、命令、账本与验收合同 | action/card schema 已迁移；阈值/相机证据开放 | 10-target 语义已迁移；机构/reveal/传感器实证开放 | Fixed-Limit、模型证据与硬件 Gate 开放 |
+| 0 合约冻结 | 四人、行为 evidence、牌槽 lifecycle、命令、账本与验收合同 | action/card schema 已迁移；阈值/相机证据开放 | 10-target 语义已迁移；机构/reveal/传感器实证开放 | Fixed-Limit 已确认；模型证据与硬件 Gate 开放 |
 | 1 软件 oracle | 游戏引擎、牌型 evaluator、数字账本、全模拟器 | 构造行为/牌槽 replay 与错误注入接口 | 构造命令/ACK 模拟器 | 无硬件完成整手牌与注意力切换 |
 | 2 行为与牌面感知 | 两类数据集、候选比较、模型、离线 replay | 主要训练阶段 | 提供目标桌面/相机/光照夹具 | 当前席动作和牌面均高精度确认、低置信拒识 |
 | 3 发牌机构 | feeder、旋转定位、传感器、控制协议 | 提供相机观测/发牌验证工具 | 主要机械、电控与固件阶段 | 单卡、定位、卡堵与急停通过 |
@@ -106,9 +121,9 @@ Stage 1 的不依赖实体证据部分现在即可开始；Stage 2A、2B 和 Sta
 
 | 阶段 | 入口条件 | 出口证据 | 当前状态 |
 | --- | --- | --- | --- |
-| 00A 契约 | 四人 Core 范围确认 | rules v1.2、S0-01…20、schemas、18 walkthroughs | 已完成软件契约迁移 |
-| 00B 证据 | 00A | S0-07/16/18 产品决定，目标相机/桌面/机构/安全证据 | 进行中，尚未关闭 |
-| 1 软件 oracle | 00A | 可重放状态机、行为 focus、账本、牌型、三类 simulator、属性测试 | 工程实现与测试通过；Fixed-Limit adapter 为 candidate，release 总门仍受 S0-07 限制 |
+| 00A 契约 | 四人 Core 范围确认 | rules v1.3、S0-01…22、schemas、18 walkthroughs | 已完成软件契约迁移；无烧牌流程冻结 |
+| 00B 证据 | 00A | S0-07 Fixed-Limit 已决定；S0-16/18、目标相机/桌面/机构/安全证据仍开放 | 进行中，尚未关闭 |
+| 1 软件 oracle | 00A | 可重放状态机、行为 focus、账本、牌型、三类 simulator、属性测试 | 工程实现与测试通过；Fixed-Limit 结构已确认，默认数值仍可配置 |
 | 2A 行为感知 | S0-02/16/18 子 Gate | held-out participant/session 指标、校准阈值、离线 export | Laptop 手势、英文语音、顺序式身份门与四席轮转已接入；九 Case 验收、预检、匿名记录、batch、数据 split、安全 replay 和可选 TCN 骨架已准备但未执行/训练；真人矩阵、最终语法、指标与目标相机 Gate 开放 |
 | 2B 牌面感知 | S0-02/04/05/11/13/19 子 Gate | held-out deck/session 指标、牌槽 lifecycle replay、离线 export | 等待目标桌面/相机证据 |
 | 3 发牌机构 | S0-01/03/04/09/10/13 子 Gate | 单张/落点/reveal/安全/协议实测 | 可做受控原型，不可 release |
@@ -130,7 +145,7 @@ Stage 1 的不依赖实体证据部分现在即可开始；Stage 2A、2B 和 Sta
 | 迭代 | 软件/DL 主线 | Robotics/产品主线 | 结束检查点 |
 | --- | --- | --- | --- |
 | A：契约到薄片 | S1.0 contract harness、S1.1 state/event、S1.2 当前席 evidence→原子提交→下一席 | 00B 手势/反馈纸模、相机/table pilot、feeder/reveal bench 设计 | 一条无设备动作闭环；00B 缺口有证据/owner |
-| B：软件 oracle | S1.3 ledger/pots、S1.4 evaluator、S1.5 candidate betting、S1.6/1.7 simulators/replay | 完成 S0-07/16/18 产品签字和 Stage 3 安全/协议前置 | Gate 1 子门；Stage 2A/2B/3 各自入口判定 |
+| B：软件 oracle | S1.3 ledger/pots、S1.4 evaluator、S1.5 Fixed-Limit betting、S1.6/1.7 simulators/replay | S0-07 已完成；继续完成 S0-16/18 和 Stage 3 安全/协议前置 | Gate 1 子门；Stage 2A/2B/3 各自入口判定 |
 | C：三轨并行 | Stage 2A 行为数据/模型/确认；Stage 2B scene/card；支持 recorded replay | Stage 3 feeder/position/reveal/MCU/safety | Gate 2A、2B、3 独立报告，不强行同日结束 |
 | D：逐级汇合 | I4.1→I4.6 runtime、replay、live perception、恢复/性能 | 真实 dealer 低速与安全见证 | Gate 4、固定 RC compatibility matrix |
 | E：交付 | 独立 checker、20 手 qualification、模型/日志报告 | 见证故障、操作员交接、安全/机构报告 | Gate 5 和离线交付包 |
@@ -177,11 +192,23 @@ Stage 0/1 后分成两条并行轨道：
 
 ## 10. 当前冻结与未冻结
 
-已作为 Core 合同冻结：四个固定玩家席位、位置规则、状态机唯一 acting-seat 权威、固定 action ROI 的无生物识别绑定、模型 evidence 不直接改状态、成功提交后才切换注意力、阶段驱动牌槽 lifecycle、Laptop 正式运行、自动发牌语义、五种动作语义、所有 live players 固定 ROI showdown、确定性多 pot 结算、数字账本唯一权威及 append-only audit；详细规则版本为 `configs/game/core_v1.json` v1.2。
+已作为 Core 合同冻结：四个固定内部物理席位与动态 Button/SB/BB/UTG 角色、显式初始 Button、匿名单轮注册、状态机唯一 acting-seat 权威、会话人脸/声纹只核验已选角色、模型 evidence 不直接改状态、成功提交后才切换注意力、Laptop/机器人按钮共享控制语义、Fixed-Limit、无烧牌发牌流程、阶段驱动牌槽 lifecycle、Laptop 正式运行、自动发牌语义、五种动作语义、所有 live players 固定 ROI showdown、确定性多 pot 结算、数字账本唯一权威及 append-only audit；详细规则版本为 `configs/game/core_v1.json` v1.3。
 
-仍需产品/实体证据：确认 Fixed-Limit；冻结行为手势语法、四个 action ROI、时序/校准阈值及显式确认策略；确定公共牌自动翻面或 fallback；完成 feeder、目标相机、10 个目标毫米几何、13 个牌槽 ROI、机构超时、安全/协议、目标牌副与 held-out deck/participant/session capture。1/2、2/4、cap 4、stack 80 和 30 秒只是默认配置；连续 20 手仅是冻结的验收策略。
+仍需产品/实体证据：冻结行为手势语法、机器人转向后的活动玩家捕获区、画面稳定门、时序/校准阈值及显式确认策略；确定公共牌自动翻面或 fallback；完成 feeder、目标相机、9 个目标毫米几何、13 个牌槽 ROI、机构超时、安全/协议、目标牌副与 held-out deck/participant/session capture。Fixed-Limit 与无烧牌流程已确认；1/2、2/4、cap 4、stack 80 和 30 秒只是默认配置；连续 20 手仅是冻结的验收策略。
 
-详细决策表见 [Stage 0](../stages/STAGE_0_SCOPE_AND_CONTRACTS.md)，逐项证据见 [Gate 0 审计](../evaluation/stage-0-gate-audit.md)。Stage 1 软件 oracle 已完成并通过独立 Gate 测试；S0-07 未确认前，其 Fixed-Limit reducer 仍只能是 candidate，其他 Gate 关闭前不能录取模型、冻结正式 ROI/data split 或定版机构。
+详细决策表见 [Stage 0](../stages/STAGE_0_SCOPE_AND_CONTRACTS.md)，逐项证据见 [Gate 0 审计](../evaluation/stage-0-gate-audit.md)。Stage 1 软件 oracle 已完成并通过独立 Gate 测试；S0-07 已由本轮产品决定关闭，其他 Gate 关闭前仍不能录取模型、冻结正式 ROI/data split 或定版机构。
+
+## 数字筹码与实体筹码路线
+
+- Plan A（Core 近期）：数字账本继续作为唯一余额权威；Laptop 或机器人按钮提交 Fixed-Limit 动作，未来固定下注区视觉只产生 `observed_chip_units` 核对证据，不直接修改余额。视觉不一致时保持当前动作并请求重试或操作员确认。
+- Plan B（后续研究）：评估受约束筹码托盘、称重或 RFID，使实体筹码可能成为权威输入。该路线必须解决遮挡、叠放、拿回筹码、边池、找零和恢复，不能阻塞 Core。
+
+## 注册、按钮与播报软件边界
+
+- `RegistrationRuntime` 先运行，只向用户呈现 Button、Small Blind、Big Blind、UTG；`seat_a…d` 仅是内部旋转目标。首手 Button 必须由 Laptop 参数或未来机器人控制明确给出，不能由第一位注册者推断。
+- 四角色人脸注册完成后冻结匿名 `SessionRoster`，再进入 Part A；不要求玩家姓名，也不增加第二轮过度验证。
+- `ControlObservation` 统一 Laptop 与机器人按钮。Laptop pilot 使用 `N/P` 在当前合法动作中选择、Enter 确认；未来机器人 adapter 产生相同语义，game 继续拥有合法性和账本权威。
+- `GameAnnouncer` 只订阅已提交事件，播报注册角色、盲注、当前行动角色、已接纳动作、street 和恢复提示；模型 candidate 不播报、不推进状态。
 
 ## 11. 文档入口与完成定义
 

@@ -50,6 +50,15 @@ class PlayerActionType(StrEnum):
     RAISE = "raise"
 
 
+class TableRole(StrEnum):
+    """Current-hand player roles; unlike seats, these rotate with Button."""
+
+    BUTTON = "button"
+    SMALL_BLIND = "small_blind"
+    BIG_BLIND = "big_blind"
+    UNDER_THE_GUN = "under_the_gun"
+
+
 def _validated_seats(seats: Iterable[Seat]) -> tuple[Seat, ...]:
     selected = tuple(dict.fromkeys(seats))
     if not selected:
@@ -87,6 +96,26 @@ def big_blind_seat(
     active = _validated_seats(active_seats)
     small_blind = small_blind_seat(button, active)
     return clockwise_order_after(small_blind, active)[0]
+
+
+def role_seats(button: Seat) -> dict[TableRole, Seat]:
+    """Resolve the four current-hand roles onto fixed physical seats."""
+
+    small_blind = small_blind_seat(button)
+    big_blind = big_blind_seat(button)
+    under_the_gun = clockwise_order_after(big_blind)[0]
+    return {
+        TableRole.BUTTON: button,
+        TableRole.SMALL_BLIND: small_blind,
+        TableRole.BIG_BLIND: big_blind,
+        TableRole.UNDER_THE_GUN: under_the_gun,
+    }
+
+
+def role_for_seat(button: Seat, seat: Seat) -> TableRole:
+    """Return the public role label for one internal physical seat."""
+
+    return next(role for role, assigned in role_seats(button).items() if assigned is seat)
 
 
 def _dealer_target(seat: Seat) -> DealerTargetSlot:
@@ -128,13 +157,12 @@ def first_to_act(
 def board_deal_targets(street: Street) -> tuple[DealerTargetSlot, ...]:
     if street is Street.FLOP:
         return (
-            DealerTargetSlot.BURN_TRAY,
             DealerTargetSlot.BOARD_FLOP_1,
             DealerTargetSlot.BOARD_FLOP_2,
             DealerTargetSlot.BOARD_FLOP_3,
         )
     if street is Street.TURN:
-        return DealerTargetSlot.BURN_TRAY, DealerTargetSlot.BOARD_TURN
+        return (DealerTargetSlot.BOARD_TURN,)
     if street is Street.RIVER:
-        return DealerTargetSlot.BURN_TRAY, DealerTargetSlot.BOARD_RIVER
+        return (DealerTargetSlot.BOARD_RIVER,)
     raise ValueError(f"street {street.value} has no board deal")

@@ -15,7 +15,10 @@ from poker_dealer.domain import (
     Rank,
     Seat,
     Suit,
+    Street,
     VisionSlot,
+    board_deal_targets,
+    hole_deal_targets,
 )
 from poker_dealer.game import (
     DealerFault,
@@ -44,7 +47,7 @@ def test_simulated_dealer_is_idempotent_and_fault_injectable() -> None:
     assert dealer.execute(DealerCommand("jam", 5, DealerCommandType.DISPENSE_ONE)).status is DealerAckStatus.FAILED
 
 
-def test_all_ten_dealer_targets_and_out_of_order_ack_delivery() -> None:
+def test_all_nine_dealer_targets_and_out_of_order_ack_delivery() -> None:
     dealer = SimulatedDealer()
     dealer.execute(DealerCommand("home", 1, DealerCommandType.HOME))
     for index, target in enumerate(DealerTargetSlot, start=2):
@@ -80,6 +83,39 @@ def test_all_ten_dealer_targets_and_out_of_order_ack_delivery() -> None:
     )
     assert all(ack.status is DealerAckStatus.SUCCEEDED for ack in delivered)
     assert scripted.dispensed_cards == 1
+
+
+def test_no_burn_complete_river_sequence_dispenses_thirteen_cards() -> None:
+    dealer = SimulatedDealer()
+    assert dealer.execute(
+        DealerCommand("no-burn-home", 1, DealerCommandType.HOME)
+    ).status is DealerAckStatus.SUCCEEDED
+    targets = (
+        *hole_deal_targets(Seat.A),
+        *board_deal_targets(Street.FLOP),
+        *board_deal_targets(Street.TURN),
+        *board_deal_targets(Street.RIVER),
+    )
+    assert len(targets) == 13
+    for sequence, target in enumerate(targets, start=2):
+        rotate = dealer.execute(
+            DealerCommand(
+                f"no-burn-rotate-{sequence}",
+                sequence * 2,
+                DealerCommandType.ROTATE_TO,
+                target,
+            )
+        )
+        dispense = dealer.execute(
+            DealerCommand(
+                f"no-burn-dispense-{sequence}",
+                sequence * 2 + 1,
+                DealerCommandType.DISPENSE_ONE,
+            )
+        )
+        assert rotate.status is DealerAckStatus.SUCCEEDED
+        assert dispense.status is DealerAckStatus.SUCCEEDED
+    assert dealer.dispensed_cards == 13
 
 
 @pytest.mark.parametrize(

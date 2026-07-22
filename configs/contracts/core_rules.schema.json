@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://poker-dealer.local/schemas/core-rules-1.2.json",
+  "$id": "https://poker-dealer.local/schemas/core-rules-1.3.json",
   "title": "Poker Dealer four-player Core rules",
   "type": "object",
   "additionalProperties": false,
@@ -12,8 +12,8 @@
   ],
   "properties": {
     "$schema": {"type": "string"},
-    "schema_version": {"const": "1.2"},
-    "contract_status": {"const": "four_player_perception_state_contract_frozen_betting_structure_pending"},
+    "schema_version": {"const": "1.3"},
+    "contract_status": {"const": "four_player_perception_state_fixed_limit_no_burn_contract_frozen"},
     "variant": {"const": "four_player_texas_holdem"},
     "rules_source": {
       "type": "object",
@@ -42,14 +42,14 @@
       "additionalProperties": false,
       "required": [
         "starting_stack_units", "minimum_stack_to_start_hand_units",
-        "rebuy_or_end_session_below_minimum", "button_starts_at",
+        "rebuy_or_end_session_below_minimum", "initial_button_policy",
         "button_advances_after", "button_stays_after_void_or_redeal"
       ],
       "properties": {
         "starting_stack_units": {"type": "integer", "minimum": 2},
         "minimum_stack_to_start_hand_units": {"type": "integer", "minimum": 1},
         "rebuy_or_end_session_below_minimum": {"const": true},
-        "button_starts_at": {"$ref": "#/$defs/seat"},
+        "initial_button_policy": {"const": "explicit_per_session"},
         "button_advances_after": {"const": "settled_hand"},
         "button_stays_after_void_or_redeal": {"const": true}
       }
@@ -85,7 +85,7 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "product_decision_status", "candidate_structure",
+        "product_decision_status", "structure",
         "actions_semantics_frozen", "ui_implementation", "amount_field_policy",
         "numeric_values_status", "small_bet_units_default",
         "small_bet_streets", "big_bet_units_default", "big_bet_streets",
@@ -96,8 +96,8 @@
         "action_timeout_seconds_default"
       ],
       "properties": {
-        "product_decision_status": {"const": "pending_confirmation"},
-        "candidate_structure": {"const": "fixed_limit"},
+        "product_decision_status": {"const": "confirmed_core_v1"},
+        "structure": {"const": "fixed_limit"},
         "actions_semantics_frozen": {"const": ["fold", "check", "call", "bet", "raise"]},
         "ui_implementation": {"const": "replaceable"},
         "amount_field_policy": {"const": "null_for_fixed_limit_required_for_no_limit_bet_or_raise"},
@@ -195,18 +195,19 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "manual_shuffle_and_load_before_each_hand", "hole_cards_per_player",
+        "dealing_profile", "manual_shuffle_and_load_before_each_hand", "hole_cards_per_player",
         "hole_cards_face_down", "hole_deal_rounds", "burn_before_each_board_street",
         "flop_cards", "turn_cards", "river_cards", "board_reveal_mode",
         "manual_card_return_after_hand", "deal_progress_requires_success_ack",
         "misdeal_before_player_action", "physical_state_uncertain"
       ],
       "properties": {
+        "dealing_profile": {"const": "robot_core_no_burn"},
         "manual_shuffle_and_load_before_each_hand": {"const": true},
         "hole_cards_per_player": {"const": 2},
         "hole_cards_face_down": {"const": true},
         "hole_deal_rounds": {"const": 2},
-        "burn_before_each_board_street": {"const": true},
+        "burn_before_each_board_street": {"const": false},
         "flop_cards": {"const": 3},
         "turn_cards": {"const": 1},
         "river_cards": {"const": 1},

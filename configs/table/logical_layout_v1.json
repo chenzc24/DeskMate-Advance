@@ -1,6 +1,6 @@
 {
   "$schema": "../contracts/table_layout.schema.json",
-  "schema_version": "1.1",
+  "schema_version": "1.2",
   "contract_status": "logical_card_and_action_ids_frozen_geometry_pending",
   "tabletop_frame": {
     "origin": "top_left_from_overhead_camera_view",
@@ -12,7 +12,6 @@
     {"target_id": "seat_b", "purpose": "hole_card_delivery", "geometry_status": "pending_measurement"},
     {"target_id": "seat_c", "purpose": "hole_card_delivery", "geometry_status": "pending_measurement"},
     {"target_id": "seat_d", "purpose": "hole_card_delivery", "geometry_status": "pending_measurement"},
-    {"target_id": "burn_tray", "purpose": "face_down_burn_card", "geometry_status": "pending_measurement"},
     {"target_id": "board_flop_1", "purpose": "face_up_board_card", "geometry_status": "pending_measurement"},
     {"target_id": "board_flop_2", "purpose": "face_up_board_card", "geometry_status": "pending_measurement"},
     {"target_id": "board_flop_3", "purpose": "face_up_board_card", "geometry_status": "pending_measurement"},

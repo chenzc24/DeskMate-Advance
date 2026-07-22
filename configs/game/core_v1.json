@@ -1,7 +1,7 @@
 {
   "$schema": "../contracts/core_rules.schema.json",
-  "schema_version": "1.2",
-  "contract_status": "four_player_perception_state_contract_frozen_betting_structure_pending",
+  "schema_version": "1.3",
+  "contract_status": "four_player_perception_state_fixed_limit_no_burn_contract_frozen",
   "variant": "four_player_texas_holdem",
   "rules_source": {
     "name": "Poker TDA Rules 2024 for button, blinds and clockwise action",
@@ -19,7 +19,7 @@
     "starting_stack_units": 80,
     "minimum_stack_to_start_hand_units": 2,
     "rebuy_or_end_session_below_minimum": true,
-    "button_starts_at": "seat_a",
+    "initial_button_policy": "explicit_per_session",
     "button_advances_after": "settled_hand",
     "button_stays_after_void_or_redeal": true
   },
@@ -37,8 +37,8 @@
     "big_blind_units": 2
   },
   "betting": {
-    "product_decision_status": "pending_confirmation",
-    "candidate_structure": "fixed_limit",
+    "product_decision_status": "confirmed_core_v1",
+    "structure": "fixed_limit",
     "actions_semantics_frozen": ["fold", "check", "call", "bet", "raise"],
     "ui_implementation": "replaceable",
     "amount_field_policy": "null_for_fixed_limit_required_for_no_limit_bet_or_raise",
@@ -101,11 +101,12 @@
     "roi_geometry_status": "pending_target_camera_evidence"
   },
   "deal": {
+    "dealing_profile": "robot_core_no_burn",
     "manual_shuffle_and_load_before_each_hand": true,
     "hole_cards_per_player": 2,
     "hole_cards_face_down": true,
     "hole_deal_rounds": 2,
-    "burn_before_each_board_street": true,
+    "burn_before_each_board_street": false,
     "flop_cards": 3,
     "turn_cards": 1,
     "river_cards": 1,

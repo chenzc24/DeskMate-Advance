@@ -6,7 +6,7 @@
 
 ## 入口条件
 
-- Gate 1 已通过；若 S0-07 仍开放，只允许用明确标注的 candidate betting config 做工程联调，不能进入最终验收。
+- Gate 1 已通过，S0-07 已确认 Fixed-Limit Core v1；集成仍必须读取配置默认值，不能把 1/2、2/4、cap 4 或 stack 80 写死。
 - Gate 2A/2B 各有固定 model/export/config/calibration/manifest hashes 和 recorded replay。
 - Gate 3 有固定 firmware/protocol/calibration、保护、操作员 runbook 和安全签字。
 - runtime 启动时能拒绝 schema/model/firmware/calibration 不兼容组合；共享合同变化必须回 Stage 00 做迁移。

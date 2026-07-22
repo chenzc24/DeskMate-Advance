@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://poker-dealer.local/schemas/table-layout-1.1.json",
+  "$id": "https://poker-dealer.local/schemas/table-layout-1.2.json",
   "title": "Poker Dealer logical table layout",
   "type": "object",
   "additionalProperties": false,
@@ -10,7 +10,7 @@
   ],
   "properties": {
     "$schema": {"type": "string"},
-    "schema_version": {"const": "1.1"},
+    "schema_version": {"const": "1.2"},
     "contract_status": {"const": "logical_card_and_action_ids_frozen_geometry_pending"},
     "tabletop_frame": {
       "type": "object",
@@ -24,8 +24,8 @@
     },
     "mechanical_targets": {
       "type": "array",
-      "minItems": 10,
-      "maxItems": 10,
+      "minItems": 9,
+      "maxItems": 9,
       "uniqueItems": true,
       "items": {"$ref": "#/$defs/mechanical_target"}
     },
@@ -82,11 +82,11 @@
       "properties": {
         "target_id": {
           "enum": [
-            "seat_a", "seat_b", "seat_c", "seat_d", "burn_tray", "board_flop_1",
+            "seat_a", "seat_b", "seat_c", "seat_d", "board_flop_1",
             "board_flop_2", "board_flop_3", "board_turn", "board_river"
           ]
         },
-        "purpose": {"enum": ["hole_card_delivery", "face_down_burn_card", "face_up_board_card"]},
+        "purpose": {"enum": ["hole_card_delivery", "face_up_board_card"]},
         "geometry_status": {"const": "pending_measurement"}
       }
     },

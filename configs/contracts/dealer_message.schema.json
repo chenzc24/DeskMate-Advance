@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://poker-dealer.local/schemas/dealer-message-1.0.json",
+  "$id": "https://poker-dealer.local/schemas/dealer-message-2.0.json",
   "title": "Semantic dealer command or terminal acknowledgement",
   "oneOf": [
     {"$ref": "#/$defs/command"},
@@ -9,7 +9,7 @@
   "$defs": {
     "target": {
       "enum": [
-        "seat_a", "seat_b", "seat_c", "seat_d", "burn_tray", "board_flop_1",
+        "seat_a", "seat_b", "seat_c", "seat_d", "board_flop_1",
         "board_flop_2", "board_flop_3", "board_turn", "board_river"
       ]
     },
@@ -21,7 +21,7 @@
         "command", "target_slot", "timeout_ms"
       ],
       "properties": {
-        "schema_version": {"const": "1.0"},
+        "schema_version": {"const": "2.0"},
         "message_type": {"const": "command"},
         "command_id": {"type": "string", "minLength": 1},
         "issued_at_ns": {"type": "integer", "minimum": 0},
@@ -59,7 +59,7 @@
         "reason", "sensor_evidence"
       ],
       "properties": {
-        "schema_version": {"const": "1.0"},
+        "schema_version": {"const": "2.0"},
         "message_type": {"const": "ack"},
         "command_id": {"type": "string", "minLength": 1},
         "command": {"enum": ["home", "rotate_to", "dispense_one", "stop", "get_status", "reset_fault"]},

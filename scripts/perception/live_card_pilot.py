@@ -1,4 +1,4 @@
-"""Run a bounded, non-recording fixed-ROI Laptop card-recognition pilot."""
+"""Run a bounded, non-recording fixed-ROI live card-recognition pilot."""
 
 from __future__ import annotations
 
@@ -54,6 +54,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--index", type=int)
     parser.add_argument("--backend", choices=("dshow", "msmf", "auto"))
+    parser.add_argument(
+        "--stream-url",
+        help="HTTP(S) MJPEG stream; mutually exclusive with --index",
+    )
+    parser.add_argument("--stream-open-timeout-ms", type=int, default=5000)
+    parser.add_argument("--stream-read-timeout-ms", type=int, default=2000)
     parser.add_argument("--max-seconds", type=float)
     parser.add_argument("--max-frames", type=int)
     parser.add_argument(
@@ -66,13 +72,31 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def main() -> int:
-    args = parse_args()
-    pilot = CardPilotConfig.from_json(args.config)
+def _camera_config(
+    args: argparse.Namespace, pilot: CardPilotConfig
+) -> CameraConfig:
     camera_values = pilot.camera
-    camera_config = CameraConfig(
+    if args.stream_url is not None:
+        if args.index is not None:
+            raise ValueError("--stream-url and --index are mutually exclusive")
+        if args.backend not in {None, "auto"}:
+            raise ValueError("network streams use FFmpeg; omit --backend")
+        return CameraConfig(
+            device_index=0,
+            stream_url=args.stream_url,
+            source_id="robot_mjpeg_card_pilot",
+            backend="auto",
+            width=None,
+            height=None,
+            fps=None,
+            open_timeout_ms=args.stream_open_timeout_ms,
+            read_timeout_ms=args.stream_read_timeout_ms,
+        )
+    return CameraConfig(
         device_index=(
-            int(camera_values["device_index"]) if args.index is None else args.index
+            int(camera_values["device_index"])
+            if args.index is None
+            else args.index
         ),
         source_id="laptop_card_pilot",
         backend=(
@@ -84,6 +108,15 @@ def main() -> int:
         height=int(camera_values["height"]),
         fps=float(camera_values["fps"]),
     )
+
+
+def main() -> int:
+    args = parse_args()
+    pilot = CardPilotConfig.from_json(args.config)
+    try:
+        camera_config = _camera_config(args, pilot)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
     max_seconds = (
         float(pilot.max_seconds_default)
         if args.max_seconds is None
@@ -231,7 +264,11 @@ def main() -> int:
         "model_id": pilot.model.model_id,
         "model_version": pilot.model.version,
         "slot_id": slot.value,
-        "roi_status": "laptop_fixture_not_target_geometry",
+        "roi_status": (
+            "robot_stream_fixed_roi_unvalidated"
+            if camera_config.is_network_stream
+            else "laptop_fixture_not_target_geometry"
+        ),
         "camera": negotiated,
         "elapsed_seconds": elapsed_s,
         "frames": frames,

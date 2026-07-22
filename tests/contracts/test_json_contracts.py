@@ -137,7 +137,7 @@ def test_decision_register_is_complete_and_honest_about_open_evidence() -> None:
     register = load_json("configs/contracts/stage0_decisions.json")
     decisions = register["decisions"]
     assert {item["id"] for item in decisions} == {
-        f"S0-{number:02d}" for number in range(1, 22)
+        f"S0-{number:02d}" for number in range(1, 23)
     }
     assert len({item["id"] for item in decisions}) == len(decisions)
     assert any(item["status"] == "evidence_required" for item in decisions)
@@ -149,7 +149,7 @@ def test_decision_register_is_complete_and_honest_about_open_evidence() -> None:
         for status in ("frozen", "partially_frozen", "evidence_required")
     }
     assert status_counts == {
-        "frozen": 4,
+        "frozen": 5,
         "partially_frozen": 12,
         "evidence_required": 5,
     }
@@ -182,11 +182,12 @@ def test_walkthrough_matrix_covers_required_rule_and_fault_cases() -> None:
     assert required <= tags
 
 
-def test_fixed_limit_candidate_defaults_are_internally_consistent() -> None:
+def test_fixed_limit_core_defaults_are_internally_consistent() -> None:
     rules = load_json("configs/game/core_v1.json")
     assert rules["table"]["players"] == 4
-    assert rules["betting"]["product_decision_status"] == "pending_confirmation"
-    assert rules["betting"]["candidate_structure"] == "fixed_limit"
+    assert rules["betting"]["product_decision_status"] == "confirmed_core_v1"
+    assert rules["betting"]["structure"] == "fixed_limit"
+    assert rules["session_defaults"]["initial_button_policy"] == "explicit_per_session"
     assert rules["betting"]["numeric_values_status"] == "configurable_defaults"
     assert rules["blinds_defaults"]["small_blind_units"] == 1
     assert rules["blinds_defaults"]["big_blind_units"] == 2
@@ -233,6 +234,11 @@ def test_schemas_reject_guessing_or_ambiguous_physical_messages() -> None:
     bad_command["target_slot"] = None
     with pytest.raises(ValidationError):
         Draft202012Validator(dealer_schema).validate(bad_command)
+
+    removed_burn_target = load_json("configs/contracts/examples/dealer_command.rotate.json")
+    removed_burn_target["target_slot"] = "burn_tray"
+    with pytest.raises(ValidationError):
+        Draft202012Validator(dealer_schema).validate(removed_burn_target)
 
     bad_ack = load_json("configs/contracts/examples/dealer_ack.failed.json")
     bad_ack["status"] = "succeeded"
