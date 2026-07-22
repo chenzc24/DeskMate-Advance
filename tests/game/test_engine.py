@@ -45,6 +45,21 @@ def test_new_hand_posts_blinds_and_focuses_utg(button: Seat) -> None:
     assert engine.state.total_units() == 320
 
 
+def test_production_begin_enters_hole_delivery_without_assuming_cards() -> None:
+    engine = HandEngine.setup_session("production", Seat.A)
+    engine.begin_hand("begin")
+    assert engine.state.phase is HandPhase.DEALING_HOLE
+    assert engine.state.street is Street.PREFLOP
+    assert engine.state.acting_seat is None
+    assert engine.state.pot_units == 3
+    assert all(
+        lifecycle.value == "expected_empty"
+        for lifecycle in engine.state.slot_states.values()
+    )
+    with pytest.raises(ValueError, match="all hole-card slots"):
+        engine.confirm_hole_dealt("too-early")
+
+
 def test_action_evidence_rejection_and_atomic_focus_switch() -> None:
     engine = HandEngine.start("hand", Seat.A)
     simulator = SimulatedActionPerception()

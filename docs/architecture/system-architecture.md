@@ -21,25 +21,23 @@ stateDiagram-v2
     READY_TO_START --> REGISTRATION: clear or change setup
     READY_TO_START --> SETUP: freeze SessionRoster
     SETUP --> DEALING_HOLE: deck loaded + homed
-    DEALING_HOLE --> PREFLOP: each dispense ACKed
-    PREFLOP --> DEALING_FLOP: betting closed
-    DEALING_FLOP --> FLOP: 3 board cards ACKed
-    FLOP --> DEALING_TURN: betting closed
-    DEALING_TURN --> TURN: 1 board card ACKed
-    TURN --> DEALING_RIVER: betting closed
-    DEALING_RIVER --> RIVER: 1 board card ACKed
-    RIVER --> SHOWDOWN: betting closed
+    DEALING_HOLE --> AWAITING_ACTION: 8 cards ACKed + face-down slots
+    AWAITING_ACTION --> DEALING_BOARD: pre-flop/flop/turn betting closed
+    DEALING_BOARD --> AWAITING_ACTION: current street ACKed + confirmed
+    AWAITING_ACTION --> SHOWDOWN: river betting closed
     SHOWDOWN --> SETTLED: all required cards confirmed
-    PREFLOP --> SETTLED: fold
-    FLOP --> SETTLED: fold
-    TURN --> SETTLED: fold
-    RIVER --> SETTLED: fold
+    AWAITING_ACTION --> SETTLED: only one live player
     SETUP --> PAUSED_RECOVERY: error
     DEALING_HOLE --> PAUSED_RECOVERY: timeout or jam
     SHOWDOWN --> PAUSED_RECOVERY: unknown or duplicate
 ```
 
 `PAUSED_RECOVERY` 可以从任意活动状态进入；恢复必须携带人工确认和原状态快照，不能用重新启动程序掩盖状态丢失。
+
+代码只使用 `HandPhase` 作为上述高层状态；Pre-flop、Flop、Turn、River 是
+`Street`，不是另一套 phase。`HandRuntime` 依据当前 `HandPhase` 在 Part A
+与 Part B 之间切换，具体边界见
+[统一手牌运行时](unified-hand-runtime.md)。
 
 注册保持单轮流程：四个角色完成人脸注册即可冻结，不增加第二轮返回首人的验证。会话人脸和可选声纹只用于状态机已经选定角色的身份核验，embedding 仅存在内存；它们不决定 Button、acting seat、合法动作或筹码。声纹注册由明确的三段进度引导，三段接纳后自动结束，也可由控制输入取消。
 
@@ -135,7 +133,7 @@ flowchart TD
 
 `ControlObservation` 统一 `confirm/cancel/start/clear/next_option/previous_option`。Laptop 键盘只是 fallback；未来机器人按钮 adapter 产生同样的 observation ID、单调时间、source 和 device state version。Wire transport、GPIO 或 MCU 不得直接调用 gallery、game reducer 或账本。
 
-注册阶段的 `confirm/start/clear` 只交给 `RegistrationRuntime`。下注阶段只有在 Part A 已经建立当前角色窗口后，`ButtonBettingRuntime` 才读取 game 的 `legal_actions`；`next/previous` 在该集合内循环，`confirm` 生成带 hand/state/acting-seat 的正式动作请求。Fixed-Limit 金额由 game 配置推导，按钮不上传任意金额。
+注册阶段的 `confirm/start/clear` 只交给 `RegistrationRuntime`。正式下注阶段的按钮选择必须进入 `HandRuntime/Part A` 已建立的当前角色窗口；`next/previous` 只能在 game 给出的 `legal_actions` 内循环，`confirm` 仍需经过当前 hand/state/acting-seat 门禁。`ButtonBettingRuntime` 的直接 game 提交仅供显式 opt-in 的 Laptop pilot 使用，不能作为产品入口。Fixed-Limit 金额由 game 配置推导，按钮不上传任意金额。
 
 ### 玩家行为与关注席位
 

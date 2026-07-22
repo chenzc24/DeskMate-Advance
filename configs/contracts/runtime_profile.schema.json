@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://poker-dealer.local/schemas/runtime_profile.schema.json",
+  "title": "Poker Dealer Runtime Profile",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "profile_id", "camera", "dealer", "perception", "controls", "speech", "logging"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "profile_id": {"enum": ["laptop", "robot_camera", "robot_hardware"]},
+    "camera": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "source_id", "backend", "width", "height", "fps", "open_timeout_ms", "read_timeout_ms"],
+      "properties": {
+        "kind": {"enum": ["local", "mjpeg"]},
+        "source_id": {"type": "string", "minLength": 1},
+        "device_index": {"type": "integer", "minimum": 0},
+        "stream_url": {"type": "string", "format": "uri", "pattern": "^https?://"},
+        "backend": {"enum": ["auto", "dshow", "msmf"]},
+        "width": {"type": ["integer", "null"], "minimum": 1},
+        "height": {"type": ["integer", "null"], "minimum": 1},
+        "fps": {"type": ["number", "null"], "exclusiveMinimum": 0},
+        "open_timeout_ms": {"type": "integer", "minimum": 1},
+        "read_timeout_ms": {"type": "integer", "minimum": 1}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"kind": {"const": "local"}}},
+          "then": {"required": ["device_index"], "not": {"required": ["stream_url"]}}
+        },
+        {
+          "if": {"properties": {"kind": {"const": "mjpeg"}}},
+          "then": {"required": ["stream_url"]}
+        }
+      ]
+    },
+    "dealer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["adapter", "device_id", "protocol_version", "physical_motion", "enabled"],
+      "properties": {
+        "adapter": {"enum": ["simulated", "real"]},
+        "device_id": {"type": "string", "minLength": 1},
+        "protocol_version": {"type": "string", "minLength": 1},
+        "physical_motion": {"type": "boolean"},
+        "enabled": {"type": "boolean"},
+        "unavailable_reason": {"type": ["string", "null"], "minLength": 1}
+      }
+    },
+    "perception": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity_config", "gesture_config", "speech_config", "speaker_config", "attribution_config", "card_config", "calibration_id", "target_geometry_validated"],
+      "properties": {
+        "identity_config": {"type": "string", "pattern": "^configs/perception/[^.].*\\.json$"},
+        "gesture_config": {"type": "string", "pattern": "^configs/perception/[^.].*\\.json$"},
+        "speech_config": {"type": "string", "pattern": "^configs/perception/[^.].*\\.json$"},
+        "speaker_config": {"type": "string", "pattern": "^configs/perception/[^.].*\\.json$"},
+        "attribution_config": {"type": "string", "pattern": "^configs/perception/[^.].*\\.json$"},
+        "card_config": {"type": "string", "pattern": "^configs/perception/[^.].*\\.json$"},
+        "calibration_id": {"type": "string", "minLength": 1},
+        "target_geometry_validated": {"type": "boolean"}
+      }
+    },
+    "controls": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"enum": ["laptop_keyboard", "robot_button", "simulator"]}
+    },
+    "speech": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "device"],
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "device": {"type": ["integer", "string", "null"]}
+      }
+    },
+    "logging": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["root"],
+      "properties": {
+        "root": {"type": "string", "pattern": "^runs[/\\\\]"}
+      }
+    }
+  }
+}

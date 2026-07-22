@@ -45,11 +45,14 @@ class SequentialPartACoordinator:
         engine: HandEngine,
         session_id: str,
         *,
-        require_actor_binding: bool = False,
-        require_visual_settle: bool = False,
+        require_actor_binding: bool = True,
+        require_visual_settle: bool = True,
+        visual_settle_timeout_ms: int = 5000,
     ) -> None:
         if not session_id.strip():
             raise ValueError("session_id is required")
+        if visual_settle_timeout_ms <= 0:
+            raise ValueError("visual settle timeout must be positive")
         if (
             engine.state.phase is not HandPhase.AWAITING_ACTION
             or engine.state.acting_seat is None
@@ -59,12 +62,16 @@ class SequentialPartACoordinator:
         self.session_id = session_id
         self.require_actor_binding = require_actor_binding
         self.require_visual_settle = require_visual_settle
+        self.visual_settle_timeout_ms = visual_settle_timeout_ms
         self.phase = PartAPhase.WAITING_ROTATION_ACK
         self.pending_rotation: DealerCommand | None = None
         self.verified_player_id: str | None = None
         self.active_actor_binding: ActorBinding | None = None
         self.last_reason = "rotation_not_requested"
         self._command_sequence = 0
+        self._action_window_opened_at_ns: int | None = None
+        self._visual_settle_opened_at_ns: int | None = None
+        self._accepted_rotation_ack_ids: set[str] = set()
 
     @property
     def focus_seat(self) -> Seat | None:
@@ -89,10 +96,14 @@ class SequentialPartACoordinator:
             target_slot=DealerTargetSlot(seat.value),
         )
         self.pending_rotation = command
+        self.engine.record_dealer_command(command)
         self.last_reason = "waiting_for_matching_rotation_ack"
         return command
 
     def accept_rotation_ack(self, ack: DealerAck) -> bool:
+        if ack.command_id in self._accepted_rotation_ack_ids:
+            return True
+        self.engine.record_dealer_ack(ack)
         command = self.pending_rotation
         if self.phase is not PartAPhase.WAITING_ROTATION_ACK or command is None:
             raise ValueError("no rotation acknowledgement is expected")
@@ -109,8 +120,10 @@ class SequentialPartACoordinator:
         if ack.sensor_evidence.at_target is not True:
             self._enter_recovery("rotation_ack_missing_at_target_evidence")
             return False
+        self._accepted_rotation_ack_ids.add(ack.command_id)
         self.pending_rotation = None
         if self.require_visual_settle:
+            self._visual_settle_opened_at_ns = ack.observed_at_ns
             self.phase = PartAPhase.WAITING_VISUAL_SETTLE
             self.last_reason = "rotation_confirmed_wait_visual_settle"
         else:
@@ -121,6 +134,7 @@ class SequentialPartACoordinator:
     def accept_visual_settle(self) -> None:
         if self.phase is not PartAPhase.WAITING_VISUAL_SETTLE:
             raise ValueError("visual settle is outside the post-rotation window")
+        self._visual_settle_opened_at_ns = None
         self.phase = PartAPhase.VERIFYING_IDENTITY
         self.last_reason = "visual_settled_verify_identity"
 
@@ -150,6 +164,7 @@ class SequentialPartACoordinator:
             return False
         self.verified_player_id = observation.player_id
         self.active_actor_binding = None
+        self._action_window_opened_at_ns = observation.observed_at_ns
         self.phase = PartAPhase.WAITING_PLAYER_ACTION
         self.last_reason = "identity_verified_action_window_open"
         return True
@@ -215,6 +230,7 @@ class SequentialPartACoordinator:
 
         self.verified_player_id = None
         self.active_actor_binding = None
+        self._action_window_opened_at_ns = None
         self.pending_rotation = None
         if (
             self.engine.state.phase is HandPhase.AWAITING_ACTION
@@ -238,6 +254,7 @@ class SequentialPartACoordinator:
             raise ValueError("identity revocation reason is required")
         self.verified_player_id = None
         self.active_actor_binding = None
+        self._action_window_opened_at_ns = None
         self.phase = PartAPhase.VERIFYING_IDENTITY
         self.last_reason = f"identity_revoked:{reason}"
 
@@ -249,11 +266,53 @@ class SequentialPartACoordinator:
         self.pending_rotation = None
         self.verified_player_id = None
         self.active_actor_binding = None
+        self._action_window_opened_at_ns = None
         self.phase = PartAPhase.ROUND_COMPLETE
         self.last_reason = f"pilot_complete:{reason}"
 
+    def check_timeout(self, now_ns: int) -> bool:
+        """Pause the authoritative hand when an open action window expires."""
+
+        if now_ns < 0:
+            raise ValueError("timeout clock must be non-negative")
+        if self.pending_rotation is not None:
+            deadline = (
+                self.pending_rotation.issued_at_ns
+                + self.pending_rotation.timeout_ms * 1_000_000
+            )
+            if now_ns >= deadline:
+                self._enter_recovery("rotation_ack_timeout")
+                return True
+        if (
+            self.phase is PartAPhase.WAITING_VISUAL_SETTLE
+            and self._visual_settle_opened_at_ns is not None
+            and now_ns
+            >= self._visual_settle_opened_at_ns
+            + self.visual_settle_timeout_ms * 1_000_000
+        ):
+            self._enter_recovery("visual_settle_timeout")
+            return True
+        if (
+            self.phase is PartAPhase.WAITING_PLAYER_ACTION
+            and self._action_window_opened_at_ns is not None
+            and now_ns
+            >= self._action_window_opened_at_ns
+            + self.engine.rules.action_timeout_seconds * 1_000_000_000
+        ):
+            self._enter_recovery("player_action_timeout")
+            return True
+        return False
+
     def _enter_recovery(self, reason: str) -> None:
         self.phase = PartAPhase.RECOVERY_REQUIRED
+        self.pending_rotation = None
         self.verified_player_id = None
         self.active_actor_binding = None
+        self._action_window_opened_at_ns = None
+        self._visual_settle_opened_at_ns = None
         self.last_reason = reason
+        if self.engine.state.phase is not HandPhase.PAUSED_RECOVERY:
+            self.engine.pause(
+                f"part-a:{self.engine.state.hand_id}:pause:{self.engine.state.state_version}",
+                reason,
+            )

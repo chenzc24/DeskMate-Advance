@@ -75,7 +75,10 @@ def action(coordinator: SequentialPartACoordinator) -> PlayerActionObservation:
 
 def ready_coordinator() -> tuple[SequentialPartACoordinator, SimulatedDealer]:
     coordinator = SequentialPartACoordinator(
-        HandEngine.start("vertical", Seat.A), "session"
+        HandEngine.start("vertical", Seat.A),
+        "session",
+        require_actor_binding=False,
+        require_visual_settle=False,
     )
     dealer = SimulatedDealer()
     home = coordinator.request_rotation(1)
@@ -150,6 +153,40 @@ def test_rotation_ack_target_mismatch_enters_recovery() -> None:
     )
     assert not coordinator.accept_rotation_ack(bad_ack)
     assert coordinator.phase is PartAPhase.RECOVERY_REQUIRED
+    assert coordinator.engine.state.phase.value == "paused_recovery"
+    assert coordinator.pending_rotation is None
+
+
+def test_duplicate_rotation_ack_is_idempotent() -> None:
+    coordinator = SequentialPartACoordinator(
+        HandEngine.start("duplicate-ack", Seat.A),
+        "session",
+        require_actor_binding=False,
+        require_visual_settle=False,
+    )
+    dealer = SimulatedDealer()
+    dealer.homed = True
+    command = coordinator.request_rotation(1)
+    ack = dealer.execute(command, 2)
+    assert coordinator.accept_rotation_ack(ack)
+    assert coordinator.accept_rotation_ack(ack)
+    assert coordinator.phase is PartAPhase.VERIFYING_IDENTITY
+
+
+def test_open_action_window_timeout_pauses_authoritative_hand() -> None:
+    coordinator, _dealer = ready_coordinator()
+    assert coordinator.accept_identity(
+        identity(
+            coordinator,
+            FaceIdentityState.MATCHED,
+            player_id="player_d",
+            registered_seat=Seat.D,
+        )
+    )
+    assert coordinator.check_timeout(31_000_000_000)
+    assert coordinator.phase is PartAPhase.RECOVERY_REQUIRED
+    assert coordinator.engine.state.phase.value == "paused_recovery"
+    assert coordinator.engine.state.paused_reason == "player_action_timeout"
 
 
 def test_illegal_action_does_not_advance_focus() -> None:
@@ -190,7 +227,10 @@ def test_identity_revocation_closes_action_window_without_state_change() -> None
 
 def test_four_player_preflop_coordinator_closes_d_a_b_c_in_order() -> None:
     coordinator = SequentialPartACoordinator(
-        HandEngine.start("four-player-vertical", Seat.A), "session"
+        HandEngine.start("four-player-vertical", Seat.A),
+        "session",
+        require_actor_binding=False,
+        require_visual_settle=False,
     )
     dealer = SimulatedDealer()
     dealer.homed = True
@@ -234,6 +274,7 @@ def test_strict_coordinator_requires_matching_actor_binding() -> None:
         HandEngine.start("strict-vertical", Seat.A),
         "session",
         require_actor_binding=True,
+        require_visual_settle=False,
     )
     dealer = SimulatedDealer()
     dealer.homed = True
@@ -267,6 +308,7 @@ def test_strict_coordinator_rejects_another_binding_id() -> None:
         HandEngine.start("strict-mismatch", Seat.A),
         "session",
         require_actor_binding=True,
+        require_visual_settle=False,
     )
     dealer = SimulatedDealer()
     dealer.homed = True
@@ -310,3 +352,20 @@ def test_visual_settle_gate_is_required_when_enabled() -> None:
         coordinator.accept_identity(identity(coordinator, FaceIdentityState.UNKNOWN))
     coordinator.accept_visual_settle()
     assert coordinator.phase is PartAPhase.VERIFYING_IDENTITY
+
+
+def test_visual_settle_timeout_pauses_hand() -> None:
+    coordinator = SequentialPartACoordinator(
+        HandEngine.start("settle-timeout", Seat.A),
+        "session",
+        require_actor_binding=True,
+        require_visual_settle=True,
+        visual_settle_timeout_ms=5,
+    )
+    dealer = SimulatedDealer()
+    dealer.homed = True
+    command = coordinator.request_rotation(1)
+    assert coordinator.accept_rotation_ack(dealer.execute(command, 2))
+    assert coordinator.check_timeout(2 + 5_000_000)
+    assert coordinator.engine.state.phase.value == "paused_recovery"
+    assert coordinator.engine.state.paused_reason == "visual_settle_timeout"

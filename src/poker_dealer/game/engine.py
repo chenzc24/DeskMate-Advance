@@ -15,6 +15,9 @@ from poker_dealer.domain import (
     ActionEvidenceState,
     CardIdentity,
     CardObservation,
+    DealerAck,
+    DealerAckStatus,
+    DealerCommand,
     HandPhase,
     ObservationStatus,
     PlayerActionObservation,
@@ -610,6 +613,86 @@ class HandEngine:
         )
         return engine
 
+    def begin_hand(self, event_id: str) -> HandState:
+        """Post blinds and enter physical hole-card delivery.
+
+        `start()` remains the pre-dealt Stage 1 oracle helper. This method is
+        the production path and never assumes that private cards already exist.
+        """
+
+        if self.state.phase is not HandPhase.SETUP:
+            raise ValueError("hand can only begin from setup")
+        if not event_id.strip():
+            raise ValueError("begin-hand event ID is required")
+        if any(
+            lifecycle is not SlotLifecycle.EXPECTED_EMPTY
+            for lifecycle in self.state.slot_states.values()
+        ):
+            raise ValueError("all card slots must be empty before the hand begins")
+        if any(
+            player.stack_units < self.rules.big_blind_units
+            for player in self.state.players.values()
+        ):
+            raise ValueError("every starting stack must cover the big blind")
+
+        before = self.state.state_version
+        self.state.phase = HandPhase.POSTING_BLINDS
+        self.state.street = Street.PREFLOP
+        self._contribute(self.state.small_blind_seat, self.rules.small_blind_units)
+        self._contribute(self.state.big_blind_seat, self.rules.big_blind_units)
+        self.state.current_bet_units = max(
+            self.state.players[self.state.small_blind_seat].street_commit_units,
+            self.state.players[self.state.big_blind_seat].street_commit_units,
+        )
+        self.state.full_bets_this_street = 1
+        self.state.phase = HandPhase.DEALING_HOLE
+        self.state.state_version += 1
+        self.log.append(
+            kind="hand_begun",
+            event_id=event_id,
+            before_version=before,
+            accepted=True,
+            payload={
+                "small_blind_seat": self.state.small_blind_seat.value,
+                "big_blind_seat": self.state.big_blind_seat.value,
+            },
+            state=self.state,
+        )
+        return self.snapshot()
+
+    def confirm_hole_dealt(self, event_id: str) -> HandState:
+        """Open pre-flop action after all eight private slots are face down."""
+
+        if self.state.phase is not HandPhase.DEALING_HOLE:
+            raise ValueError("hole-card delivery is not pending")
+        required_slots = tuple(
+            slot for seat in SEAT_ORDER for slot in HOLE_SLOTS[seat]
+        )
+        if any(
+            self.state.slot_states[slot] is not SlotLifecycle.PRESENT_FACE_DOWN
+            for slot in required_slots
+        ):
+            raise ValueError("all hole-card slots must be present face down")
+
+        before = self.state.state_version
+        self.state.phase = HandPhase.AWAITING_ACTION
+        actionables = self.state.actionable_seats()
+        self.state.acting_seat = first_to_act(
+            self.state.button, Street.PREFLOP, actionables
+        )
+        self.state.raise_rights = set(actionables)
+        self.state.state_version += 1
+        self._refresh_legal_actions()
+        self.log.append(
+            kind="hole_cards_confirmed",
+            event_id=event_id,
+            before_version=before,
+            accepted=True,
+            payload={"hole_card_count": len(required_slots)},
+            state=self.state,
+        )
+        return self.snapshot()
+
     @classmethod
     def start(
         cls,
@@ -672,6 +755,81 @@ class HandEngine:
 
     def snapshot(self) -> HandState:
         return copy.deepcopy(self.state)
+
+    def record_dealer_command(self, command: DealerCommand) -> None:
+        """Append a semantic command intent without pretending it completed."""
+
+        if (
+            self.state.pending_command_id is not None
+            and self.state.pending_command_id != command.command_id
+        ):
+            raise ValueError("another dealer command is already pending")
+        self.state.pending_command_id = command.command_id
+        self.log.append(
+            kind="dealer_command_issued",
+            event_id=command.command_id,
+            before_version=self.state.state_version,
+            accepted=True,
+            payload={
+                "command": command.command.value,
+                "target_slot": (
+                    command.target_slot.value if command.target_slot else None
+                ),
+                "timeout_ms": command.timeout_ms,
+            },
+            state=self.state,
+            observed_at_ns=command.issued_at_ns,
+        )
+
+    def record_dealer_ack(self, ack: DealerAck) -> None:
+        """Append received ACK evidence; coordinators still decide progression."""
+
+        if self.state.pending_command_id == ack.command_id:
+            self.state.pending_command_id = None
+        self.log.append(
+            kind="dealer_ack_received",
+            event_id=f"ack:{ack.command_id}:{ack.device_state_version}",
+            before_version=self.state.state_version,
+            accepted=ack.status is DealerAckStatus.SUCCEEDED,
+            payload={
+                "command_id": ack.command_id,
+                "command": ack.command.value,
+                "target_slot": ack.target_slot.value if ack.target_slot else None,
+                "status": ack.status.value,
+                "device_state": ack.device_state.value,
+                "device_state_version": ack.device_state_version,
+                "error_code": ack.error_code.value if ack.error_code else None,
+                "reason": ack.reason,
+            },
+            state=self.state,
+            observed_at_ns=ack.observed_at_ns,
+        )
+
+    def mark_delivery_pending(
+        self, event_id: str, slot: VisionSlot, observed_at_ns: int
+    ) -> HandState:
+        """Persist a successful single-card dispense before visual confirmation."""
+
+        if self.state.phase not in {HandPhase.DEALING_HOLE, HandPhase.DEALING_BOARD}:
+            raise ValueError("card delivery is not active")
+        lifecycle = self.state.slot_states[slot]
+        if lifecycle is SlotLifecycle.DELIVERY_PENDING:
+            return self.snapshot()
+        if lifecycle is not SlotLifecycle.EXPECTED_EMPTY:
+            raise ValueError("delivery target is not empty")
+        before = self.state.state_version
+        self.state.slot_states[slot] = SlotLifecycle.DELIVERY_PENDING
+        self.state.state_version += 1
+        self.log.append(
+            kind="card_delivery_acknowledged",
+            event_id=event_id,
+            before_version=before,
+            accepted=True,
+            payload={"slot_id": slot.value},
+            state=self.state,
+            observed_at_ns=observed_at_ns,
+        )
+        return self.snapshot()
 
     def _contribute(self, seat: Seat, requested: int) -> int:
         if requested < 0:
@@ -872,7 +1030,11 @@ class HandEngine:
         }
 
         active_slots: set[VisionSlot]
-        if self.state.phase is HandPhase.DEALING_BOARD:
+        if self.state.phase is HandPhase.DEALING_HOLE:
+            active_slots = {
+                slot for seat in SEAT_ORDER for slot in HOLE_SLOTS[seat]
+            }
+        elif self.state.phase is HandPhase.DEALING_BOARD:
             active_slots = set(STREET_BOARD_SLOTS[self.state.street])  # type: ignore[index]
         elif self.state.phase is HandPhase.SHOWDOWN:
             active_slots = set(BOARD_SLOTS)
@@ -916,9 +1078,58 @@ class HandEngine:
         }.get(observation.status)
         reason = "observation_recorded"
 
+        existing_card = self.state.confirmed_cards.get(observation.slot_id)
+        existing_lifecycle = self.state.slot_states[observation.slot_id]
+        if (
+            existing_card is not None
+            and observation.status is not ObservationStatus.CONFIRMED
+        ):
+            reason = "confirmed_slot_cannot_downgrade"
+            self.log.append(
+                kind="card_observation_rejected",
+                event_id=observation.observation_id,
+                before_version=before,
+                accepted=False,
+                payload={**payload, "reason": reason},
+                state=self.state,
+                observed_at_ns=observation.observed_at_ns,
+            )
+            return CardObservationResult(False, reason, self.snapshot())
+
         if observation.status is ObservationStatus.CONFIRMED:
             card = observation.card
             assert card is not None  # enforced by CardObservation
+            if existing_card == card and existing_lifecycle is SlotLifecycle.CONFIRMED:
+                self.log.append(
+                    kind="card_observation_applied",
+                    event_id=observation.observation_id,
+                    before_version=before,
+                    accepted=True,
+                    payload={**payload, "reason": "card_already_confirmed"},
+                    state=self.state,
+                    observed_at_ns=observation.observed_at_ns,
+                )
+                return CardObservationResult(
+                    True, "card_already_confirmed", self.snapshot()
+                )
+            if existing_card is not None and existing_card != card:
+                self.state.slot_states[observation.slot_id] = SlotLifecycle.CONFLICT
+                self.state.phase = HandPhase.PAUSED_RECOVERY
+                self.state.paused_reason = "slot_card_identity_changed"
+                self.state.acting_seat = None
+                self.state.legal_actions = ()
+                self.state.state_version += 1
+                reason = "slot_card_identity_changed"
+                self.log.append(
+                    kind="card_observation_conflict",
+                    event_id=observation.observation_id,
+                    before_version=before,
+                    accepted=False,
+                    payload={**payload, "reason": reason},
+                    state=self.state,
+                    observed_at_ns=observation.observed_at_ns,
+                )
+                return CardObservationResult(False, reason, self.snapshot())
             duplicate_slots = tuple(
                 slot
                 for slot, confirmed in self.state.confirmed_cards.items()
@@ -1081,6 +1292,32 @@ class HandEngine:
         )
         return result.ranks
 
+    def settle_confirmed_showdown(self, event_id: str) -> Mapping[Seat, HandRank]:
+        """Settle a live hand only from identities confirmed in owned slots."""
+
+        if self.state.phase is not HandPhase.SHOWDOWN:
+            raise ValueError("hand is not at showdown")
+        if any(
+            self.state.slot_states[slot] is not SlotLifecycle.CONFIRMED
+            for slot in BOARD_SLOTS
+        ):
+            raise ValueError("showdown requires five confirmed board slots")
+        live = self.state.live_seats()
+        if any(
+            self.state.slot_states[slot] is not SlotLifecycle.CONFIRMED
+            for seat in live
+            for slot in HOLE_SLOTS[seat]
+        ):
+            raise ValueError("showdown requires two confirmed hole cards per live seat")
+        board = tuple(self.state.confirmed_cards[slot] for slot in BOARD_SLOTS)
+        hole_cards = {
+            seat: tuple(
+                self.state.confirmed_cards[slot] for slot in HOLE_SLOTS[seat]
+            )
+            for seat in live
+        }
+        return self.settle_showdown(event_id, board, hole_cards)  # type: ignore[arg-type]
+
     def apply_operator_adjustment(
         self, adjustment_id: str, adjustment: OperatorAdjustment
     ) -> HandState:
@@ -1123,6 +1360,7 @@ class HandEngine:
         before = self.state.state_version
         self.state.phase = HandPhase.PAUSED_RECOVERY
         self.state.paused_reason = reason
+        self.state.pending_command_id = None
         self.state.acting_seat = None
         self.state.legal_actions = ()
         self.state.state_version += 1
@@ -1145,6 +1383,7 @@ class HandEngine:
         self.state.pot_units = 0
         self.state.phase = HandPhase.VOIDED
         self.state.paused_reason = reason
+        self.state.pending_command_id = None
         self.state.acting_seat = None
         self.state.legal_actions = ()
         self.state.state_version += 1

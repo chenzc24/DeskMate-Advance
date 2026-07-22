@@ -72,6 +72,7 @@ def ready_strict_loop() -> tuple[SequentialPartACoordinator, ActorBinding]:
         HandEngine.start("actor-bound-e2e", Seat.A),
         "session",
         require_actor_binding=True,
+        require_visual_settle=False,
     )
     dealer = SimulatedDealer()
     dealer.homed = True

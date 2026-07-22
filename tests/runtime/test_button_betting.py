@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from poker_dealer.domain import (
     ControlIntent,
     ControlObservation,
@@ -8,7 +10,12 @@ from poker_dealer.domain import (
     Seat,
 )
 from poker_dealer.game import HandEngine
-from poker_dealer.runtime import ButtonBettingRuntime
+from poker_dealer.pilots import ButtonBettingRuntime
+
+
+def test_direct_engine_button_path_requires_explicit_pilot_opt_in() -> None:
+    with pytest.raises(ValueError, match="pilot-only"):
+        ButtonBettingRuntime(HandEngine.start("button-guard", Seat.A))
 
 
 def control(sequence: int, intent: ControlIntent, *, timestamp: int | None = None) -> ControlObservation:
@@ -24,7 +31,7 @@ def control(sequence: int, intent: ControlIntent, *, timestamp: int | None = Non
 
 def test_button_selection_commits_fixed_limit_action_and_online_ledger() -> None:
     engine = HandEngine.start("button-hand", Seat.A)
-    runtime = ButtonBettingRuntime(engine)
+    runtime = ButtonBettingRuntime(engine, allow_direct_engine_pilot=True)
     assert engine.state.acting_seat is Seat.D
     assert runtime.selected_action is PlayerActionType.FOLD
     assert runtime.accept_control(control(1, ControlIntent.NEXT_OPTION)).selected_action is PlayerActionType.CALL
@@ -38,7 +45,7 @@ def test_button_selection_commits_fixed_limit_action_and_online_ledger() -> None
 
 def test_robot_or_laptop_cannot_supply_arbitrary_fixed_limit_amount() -> None:
     engine = HandEngine.start("button-hand", Seat.A)
-    runtime = ButtonBettingRuntime(engine)
+    runtime = ButtonBettingRuntime(engine, allow_direct_engine_pilot=True)
     runtime.accept_control(control(1, ControlIntent.NEXT_OPTION))
     runtime.accept_control(control(2, ControlIntent.NEXT_OPTION))
     assert runtime.selected_action is PlayerActionType.RAISE
@@ -49,7 +56,7 @@ def test_robot_or_laptop_cannot_supply_arbitrary_fixed_limit_amount() -> None:
 
 def test_stale_or_pre_window_robot_controls_do_not_change_ledger() -> None:
     engine = HandEngine.start("button-hand", Seat.A)
-    runtime = ButtonBettingRuntime(engine)
+    runtime = ButtonBettingRuntime(engine, allow_direct_engine_pilot=True)
     runtime.sync(window_opened_at_ns=100)
     before = engine.snapshot()
     stale = runtime.accept_control(
@@ -70,7 +77,7 @@ def test_stale_or_pre_window_robot_controls_do_not_change_ledger() -> None:
 
 def test_duplicate_and_regressing_device_versions_are_rejected() -> None:
     engine = HandEngine.start("button-hand", Seat.A)
-    runtime = ButtonBettingRuntime(engine)
+    runtime = ButtonBettingRuntime(engine, allow_direct_engine_pilot=True)
     first = control(1, ControlIntent.NEXT_OPTION)
     assert runtime.accept_control(first).accepted
     assert runtime.accept_control(first).reason == "duplicate_control"

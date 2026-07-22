@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "profile_id": "robot_camera",
+  "camera": {
+    "kind": "mjpeg",
+    "source_id": "robot_mjpeg_camera",
+    "stream_url": "http://100.80.46.54:5000/video_feed",
+    "backend": "auto",
+    "width": null,
+    "height": null,
+    "fps": null,
+    "open_timeout_ms": 5000,
+    "read_timeout_ms": 2000
+  },
+  "dealer": {
+    "adapter": "simulated",
+    "device_id": "simulated-robot-camera-dealer",
+    "protocol_version": "2.0",
+    "physical_motion": false,
+    "enabled": true
+  },
+  "perception": {
+    "identity_config": "configs/perception/face_identity_session.json",
+    "gesture_config": "configs/perception/actions_laptop_pilot.json",
+    "speech_config": "configs/perception/actions_speech_pilot.json",
+    "speaker_config": "configs/perception/speaker_verification_session.json",
+    "attribution_config": "configs/perception/actor_binding_session.json",
+    "card_config": "configs/perception/cards_lgd_pilot.json",
+    "calibration_id": "robot-camera-target-geometry-pending-v1",
+    "target_geometry_validated": false
+  },
+  "controls": ["laptop_keyboard"],
+  "speech": {"enabled": true, "device": null},
+  "logging": {"root": "runs/runtime/robot_camera"}
+}

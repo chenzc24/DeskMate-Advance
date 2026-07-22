@@ -1,4 +1,4 @@
-"""Fixed-Limit action selection shared by laptop and future robot controls."""
+"""Pilot-only button action selector; never a production action-input path."""
 
 from __future__ import annotations
 
@@ -29,14 +29,16 @@ class ButtonBettingOutcome:
 
 
 class ButtonBettingRuntime:
-    """Cycle legal actions and commit one through the authoritative engine.
+    """Exercise rules/ledger directly, outside the product ``HandRuntime`` path."""
 
-    The standalone laptop pilot deliberately exercises only rules/ledger. A
-    final integrated runtime must open this selector after Part A verifies the
-    state-selected actor; the selector never chooses an acting seat.
-    """
-
-    def __init__(self, engine: HandEngine) -> None:
+    def __init__(
+        self, engine: HandEngine, *, allow_direct_engine_pilot: bool = False
+    ) -> None:
+        if not allow_direct_engine_pilot:
+            raise ValueError(
+                "direct button-to-engine submission is pilot-only; "
+                "production controls must enter through HandRuntime/Part A"
+            )
         self.engine = engine
         self.phase = ButtonBettingPhase.CLOSED
         self._selected_index = 0
@@ -77,11 +79,7 @@ class ButtonBettingRuntime:
         if observation.observed_at_ns < self._window_opened_at_ns:
             return self._outcome(False, "control_precedes_action_window")
         state = self.engine.state
-        current_context = (
-            state.hand_id,
-            state.state_version,
-            state.acting_seat,
-        )
+        current_context = (state.hand_id, state.state_version, state.acting_seat)
         if self.phase is not ButtonBettingPhase.SELECTING or self._context != current_context:
             return self._outcome(False, "action_window_context_changed")
         actions = state.legal_actions
@@ -118,3 +116,6 @@ class ButtonBettingRuntime:
 
     def _outcome(self, accepted: bool, reason: str) -> ButtonBettingOutcome:
         return ButtonBettingOutcome(accepted, reason, self.selected_action)
+
+
+__all__ = ["ButtonBettingOutcome", "ButtonBettingPhase", "ButtonBettingRuntime"]

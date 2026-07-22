@@ -17,6 +17,48 @@ Start with [the master plan](docs/plans/POKER_DEALER_MASTER_PLAN.md) and
 namespace is `poker_dealer`; DeskMate is available only through the immutable
 [archive pointer](archive/deskmate/README.md).
 
+The current Part A/Part B ownership and complete simulated hand path are
+documented in [the unified hand runtime](docs/architecture/unified-hand-runtime.md).
+Laptop/robot-camera dependency selection and the fail-closed hardware boundary
+are documented in [runtime profiles](docs/architecture/runtime-profiles.md).
+The shared perception ports, complete replay loop, development Live UI and
+remaining card/geometry gates are documented in
+[live runtime integration](docs/architecture/live-runtime-integration.md).
+
+The single profile entry can be checked without opening any device:
+
+```powershell
+$env:PYTHONPATH = "src"
+.\.venv\Scripts\python.exe scripts\runtime\run_hand.py --profile laptop --check-config
+.\.venv\Scripts\python.exe scripts\runtime\run_hand.py --profile robot_camera --check-config
+.\.venv\Scripts\python.exe scripts\runtime\run_hand.py --profile robot_hardware --check-config
+```
+
+The first two profiles use a simulated dealer. The hardware profile is
+intentionally unavailable until the protocol and safety gates are released.
+Camera-only smoke checks use `--camera-smoke-frames N`; they do not run a hand
+or authorize physical motion.
+The exact software/Robotics boundary is frozen in
+[the Robotics handoff contract](docs/contracts/ROBOTICS_HANDOFF.md).
+
+The complete no-device hand replay and independent log checker are:
+
+```powershell
+$env:PYTHONPATH = "src"
+.\.venv\Scripts\python.exe scripts\runtime\run_hand.py --profile laptop --mode replay --session-id replay-001 --hand-id hand-001 --log-jsonl runs/runtime/replay-001/hand-001.jsonl
+.\.venv\Scripts\python.exe scripts\runtime\check_hand_log.py runs/runtime/replay-001/hand-001.jsonl
+```
+
+Use `--mode live-preflight` to hash-check all profile-selected perception assets
+without opening devices. The unified development Live mode exists for both
+non-physical profiles, but target geometry and the hole-card back/orientation
+model are not validated; its explicit operator fallback cannot close Gate 2B.
+When speech is enabled, unified Live registration also enrolls three
+memory-only speaker samples per participant. Spoken actions are discarded
+unless the speaker matches the state-selected player; a speech-only action
+still requires the same speaker to say `confirm` or an operator to press `C`.
+The gallery, raw audio and embeddings are never persisted.
+
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -e .
 .\.venv\Scripts\python.exe -m pytest -q tests
