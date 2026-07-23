@@ -3,7 +3,7 @@
   "updated_on": "2026-07-23",
   "asset_root": "models/assets",
   "runtime_downloads_allowed": false,
-  "notes": "No Poker Dealer model is admitted for release. MediaPipe gesture/pose, Vosk English/speaker verification, YuNet face detection, SFace embedding, the untrained landmark TCN draft, LGD card recognition and the chip-localization checkpoint are development-only feasibility evidence.",
+  "notes": "No Poker Dealer model is admitted for release. MediaPipe gesture/pose, Vosk English/speaker verification, YuNet face detection, SFace embedding, the untrained landmark TCN draft, LGD card recognition, chip localization and the fixed-design chip denomination templates are development-only feasibility evidence.",
   "models": [
     {
       "model_id": "player-action-mediapipe-canned-gesture",
@@ -319,6 +319,87 @@
         "PyTorch checkpoint has no validated offline ONNX or OpenVINO export",
         "physical chip evidence is Plus-only and cannot replace the authoritative digital ledger",
         "AGPL-3.0 and CC BY 4.0 distribution obligations require review before release"
+      ]
+    },
+    {
+      "model_id": "chip-denomination-fixed-design-template",
+      "version": "las-vegas-v1-20260723",
+      "state": "development",
+      "task": "rotation-tolerant 1/5/10/20 denomination matching for one fixed LAS VEGAS POKER CLUB chip design",
+      "source": {
+        "provider": "Poker Dealer project-owned template packaging",
+        "packaging_entrypoint": "chip_recognition_workspace/package_chip_template_library.py",
+        "raw_source_policy": "18 user-provided front-view captures remain private; only binary centre-number masks and aggregate colour signatures are distributed",
+        "prepared_on": "2026-07-23"
+      },
+      "license": {
+        "identifier": "project-captured-derived-asset",
+        "admission_note": "The runtime package contains only project-derived masks and numeric signatures. Confirm project-owner permission and fixed chip-design suitability before redistribution or release."
+      },
+      "asset": {
+        "path": "models/assets/chip_recognition/las-vegas-denomination-templates-v1/manifest.json",
+        "bytes": 12082,
+        "sha256": "f4a5c6255a61e1961a822d380bd0cb01b65351efa2410059a626a75015b3bc25",
+        "git_tracked": true,
+        "storage": "git"
+      },
+      "mask_assets": {
+        "path": "models/assets/chip_recognition/las-vegas-denomination-templates-v1/masks",
+        "files": 18,
+        "bytes": 11834,
+        "sha256": "79339ae0c932ba268a2042c2643d77c3aab4bef55f84b226273ae5ea05cc0f42",
+        "git_tracked": true,
+        "storage": "git"
+      },
+      "class_mapping": {
+        "classes": 4,
+        "names": {
+          "0": 1,
+          "1": 5,
+          "2": 10,
+          "3": 20
+        },
+        "templates_per_denomination": {
+          "1": 5,
+          "5": 5,
+          "10": 4,
+          "20": 4
+        }
+      },
+      "framework": {
+        "name": "opencv-numpy-template-matching",
+        "tested_version": "OpenCV 5.0.0 / NumPy 2.x",
+        "format": "128x128 binary masks, HOG-like shape features and 12-value colour signatures"
+      },
+      "input_contract": "one YOLO-localized chip crop from the supported physical design after ellipse quality checks and circular normalization",
+      "output_contract": "a denomination candidate with score, margin, source template and rejection reason; temporal confirmation may expose an observed visible total, but never mutates the authoritative digital ledger",
+      "dataset_manifest_sha256": "cf83801f2344e38087d3b1f8d48749fa3edc8e73d6cd40663b8dfca06b7d1868",
+      "view_manifest_sha256": "f4a5c6255a61e1961a822d380bd0cb01b65351efa2410059a626a75015b3bc25",
+      "metrics": {
+        "development_capture_fit": {
+          "labelled_images": 66,
+          "localized_and_rectified": 66,
+          "accepted": 49,
+          "accepted_correct": 49,
+          "rejected_unknown": 17,
+          "accepted_precision": 1.0,
+          "acceptance_rate": 0.74242,
+          "independent_validation": false
+        },
+        "template_matching_latency": {
+          "hardware": "development laptop",
+          "p50_ms": 11.252,
+          "p95_ms": 14.180,
+          "first_call_max_ms": 92.827
+        }
+      },
+      "admission_blockers": [
+        "templates are specific to the user's LAS VEGAS POKER CLUB 1/5/10/20 chip design",
+        "development captures are not an independently held-out camera/session split",
+        "no per-denomination target-camera precision, recall, confusion or rejection report",
+        "distance, perspective, glare, occlusion, stacks and partial-chip limits are not release calibrated",
+        "1-versus-5 confusion still requires broader target-camera evidence",
+        "physical denomination evidence is Plus-only and cannot replace the authoritative digital ledger"
       ]
     },
     {

@@ -24,6 +24,9 @@ are documented in [runtime profiles](docs/architecture/runtime-profiles.md).
 The shared perception ports, complete replay loop, development Live UI and
 remaining card/geometry gates are documented in
 [live runtime integration](docs/architecture/live-runtime-integration.md).
+The development-only physical-chip localization and fixed-design denomination
+pilot is documented in
+[the chip-recognition usage guide](docs/evaluation/chip-recognition-development-pilot.md).
 
 The single profile entry can be checked without opening any device:
 

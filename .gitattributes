@@ -1,3 +1,4 @@
 models/assets/card_recognition/lgd-cards-gen3/model.onnx filter=lfs diff=lfs merge=lfs -text
 models/assets/card_recognition/lgd-cards-gen3/best.pt filter=lfs diff=lfs merge=lfs -text
 models/assets/chip_recognition/yolo11n-localization-hard-negative-v3/best.pt filter=lfs diff=lfs merge=lfs -text
+models/assets/chip_recognition/las-vegas-denomination-templates-v1/manifest.json -text

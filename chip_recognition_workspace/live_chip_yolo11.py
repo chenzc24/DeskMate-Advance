@@ -37,11 +37,10 @@ DEFAULT_MODEL = (
 )
 DEFAULT_TEMPLATE_LIBRARY = (
     ROOT
-    / "data"
-    / "work"
-    / "chips"
-    / "2026-07-23-template-matching"
-    / "library"
+    / "models"
+    / "assets"
+    / "chip_recognition"
+    / "las-vegas-denomination-templates-v1"
 )
 DEFAULT_CAMERA_INDEX = 0
 DEFAULT_CAMERA_BACKEND = "msmf"

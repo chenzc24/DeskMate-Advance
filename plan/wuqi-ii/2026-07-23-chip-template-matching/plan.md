@@ -1,7 +1,7 @@
 # Fixed-chip denomination template matching
 
-- Status: complete for the offline template-library and development-fit gate;
-  live-camera temporal confirmation remains a separate follow-up.
+- Status: complete as a packaged development runtime asset with live temporal
+  confirmation; not admitted as a candidate or release.
 - Objective: build a training-free `1`/`5`/`10`/`20` denomination template
   library from the user-provided front-view images, then classify the central
   number region after YOLO localization and circular normalization. Low-score
@@ -10,8 +10,12 @@
   - `chip_recognition_workspace/build_chip_templates.py`
   - `chip_recognition_workspace/chip_template_matcher.py`
   - `chip_recognition_workspace/evaluate_chip_templates.py`
+  - `chip_recognition_workspace/package_chip_template_library.py`
   - focused tests added under `chip_recognition_workspace/`
   - `data/work/chips/2026-07-23-template-matching/` (ignored derived output)
+  - `models/assets/chip_recognition/las-vegas-denomination-templates-v1/`
+  - `models/manifest.yaml`
+  - `docs/evaluation/chip-recognition-development-pilot.md`
   - this plan file
 - Dirty/read-only paths:
   - `data/raw/chip_templates/` contains immutable user-provided source images;
@@ -42,10 +46,23 @@
   - template matching P50/P95 latency was 11.252/14.180 ms; the first-call
     maximum was 92.827 ms, while batched YOLO localization averaged 44.006 ms
     per image on the present machine;
-  - focused geometry/template tests pass (`10 passed`); the practical suite is
-    `292 passed, 4 skipped, 4 failed`, with all four failures caused by the
+  - the focused packager test and all chip workspace tests pass
+    (`36 passed`); the practical suite is
+    `301 passed, 4 skipped, 4 failed`, with all four failures caused by the
     pre-existing missing YuNet face-identity model asset, outside owned paths.
+  - the published runtime package contains only 18 binary 128x128 masks,
+    numeric colour signatures and a path-sanitized manifest (23,916 bytes
+    total); raw source and intermediate normalized images remain ignored;
+  - runtime manifest SHA-256:
+    `f4a5c6255a61e1961a822d380bd0cb01b65351efa2410059a626a75015b3bc25`;
+    mask-set SHA-256:
+    `79339ae0c932ba268a2042c2643d77c3aab4bef55f84b226273ae5ea05cc0f42`;
+  - the live program selects the packaged library by default and the usage
+    guide documents Laptop, DroidCam and Raspberry Pi MJPEG operation.
 - Physical-motion status: offline perception evidence only; no camera control,
   ledger mutation, robot command, GPIO, serial output or physical motion.
-- Commit intent: keep raw/derived images, weights and experimental scripts
-  uncommitted unless the user explicitly requests publication.
+- Commit intent: the user explicitly requested publishing denomination
+  recognition and its usage guide. Commit the compact sanitized template
+  runtime package, packaging source/test, manifest registration, default
+  runtime path and documentation; keep raw captures and intermediate views
+  ignored.
