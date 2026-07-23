@@ -17,7 +17,10 @@ from poker_dealer.runtime.profile import RuntimeProfile
 from poker_dealer.domain import Seat
 from poker_dealer.robotics.dealer import SimulatedDealerAdapter
 from poker_dealer.runtime import (
+    AnnouncingRuntimeEventWriter,
+    ConsoleAnnouncer,
     DiagnosticRun,
+    EventAnnouncer,
     HandRuntimeLoop,
     LiveSessionOperatorUI,
     RecordedReplaySources,
@@ -30,6 +33,8 @@ from poker_dealer.runtime import (
     SessionEventWriter,
     SessionOperatorController,
     SessionOperatorSignal,
+    SpeechPlaybackGate,
+    WindowsSpeechAnnouncer,
     check_runtime_hand_log,
     check_session_log,
     default_replay_roster,
@@ -153,6 +158,18 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="do not reserve a microphone for this invocation",
     )
     parser.add_argument(
+        "--announcer",
+        choices=("none", "console", "windows"),
+        default="none",
+        help="announce committed runtime events; windows uses local System.Speech TTS",
+    )
+    parser.add_argument(
+        "--announcement-tail-guard-ms",
+        type=int,
+        default=350,
+        help="continue suppressing speech input after Windows TTS completes",
+    )
+    parser.add_argument(
         "--diagnostics",
         action="store_true",
         help="write one bounded startup-to-shutdown diagnostics bundle under runs/",
@@ -250,6 +267,10 @@ def _run_with_error_boundary(
             raise ValueError("--max-hands must be positive")
         if args.session_decision_timeout_seconds <= 0:
             raise ValueError("--session-decision-timeout-seconds must be positive")
+        if args.announcement_tail_guard_ms < 0:
+            raise ValueError("--announcement-tail-guard-ms must be non-negative")
+        if args.announcer != "none" and mode != "live":
+            raise ValueError("--announcer is available only in live mode")
         if args.max_hands > 1 and args.log_jsonl is not None:
             raise ValueError("--log-jsonl is single-hand only; use the profile log root")
         if args.max_hands > 1 and args.replay_log is not None:
@@ -617,6 +638,35 @@ def _hand_log_path(
     return app.event_log_path(session_id=session_id, hand_id=hand_id)
 
 
+def _create_live_announcer(
+    args: argparse.Namespace,
+) -> tuple[
+    EventAnnouncer | None,
+    WindowsSpeechAnnouncer | None,
+    SpeechPlaybackGate | None,
+]:
+    if args.announcement_tail_guard_ms < 0:
+        raise ValueError("--announcement-tail-guard-ms must be non-negative")
+    if args.announcer == "none":
+        return None, None, None
+    if args.announcer == "console":
+        return EventAnnouncer(ConsoleAnnouncer()), None, None
+    playback_gate = SpeechPlaybackGate(
+        tail_guard_ms=args.announcement_tail_guard_ms
+    )
+    speech_port = WindowsSpeechAnnouncer(playback_gate)
+    return EventAnnouncer(speech_port), speech_port, playback_gate
+
+
+def _runtime_writer(
+    path: Path,
+    event_announcer: EventAnnouncer | None,
+) -> RuntimeEventWriter:
+    if event_announcer is None:
+        return RuntimeEventWriter(path)
+    return AnnouncingRuntimeEventWriter(path, event_announcer)
+
+
 def _run_live(
     args: argparse.Namespace,
     profile: RuntimeProfile,
@@ -658,13 +708,20 @@ def _run_live(
     app.open(open_camera=True)
     frame_source = InteractiveOpenCVFrameSource(app.camera, display=True)
     controls = LiveKeyboardControlSource(frame_source)
-    session = LivePerceptionSession(live_config, frame_source)
+    event_announcer, speech_announcer, playback_gate = _create_live_announcer(args)
+    session = LivePerceptionSession(
+        live_config,
+        frame_source,
+        speech_playback_gate=playback_gate,
+    )
     hand_results: list[dict[str, object]] = []
     game_session: SessionRuntime | None = None
     try:
         session.open(session_id)
-        writer = RuntimeEventWriter(first_output_path)
+        writer = _runtime_writer(first_output_path, event_announcer)
         try:
+            if event_announcer is not None:
+                event_announcer.publish("registration_focus_changed", role="button")
             roster = session.acquire_roster(
                 frame_source=frame_source,
                 control_source=controls,
@@ -674,6 +731,8 @@ def _run_live(
                 deadline_ns=time.monotonic_ns()
                 + int(args.registration_timeout_seconds * 1_000_000_000),
             )
+            if event_announcer is not None:
+                event_announcer.publish("roster_ready")
             game_session = app.create_session(roster=roster)
             controller = SessionOperatorController(
                 game_session,
@@ -709,7 +768,7 @@ def _run_live(
                             },
                         )
                     if index > 1:
-                        writer = RuntimeEventWriter(output_path)
+                        writer = _runtime_writer(output_path, event_announcer)
                     runtime = game_session.start_hand(current_hand_id)
                     session_writer.sync(game_session.log)
                     while True:
@@ -795,6 +854,8 @@ def _run_live(
             writer.close()
     finally:
         session.close()
+        if speech_announcer is not None:
+            speech_announcer.close()
         frame_source.close()
         app.close()
     assert game_session is not None
@@ -827,6 +888,7 @@ def _run_live(
         "dealer_adapter": "simulated",
         "face_down_evidence": "development_operator_confirmation",
         "card_gate_2b_passed": False,
+        "announcer": args.announcer,
         **_diagnostics_output(diagnostics),
     }
     print(json.dumps(output, ensure_ascii=False))

@@ -37,6 +37,24 @@ def test_speech_device_override_is_applied_before_resource_lock_selection() -> N
     assert "microphone:test-microphone" in app.resource_ids
 
 
+def test_audiorelay_profile_and_announcer_arguments_are_resolved() -> None:
+    module = _load_script()
+    args = module.parse_args(
+        [
+            "--profile",
+            "configs/runtime/laptop_audiorelay.json",
+            "--announcer",
+            "windows",
+            "--announcement-tail-guard-ms",
+            "500",
+        ]
+    )
+    profile = module._load_profile(args)
+    assert profile.speech_device == "Virtual Mic (AudioRelay Wave)"
+    assert args.announcer == "windows"
+    assert args.announcement_tail_guard_ms == 500
+
+
 def test_real_hardware_config_check_fails_closed(capsys) -> None:
     module = _load_script()
     assert module.main(["--profile", "robot_hardware", "--check-config"]) == 2

@@ -21,7 +21,6 @@ Connect the already-tested Android AudioRelay link to the formal
 - `src/poker_dealer/runtime/announcer.py`
 - `src/poker_dealer/runtime/live_perception.py`
 - `tests/runtime/test_announcer.py`
-- `tests/runtime/test_live_perception_audio_gate.py`
 - `tests/runtime/test_run_hand_cli.py`
 
 Additional narrowly scoped runtime exports may be updated if the new types need

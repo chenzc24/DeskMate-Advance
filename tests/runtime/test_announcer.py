@@ -1,10 +1,17 @@
 from __future__ import annotations
 
+import queue
+
 from poker_dealer.runtime import (
     Announcement,
+    AnnouncingRuntimeEventWriter,
     AnnouncementPriority,
     EventAnnouncer,
+    SpeechPlaybackGate,
 )
+from poker_dealer.domain import PlayerActionType, Seat
+from poker_dealer.game import ActionRequest, HandEngine
+from poker_dealer.runtime.live_perception import LivePerceptionSession
 
 
 class RecordingPort:
@@ -13,6 +20,14 @@ class RecordingPort:
 
     def announce(self, announcement: Announcement) -> None:
         self.items.append(announcement)
+
+
+class RecordingRecognizer:
+    def __init__(self) -> None:
+        self.resets = 0
+
+    def reset_window(self) -> None:
+        self.resets += 1
 
 
 def test_registration_and_turn_announcements_use_roles_only() -> None:
@@ -63,4 +78,66 @@ def test_voice_enrollment_announces_progress_retry_completion_and_cancel() -> No
         "Voice sample too short. Repeat phrase 2 in one breath.",
         "Button voice enrollment complete.",
         "Button voice enrollment cancelled.",
+    ]
+
+
+def test_playback_gate_holds_through_tail_guard() -> None:
+    now = [1_000_000_000]
+    gate = SpeechPlaybackGate(tail_guard_ms=350, clock_ns=lambda: now[0])
+    gate.reserve_playback()
+    assert gate.is_suppressed()
+    gate.complete_playback()
+    assert gate.is_suppressed()
+    now[0] += 349_000_000
+    assert gate.is_suppressed()
+    now[0] += 1_000_000
+    assert not gate.is_suppressed()
+
+
+def test_live_speech_drops_blocks_across_playback_boundary() -> None:
+    now = [2_000_000_000]
+    gate = SpeechPlaybackGate(tail_guard_ms=100, clock_ns=lambda: now[0])
+    recognizer = RecordingRecognizer()
+    session = object.__new__(LivePerceptionSession)
+    session._audio_queue = queue.Queue()
+    session._audio_queue.put_nowait(b"echo")
+    session._speech_playback_gate = gate
+    session._speech_was_suppressed = False
+    session._speech_recognizer = recognizer
+
+    gate.reserve_playback()
+    assert session._speech_input_suppressed(now[0])
+    assert session._audio_queue.empty()
+    assert recognizer.resets == 1
+
+    gate.complete_playback()
+    now[0] += 100_000_000
+    session._audio_queue.put_nowait(b"stale-tail")
+    assert not session._speech_input_suppressed(now[0])
+    assert session._audio_queue.empty()
+    assert recognizer.resets == 2
+
+
+def test_runtime_writer_announces_only_committed_engine_events() -> None:
+    port = RecordingPort()
+    engine = HandEngine.start("announced-hand", Seat.A)
+    writer = AnnouncingRuntimeEventWriter(None, EventAnnouncer(port))
+    writer.sync_engine(engine.log)
+    assert not port.items
+
+    state = engine.state
+    engine.apply_action(
+        ActionRequest(
+            "action-1",
+            state.hand_id,
+            state.state_version,
+            state.acting_seat,  # type: ignore[arg-type]
+            PlayerActionType.CALL,
+        )
+    )
+    writer.sync_engine(engine.log)
+
+    assert [item.text for item in port.items] == [
+        "Under the Gun calls.",
+        "Button to act.",
     ]

@@ -64,6 +64,7 @@ from poker_dealer.perception.identity import (
     SessionFaceGallery,
 )
 
+from .announcer import SpeechPlaybackGate
 from .ports import (
     ActionEvidence,
     ControlSource,
@@ -262,6 +263,7 @@ class LivePerceptionSession:
         self,
         config: LivePerceptionConfig,
         frame_source: InteractiveOpenCVFrameSource,
+        speech_playback_gate: SpeechPlaybackGate | None = None,
     ) -> None:
         self.config = config
         self.frame_source = frame_source
@@ -329,6 +331,8 @@ class LivePerceptionSession:
             maxsize=int(self.speech_config.audio["queue_max_blocks"])
         )
         self._audio_stream = None
+        self._speech_playback_gate = speech_playback_gate
+        self._speech_was_suppressed = False
         self._speech_recognizer: VoskSpeechRecognizer | None = None
         self._speech_adapter = SpeechObservationAdapter(self.speech_config)
         self._speech_confirmation = SpeechConfirmationController(
@@ -361,6 +365,11 @@ class LivePerceptionSession:
             )
 
             def callback(indata: bytes, _frames: int, _time, _status) -> None:
+                if (
+                    self._speech_playback_gate is not None
+                    and self._speech_playback_gate.is_suppressed()
+                ):
+                    return
                 try:
                     self._audio_queue.put_nowait(bytes(indata))
                 except queue.Full:
@@ -534,6 +543,8 @@ class LivePerceptionSession:
                         advance_registration_role()
             if voice_player_id is not None:
                 assert voice_seat is not None and self._speech_recognizer is not None
+                if self._speech_input_suppressed(time.monotonic_ns()):
+                    continue
                 while len(voice_samples) < self.speaker_config.minimum_samples:
                     try:
                         pcm = self._audio_queue.get_nowait()
@@ -767,6 +778,8 @@ class LivePerceptionSession:
         if self._speech_recognizer is not None:
             if self.speaker_gallery is None:
                 raise RuntimeError("speaker gallery is unavailable")
+            if self._speech_input_suppressed(observed_at_ns):
+                return None
             while True:
                 try:
                     pcm = self._audio_queue.get_nowait()
@@ -972,11 +985,32 @@ class LivePerceptionSession:
         self._verified_speech_player_id = None
         if self._speech_recognizer is not None:
             self._speech_recognizer.reset_window()
-        while not self._audio_queue.empty():
+        self._discard_audio_queue()
+
+    def _discard_audio_queue(self) -> None:
+        while True:
             try:
                 self._audio_queue.get_nowait()
             except queue.Empty:
                 break
+
+    def _speech_input_suppressed(self, observed_at_ns: int) -> bool:
+        suppressed = (
+            self._speech_playback_gate is not None
+            and self._speech_playback_gate.is_suppressed(observed_at_ns)
+        )
+        if suppressed:
+            self._discard_audio_queue()
+            if not self._speech_was_suppressed and self._speech_recognizer is not None:
+                self._speech_recognizer.reset_window()
+            self._speech_was_suppressed = True
+            return True
+        if self._speech_was_suppressed:
+            self._discard_audio_queue()
+            if self._speech_recognizer is not None:
+                self._speech_recognizer.reset_window()
+            self._speech_was_suppressed = False
+        return False
 
     @staticmethod
     def _unknown_action(

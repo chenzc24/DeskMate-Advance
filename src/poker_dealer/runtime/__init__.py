@@ -9,9 +9,11 @@ from .announcer import (
     Announcement,
     AnnouncementPolicy,
     AnnouncementPriority,
+    AnnouncingRuntimeEventWriter,
     AnnouncerPort,
     ConsoleAnnouncer,
     EventAnnouncer,
+    SpeechPlaybackGate,
     WindowsSpeechAnnouncer,
 )
 from .diagnostics import (
@@ -90,6 +92,7 @@ __all__ = [
     "Announcement",
     "AnnouncementPolicy",
     "AnnouncementPriority",
+    "AnnouncingRuntimeEventWriter",
     "AnnouncerPort",
     "CameraSmokeResult",
     "ConsoleAnnouncer",
@@ -114,6 +117,7 @@ __all__ = [
     "SessionOperatorController",
     "SessionOperatorOutcome",
     "SessionOperatorSignal",
+    "SpeechPlaybackGate",
     "LiveSessionBoundaryResult",
     "LiveSessionOperatorUI",
     "HandRuntimeLoop",
