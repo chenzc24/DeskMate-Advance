@@ -22,10 +22,10 @@ DEFAULT_OUTPUT = (
 )
 DEFAULT_MODEL = (
     ROOT
-    / "runs"
-    / "chip_localization"
-    / "yolo11n_public_target_v2"
-    / "weights"
+    / "models"
+    / "assets"
+    / "chip_recognition"
+    / "yolo11n-localization-hard-negative-v3"
     / "best.pt"
 )
 SUPPORTED_SUFFIXES = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}

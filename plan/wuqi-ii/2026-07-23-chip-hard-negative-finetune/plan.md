@@ -12,6 +12,9 @@
   - `chip_recognition_workspace/train_chip_yolo11n.py` (new allowed development
     status only)
   - `chip_recognition_workspace/chip_yolo11n_hard_negative_v3.json`
+  - `models/assets/chip_recognition/yolo11n-localization-hard-negative-v3/best.pt`
+  - `models/manifest.yaml`
+  - `.gitattributes`
   - `data/work/chips/2026-07-23-localization-hard-negative-v1/`
   - `runs/chip_localization/yolo11n_public_target_v3_hard_negative/`
   - this plan file
@@ -49,12 +52,16 @@
     frames with detections `20 -> 0`, detections `31 -> 0`, and maximum
     confidence `0.86016 -> none`. This is resubstitution/fit evidence only and
     is not an independent false-positive estimate;
-  - all 35 chip-workspace tests pass. The practical full suite is 292 passed,
+  - all 35 chip-workspace tests pass. The practical full suite is 301 passed,
     4 skipped and 4 unrelated failures because the YuNet face model asset is
     absent.
+  - at the user's request, the selected checkpoint is registered as
+    `chip-localization-yolo11n@hard-negative-v3-20260723`, stored through Git
+    LFS, and selected by the development live/rectification tools by default.
+    It remains `development`, not `candidate` or `release`.
 - Physical-motion status: offline data preparation, training and evaluation
   only. No camera, robot, GPIO, serial, ledger or game-state mutation.
-- Commit intent: the user requested publishing the chip-development program
-  after synchronizing `origin/main`. Commit source, configs, tests and plans;
-  exclude raw/private captures, derived data, runs, caches, third-party
-  checkpoints and the unadmitted candidate weight.
+- Commit intent: the user explicitly requested publishing the selected chip
+  checkpoint. Commit the registered Git LFS asset, model manifest, default
+  runtime references and this plan update; continue excluding raw/private
+  captures, derived data, runs, caches and unrelated third-party checkpoints.

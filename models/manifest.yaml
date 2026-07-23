@@ -1,9 +1,9 @@
 {
   "schema_version": "1.0",
-  "updated_on": "2026-07-22",
+  "updated_on": "2026-07-23",
   "asset_root": "models/assets",
   "runtime_downloads_allowed": false,
-  "notes": "No Poker Dealer model is admitted for release. MediaPipe gesture/pose, Vosk English/speaker verification, YuNet face detection, SFace embedding, the untrained landmark TCN draft and LGD card recognition assets are development-only Stage 2 feasibility evidence.",
+  "notes": "No Poker Dealer model is admitted for release. MediaPipe gesture/pose, Vosk English/speaker verification, YuNet face detection, SFace embedding, the untrained landmark TCN draft, LGD card recognition and the chip-localization checkpoint are development-only feasibility evidence.",
   "models": [
     {
       "model_id": "player-action-mediapipe-canned-gesture",
@@ -222,6 +222,103 @@
         "no held-out participant/session split",
         "no liveness or presentation-attack protection",
         "explicit consent and guaranteed process-exit cleanup require operator validation"
+      ]
+    },
+    {
+      "model_id": "chip-localization-yolo11n",
+      "version": "hard-negative-v3-20260723",
+      "state": "development",
+      "task": "single-class poker-chip localization for bounded development camera views; denomination and ledger authority are out of contract",
+      "source": {
+        "provider": "Poker Dealer project-owned fine-tune",
+        "training_config_path": "chip_recognition_workspace/chip_yolo11n_hard_negative_v3.json",
+        "base_checkpoint_sha256": "18e9f2cb0365d2ec265e828d5c2e18dd5a78bb4e29fb0167e8642e70bf650584",
+        "prepared_on": "2026-07-23",
+        "upstream_datasets": [
+          {
+            "name": "Chip Counting rovys v2",
+            "url": "https://universe.roboflow.com/thai-tan-tran-4oh7a/chip-counting-rovys/dataset/2",
+            "license": "CC BY 4.0"
+          },
+          {
+            "name": "Chips_Demo v1",
+            "url": "https://universe.roboflow.com/ai-jdlc4/chips_demo/dataset/1",
+            "license": "CC BY 4.0"
+          },
+          {
+            "name": "chip_det v16",
+            "url": "https://universe.roboflow.com/chintha-hrall/chip_det-ytnpl/dataset/16",
+            "license": "CC BY 4.0"
+          }
+        ],
+        "target_negative_capture": "53 project-captured frames from one complete target-camera session; train-only with sixfold recorded exposure"
+      },
+      "license": {
+        "identifier": "AGPL-3.0 with CC-BY-4.0 training-data attribution obligations",
+        "evidence_url": "https://github.com/ultralytics/ultralytics/blob/main/LICENSE",
+        "admission_note": "The Ultralytics checkpoint remains AGPL-3.0 development material. Preserve the three recorded CC BY 4.0 dataset attributions and review distribution obligations before release."
+      },
+      "asset": {
+        "path": "models/assets/chip_recognition/yolo11n-localization-hard-negative-v3/best.pt",
+        "bytes": 5533594,
+        "sha256": "7ab3a870bf6865127e3c65fc6c8e771a3c990aed94e97f6977bfdba1ac09e3c3",
+        "git_tracked": true,
+        "storage": "git-lfs"
+      },
+      "class_mapping": {
+        "classes": 1,
+        "names": {
+          "0": "poker_chip"
+        }
+      },
+      "framework": {
+        "name": "ultralytics-pytorch",
+        "tested_version": "Ultralytics 8.4.104 / Torch 2.13.0+cu130",
+        "format": "YOLO11n PyTorch checkpoint",
+        "input_size": [960, 960]
+      },
+      "input_contract": "one project-owned BGR camera frame; YOLO letterboxing to 960x960; bounded development view only",
+      "output_contract": "zero or more poker-chip bounding boxes with confidence as non-authoritative Plus perception evidence; never a denomination, ledger mutation, game transition or robot command",
+      "dataset_manifest_sha256": "930df9e122ae7c5a311b03adea80521ed266b4b144758a90f4ec896e86fd6457",
+      "view_manifest_sha256": "930df9e122ae7c5a311b03adea80521ed266b4b144758a90f4ec896e86fd6457",
+      "dataset_yaml_sha256": "6d9809c7420148260dfe6fcd69b57835fd5aaf8ee0831fa1172736ecccc78285",
+      "metrics": {
+        "public_validation": {
+          "images": 429,
+          "instances": 2137,
+          "precision": 0.98065,
+          "recall": 0.96350,
+          "map50": 0.98758,
+          "map50_95": 0.88786
+        },
+        "public_test": {
+          "images": 460,
+          "instances": 1514,
+          "precision": 0.94722,
+          "recall": 0.87913,
+          "map50": 0.92734,
+          "map50_95": 0.82508
+        },
+        "target_negative_fit_only": {
+          "images": 53,
+          "confidence_threshold": 0.25,
+          "images_with_detections": 0,
+          "detections": 0,
+          "independent_validation": false
+        },
+        "validation_speed": {
+          "hardware": "NVIDIA GeForce RTX 4060 Laptop GPU",
+          "inference_ms_per_image": 7.9,
+          "input_size": [960, 960]
+        }
+      },
+      "admission_blockers": [
+        "all target-camera negative frames contributed to training and no independent target-camera negative session is held out",
+        "public test mAP50 decreased from 0.94794 to 0.92734 versus the previous checkpoint",
+        "no target-camera positive-session precision, recall, distance, perspective or occlusion evaluation",
+        "PyTorch checkpoint has no validated offline ONNX or OpenVINO export",
+        "physical chip evidence is Plus-only and cannot replace the authoritative digital ledger",
+        "AGPL-3.0 and CC BY 4.0 distribution obligations require review before release"
       ]
     },
     {

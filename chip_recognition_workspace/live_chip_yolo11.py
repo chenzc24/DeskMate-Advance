@@ -29,10 +29,10 @@ from poker_dealer.io.camera import (
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_MODEL = (
     ROOT
-    / "runs"
-    / "chip_localization"
-    / "yolo11n_public_target_v2"
-    / "weights"
+    / "models"
+    / "assets"
+    / "chip_recognition"
+    / "yolo11n-localization-hard-negative-v3"
     / "best.pt"
 )
 DEFAULT_TEMPLATE_LIBRARY = (
@@ -552,7 +552,9 @@ def main() -> int:
                     if camera_error is not None
                     else "completed" if frames else "no_readable_frames"
                 ),
-                "model_status": "development_target_camera_yolo11",
+                "model_status": (
+                    "chip-localization-yolo11n@hard-negative-v3-20260723"
+                ),
                 "model_path": str(args.model.resolve()),
                 "camera_index": None if is_network_stream else args.camera_index,
                 "stream_url": args.stream_url,
