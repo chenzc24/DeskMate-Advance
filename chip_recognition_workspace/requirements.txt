@@ -1,0 +1,4 @@
+openvino==2026.2.1
+ultralytics==8.4.104
+rapidocr==3.9.2
+onnxruntime==1.27.0

@@ -38,6 +38,7 @@ models/**/*.tflite
 models/**/*.safetensors
 models/**/*.bin
 models/**/*.task
+chip_recognition_workspace/pretrained/
 
 # Notebook and editor state
 .ipynb_checkpoints/

@@ -1,0 +1,66 @@
+{
+  "schema_version": "1.0",
+  "training_id": "chip-yolo11n-localization-hard-negative-v3",
+  "status": "development_hard_negative_fit_only_no_target_holdout",
+  "base_model": {
+    "path": "runs/chip_localization/yolo11n_public_target_v2/weights/best.pt",
+    "sha256": "18e9f2cb0365d2ec265e828d5c2e18dd5a78bb4e29fb0167e8642e70bf650584",
+    "source_url": "local development checkpoint from the reviewed v2 run",
+    "license_identifier": "project-development-and-upstream-dataset-licenses"
+  },
+  "dataset": {
+    "yaml_path": "data/work/chips/2026-07-23-localization-hard-negative-v1/data.yaml",
+    "manifest_path": "data/work/chips/2026-07-23-localization-hard-negative-v1/dataset_manifest.json",
+    "manifest_sha256": "930df9e122ae7c5a311b03adea80521ed266b4b144758a90f4ec896e86fd6457",
+    "required_splits": [
+      "train",
+      "val",
+      "test"
+    ],
+    "split_policy": "base splits preserved; complete target-camera negative session train-only with recorded sixfold exposure",
+    "class_names": {
+      "0": "poker_chip"
+    },
+    "independent_validation": false,
+    "metrics_policy": "public validation/test preserves localization regression checks; all 53 target-camera negatives are fit data and cannot support held-out false-positive claims"
+  },
+  "framework": {
+    "ultralytics": "8.4.104",
+    "torch": "2.13.0+cu130",
+    "device": 0
+  },
+  "train": {
+    "epochs": 15,
+    "batch": 8,
+    "imgsz": 960,
+    "workers": 4,
+    "seed": 20260723,
+    "deterministic": true,
+    "optimizer": "AdamW",
+    "lr0": 0.0001,
+    "lrf": 0.05,
+    "weight_decay": 0.0005,
+    "warmup_epochs": 1.0,
+    "amp": false,
+    "cache": false,
+    "patience": 6,
+    "save": true,
+    "save_period": 5,
+    "mosaic": 0.3,
+    "close_mosaic": 5,
+    "mixup": 0.0,
+    "copy_paste": 0.0,
+    "degrees": 10.0,
+    "translate": 0.08,
+    "scale": 0.3,
+    "shear": 1.0,
+    "perspective": 0.0003,
+    "flipud": 0.0,
+    "fliplr": 0.5,
+    "hsv_h": 0.01,
+    "hsv_s": 0.2,
+    "hsv_v": 0.2,
+    "project": "runs/chip_localization",
+    "name": "yolo11n_public_target_v3_hard_negative"
+  }
+}

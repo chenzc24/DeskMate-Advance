@@ -1,0 +1,66 @@
+{
+  "schema_version": "1.0",
+  "training_id": "chip-yolo11n-localization-public-target-v2",
+  "status": "development_no_target_camera_holdout_no_negative_samples",
+  "base_model": {
+    "path": "chip_recognition_workspace/pretrained/ultralytics-yolo11n-coco/yolo11n.pt",
+    "sha256": "0ebbc80d4a7680d14987a577cd21342b65ecfd94632bd9a8da63ae6417644ee1",
+    "source_url": "https://github.com/ultralytics/assets/releases/download/v8.4.0/yolo11n.pt",
+    "license_identifier": "AGPL-3.0"
+  },
+  "dataset": {
+    "yaml_path": "data/work/chips/2026-07-22-localization-public-target-v2/data.yaml",
+    "manifest_path": "data/work/chips/2026-07-22-localization-public-target-v2/dataset_manifest.json",
+    "manifest_sha256": "5f653b8f49eb6948526d03baef6a6bfa4539ae68f0b38e4faf0858750674f891",
+    "required_splits": [
+      "train",
+      "val",
+      "test"
+    ],
+    "split_policy": "source_group_and_capture_session_isolated_public_splits; target_camera_single_session_train_only",
+    "class_names": {
+      "0": "poker_chip"
+    },
+    "independent_validation": false,
+    "metrics_policy": "public-domain localization diagnostic only; no target-camera holdout or negative-sample admission claim"
+  },
+  "framework": {
+    "ultralytics": "8.4.104",
+    "torch": "2.13.0+cu130",
+    "device": 0
+  },
+  "train": {
+    "epochs": 60,
+    "batch": 8,
+    "imgsz": 960,
+    "workers": 4,
+    "seed": 20260722,
+    "deterministic": true,
+    "optimizer": "AdamW",
+    "lr0": 0.0005,
+    "lrf": 0.01,
+    "weight_decay": 0.0005,
+    "warmup_epochs": 3.0,
+    "amp": false,
+    "cache": false,
+    "patience": 15,
+    "save": true,
+    "save_period": 10,
+    "mosaic": 0.5,
+    "close_mosaic": 10,
+    "mixup": 0.0,
+    "copy_paste": 0.0,
+    "degrees": 15.0,
+    "translate": 0.1,
+    "scale": 0.4,
+    "shear": 2.0,
+    "perspective": 0.0005,
+    "flipud": 0.0,
+    "fliplr": 0.5,
+    "hsv_h": 0.01,
+    "hsv_s": 0.25,
+    "hsv_v": 0.2,
+    "project": "runs/chip_localization",
+    "name": "yolo11n_public_target_v2"
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "schema_version": "1.0",
+  "training_id": "chip-yolo11n-target-camera-v1",
+  "status": "development_waiting_for_labeled_sessions",
+  "base_model": {
+    "path": "chip_recognition_workspace/pretrained/ultralytics-yolo11n-coco/yolo11n.pt",
+    "sha256": "0ebbc80d4a7680d14987a577cd21342b65ecfd94632bd9a8da63ae6417644ee1",
+    "source_url": "https://github.com/ultralytics/assets/releases/download/v8.4.0/yolo11n.pt",
+    "license_identifier": "AGPL-3.0"
+  },
+  "dataset": {
+    "yaml_path": "data/work/chips/target-camera-v1/yolo/dataset.yaml",
+    "required_splits": [
+      "train",
+      "val",
+      "test"
+    ],
+    "split_policy": "complete_capture_session_only",
+    "class_names": {
+      "0": "PokerChip"
+    }
+  },
+  "framework": {
+    "ultralytics": "8.4.104",
+    "torch": "2.13.0+cu130",
+    "device": 0
+  },
+  "train": {
+    "epochs": 100,
+    "batch": 16,
+    "imgsz": 640,
+    "workers": 4,
+    "seed": 20260722,
+    "deterministic": true,
+    "optimizer": "AdamW",
+    "lr0": 0.001,
+    "lrf": 0.01,
+    "weight_decay": 0.0005,
+    "warmup_epochs": 3.0,
+    "amp": true,
+    "cache": false,
+    "patience": 20,
+    "save": true,
+    "save_period": 10,
+    "mosaic": 0.3,
+    "close_mosaic": 10,
+    "mixup": 0.0,
+    "copy_paste": 0.0,
+    "degrees": 180.0,
+    "translate": 0.1,
+    "scale": 0.3,
+    "shear": 2.0,
+    "perspective": 0.0005,
+    "flipud": 0.5,
+    "fliplr": 0.5,
+    "hsv_h": 0.01,
+    "hsv_s": 0.25,
+    "hsv_v": 0.2,
+    "project": "runs/chip_finetune",
+    "name": "yolo11n_target_camera_v1"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0",
+  "review_id": "chip-denomination-single-foreground-v1",
+  "source_snapshot_sha256": "a74184fed59ea8616127087856fc70257340525d13dff664d798731fe366614c",
+  "review_scope": "All five prelabel contact sheets; one deliberately presented foreground chip per image",
+  "accept_all_non_overridden_candidates": true,
+  "manual_overrides_xywh": {
+    "C021": [355, 160, 125, 190],
+    "C048": [190, 195, 205, 105],
+    "C049": [210, 208, 205, 80],
+    "C051": [205, 198, 260, 112],
+    "C066": [365, 160, 140, 145]
+  },
+  "class_names": {
+    "0": "chip_1",
+    "1": "chip_5",
+    "2": "chip_10",
+    "3": "chip_20"
+  },
+  "limitations": [
+    "Only the deliberately presented foreground chip is annotated.",
+    "Background stacks are excluded by derived cropping and are not complete multi-chip labels.",
+    "All images are from one capture day/session family and cannot support held-out accuracy claims."
+  ]
+}

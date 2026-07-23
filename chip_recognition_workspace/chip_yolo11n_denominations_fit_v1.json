@@ -1,0 +1,71 @@
+{
+  "schema_version": "1.0",
+  "training_id": "chip-yolo11n-denominations-target-camera-fit-v1",
+  "status": "development_fit_only_no_independent_validation",
+  "base_model": {
+    "path": "chip_recognition_workspace/pretrained/ultralytics-yolo11n-coco/yolo11n.pt",
+    "sha256": "0ebbc80d4a7680d14987a577cd21342b65ecfd94632bd9a8da63ae6417644ee1",
+    "source_url": "https://github.com/ultralytics/assets/releases/download/v8.4.0/yolo11n.pt",
+    "license_identifier": "AGPL-3.0"
+  },
+  "dataset": {
+    "yaml_path": "data/work/chips/2026-07-22-denominations/labeled_augmented_v1/augmented/dataset_fit_only.yaml",
+    "manifest_path": "data/work/chips/2026-07-22-denominations/labeled_augmented_v1/dataset_manifest.json",
+    "manifest_sha256": "1d3fa8960ef1cde10d59f0905455a641359f8844d2ba93f324b1e802871d7bb4",
+    "required_splits": [
+      "train",
+      "val"
+    ],
+    "split_policy": "single_session_fit_only_train_equals_val",
+    "independent_validation": false,
+    "metrics_policy": "resubstitution/training fit only; never report as held-out accuracy",
+    "class_names": {
+      "0": "chip_1",
+      "1": "chip_5",
+      "2": "chip_10",
+      "3": "chip_20"
+    }
+  },
+  "framework": {
+    "ultralytics": "8.4.104",
+    "torch": "2.13.0+cu130",
+    "device": 0
+  },
+  "train": {
+    "epochs": 40,
+    "batch": 16,
+    "imgsz": 640,
+    "workers": 4,
+    "seed": 20260722,
+    "deterministic": true,
+    "optimizer": "AdamW",
+    "lr0": 0.0005,
+    "lrf": 0.1,
+    "weight_decay": 0.0005,
+    "warmup_epochs": 2.0,
+    "freeze": 10,
+    "amp": false,
+    "cache": false,
+    "val": false,
+    "plots": false,
+    "patience": 15,
+    "save": true,
+    "save_period": 10,
+    "mosaic": 0.0,
+    "close_mosaic": 0,
+    "mixup": 0.0,
+    "copy_paste": 0.0,
+    "degrees": 0.0,
+    "translate": 0.0,
+    "scale": 0.0,
+    "shear": 0.0,
+    "perspective": 0.0,
+    "flipud": 0.0,
+    "fliplr": 0.0,
+    "hsv_h": 0.0,
+    "hsv_s": 0.0,
+    "hsv_v": 0.0,
+    "project": "runs/chip_finetune",
+    "name": "yolo11n_denominations_fit_v1"
+  }
+}
