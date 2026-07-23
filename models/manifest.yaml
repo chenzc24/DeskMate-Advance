@@ -3,7 +3,7 @@
   "updated_on": "2026-07-23",
   "asset_root": "models/assets",
   "runtime_downloads_allowed": false,
-  "notes": "No Poker Dealer model is admitted for release. MediaPipe gesture/pose, Vosk English/speaker verification, YuNet face detection, SFace embedding, the untrained landmark TCN draft, LGD card recognition, chip localization and the fixed-design chip denomination templates are development-only feasibility evidence.",
+  "notes": "No Poker Dealer model is admitted for release. The frozen card-recognition v2 checkpoint is a non-runtime-selected candidate; MediaPipe gesture/pose, Vosk English/speaker verification, YuNet face detection, SFace embedding, the untrained landmark TCN draft, the LGD card baseline, chip localization and the fixed-design chip denomination templates remain development-only feasibility evidence.",
   "models": [
     {
       "model_id": "player-action-mediapipe-canned-gesture",
@@ -473,6 +473,132 @@
         "no held-out physical deck and complete capture-session split",
         "confidence, ambiguity and temporal thresholds are uncalibrated pilot defaults",
         "upstream private holdout labels and deck/session provenance are insufficient for project admission",
+        "AGPL-3.0 distribution obligations require review before release"
+      ]
+    },
+    {
+      "model_id": "card-identity-lgd-yolo11s-52class",
+      "version": "poker-dealer-v2-20260723",
+      "state": "candidate",
+      "task": "52-class face-up playing-card corner-glyph detection with full-orientation and small-target augmentation",
+      "source": {
+        "provider": "Poker Dealer project fine-tune",
+        "base_model_version": "gen3-hf-b2e9e89cc0138a70",
+        "base_weight_sha256": "3513b77ab418ac2e86d3bf53be6566522666e656cbccb12678ba93feb6201004",
+        "training_entrypoint": "scripts/perception/train_card_detector.py",
+        "data_entrypoint": "scripts/data/build_card_retrain_v2.py",
+        "trained_on": "2026-07-23",
+        "best_epoch": 7,
+        "stopped_epoch": 13,
+        "early_stopping_patience": 6
+      },
+      "license": {
+        "identifier": "AGPL-3.0",
+        "base_weight_evidence_url": "https://huggingface.co/sroot/lgd-cards-gen3/blob/b2e9e89cc0138a70fc3ac5661922f99b4e3ae135/README.md#license--provenance",
+        "external_dataset_license": "CC0-1.0",
+        "local_data_license": "project-captured internal training data",
+        "admission_note": "The fine-tuned checkpoint inherits AGPL-3.0 from the Ultralytics YOLO11 base weight. Review distribution obligations and confirm permission for project-captured training data before any release."
+      },
+      "asset": {
+        "path": "models/assets/card_recognition/poker-dealer-v2/best.pt",
+        "bytes": 19279386,
+        "sha256": "620718e8ac16c8a3f666a7e0ac5e1f533eff3385b0f689ad6ba09cab0724b29b",
+        "git_tracked": true,
+        "storage": "git-lfs",
+        "runtime_selected": false
+      },
+      "class_mapping": {
+        "path": "models/assets/card_recognition/poker-dealer-v2/model.classes.json",
+        "bytes": 316,
+        "sha256": "8a2d7e9dacf245aca5ef5a402cb404def919e9994e9142644d80c6d6248ee038",
+        "classes": 52,
+        "git_tracked": true,
+        "storage": "git"
+      },
+      "framework": {
+        "name": "Ultralytics YOLO / PyTorch",
+        "ultralytics_version": "8.4.104",
+        "torch_version": "2.13.0+cu130",
+        "format": "optimizer-stripped YOLO11s PyTorch checkpoint",
+        "training_input_size": [
+          960,
+          960
+        ]
+      },
+      "input_contract": "one BGR camera frame or project-owned fixed card-slot crop; letterboxed to the configured detector input size without runtime download",
+      "output_contract": "bounded boxes, one of 52 rank+suit class codes and confidence as CardFrameEvidence only; unknown, ambiguity, duplicate-card, temporal confirmation and game legality remain owned deterministic boundaries",
+      "dataset_manifest_sha256": "6573e2cce08406da5e4f9ff9dc85887e44c332d87c13fda6ec701ced2ad7e446",
+      "view_manifest_sha256": "34fdf98869eb83a13740c8d05650470d164a34d51d783a7acb26d308106c21e0",
+      "training_view": {
+        "dataset_yaml_sha256": "1650f5672dda62eee96d2fc8fb017af43f4cb2dafc2de119ca2ea65fcd672e75",
+        "train_list_sha256": "3e39e77617f7e93292b3e89c4cc5fd994e687563ba4223c286785c1ac5453e86",
+        "validation_list_sha256": "d4fbd4747b3ff999395781aeee05bfe95cc8f3e0ac0b8558cecb873cf72349ac",
+        "train_images": 1600,
+        "validation_images": 400,
+        "local_images": 1000,
+        "external_images": 1000,
+        "split_unit": "local source image before augmentation; external source image",
+        "source_overlap": 0,
+        "local_origin_balance": "train 26 old/26 new; validation 26 old/26 new",
+        "orientation_augmentation": "upright, right, inverted and left",
+        "scale_augmentation": "very_far, far, medium and near"
+      },
+      "training": {
+        "optimizer": "AdamW",
+        "epochs_requested": 30,
+        "epochs_completed": 13,
+        "best_epoch": 7,
+        "image_size": 960,
+        "batch": 4,
+        "initial_learning_rate": 0.0003,
+        "mixed_precision": false,
+        "train_box_loss_at_best": 0.44773,
+        "train_class_loss_at_best": 0.32379,
+        "train_dfl_loss_at_best": 0.79472
+      },
+      "metrics": {
+        "source_isolated_mixed_validation": {
+          "images": 400,
+          "instances": 1154,
+          "precision": 0.93091,
+          "recall": 0.75245,
+          "map50": 0.85656,
+          "map50_95": 0.75303,
+          "input_size": 960,
+          "scope": "200 locally augmented validation images from held-out local source images plus 200 source-disjoint external validation images"
+        },
+        "base_model_same_validation": {
+          "images": 400,
+          "instances": 1154,
+          "precision": 0.592,
+          "recall": 0.699,
+          "map50": 0.512,
+          "map50_95": 0.435
+        },
+        "aggregate_improvement_percentage_points": {
+          "precision": 33.891,
+          "recall": 5.345,
+          "map50": 34.456,
+          "map50_95": 31.803
+        },
+        "best_checkpoint_validation_latency_ms_per_image": {
+          "preprocess": 0.5,
+          "inference": 10.2,
+          "postprocess": 1.4,
+          "device": "NVIDIA GeForce RTX 4070 Laptop GPU"
+        }
+      },
+      "offline_export": {
+        "status": "not_created",
+        "runtime_selected": false
+      },
+      "admission_blockers": [
+        "no third independent target-camera capture session or held-out physical deck exists",
+        "the local validation view is source-isolated but derives from only one source image per class",
+        "required per-rank and per-suit precision, recall, F1 and confusion reporting is incomplete",
+        "unknown and rejection calibration, duplicate-card detection and per-slot temporal stability remain unevaluated",
+        "horizontal and distance augmentation is represented in validation but requires live and recorded target-camera replay",
+        "no validated offline ONNX or OpenVINO export exists",
         "AGPL-3.0 distribution obligations require review before release"
       ]
     },

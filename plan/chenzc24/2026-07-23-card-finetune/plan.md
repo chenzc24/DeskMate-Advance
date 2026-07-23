@@ -73,9 +73,12 @@ control, command physical motion or process identity-bearing media.
 
 ## Commit Intent
 
-Do not stage, commit, push, create a branch, publish weights or change the
-runtime-selected model. Checkpoints remain ignored development artifacts until
-evaluation and a separate manifest update.
+The user subsequently authorized freezing the best retrained checkpoint as
+card-recognition v2 and creating a scoped Git commit. Track the optimizer-
+stripped checkpoint through Git LFS, its 52-class sidecar through Git, and its
+candidate metadata in `models/manifest.yaml`. Do not include unrelated dirty
+paths, do not select the candidate at runtime, and do not push without separate
+authorization.
 
 ## Active Run
 
@@ -119,3 +122,17 @@ scale bins. Validation, plots, early stopping and best-checkpoint selection are
 enabled for the replacement run. The resulting validation remains development
 evidence rather than Gate evidence because only two local source images exist
 per class and no third held-out target-camera session is available.
+
+## Frozen V2 Candidate
+
+- Version: `poker-dealer-v2-20260723`
+- State: `candidate`, `runtime_selected: false`
+- Best epoch: 7; early-stopped after epoch 13
+- Weight SHA-256:
+  `620718e8ac16c8a3f666a7e0ac5e1f533eff3385b0f689ad6ba09cab0724b29b`
+- Same-view validation: precision `0.93091`, recall `0.75245`,
+  mAP50 `0.85656`, mAP50-95 `0.75303`
+- Owned frozen paths:
+  `models/assets/card_recognition/poker-dealer-v2/`,
+  `models/manifest.yaml`, and the exact Git LFS rule in `.gitattributes`
+- Physical-motion status: no motion, robot command or runtime selection
