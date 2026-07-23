@@ -9,6 +9,7 @@ from poker_dealer.perception.cards import (
 
 
 CONFIG = Path("configs/perception/card_slots_development_v1.json")
+LAPTOP_CONFIG = Path("configs/perception/card_slots_laptop_development_v1.json")
 
 
 def test_geometry_defines_all_thirteen_slots_and_is_not_target_validated() -> None:
@@ -16,6 +17,10 @@ def test_geometry_defines_all_thirteen_slots_and_is_not_target_validated() -> No
     assert set(geometry.slots) == set(VisionSlot)
     assert len(geometry.slots) == 13
     assert geometry.target_geometry_validated is False
+    laptop = CardSlotGeometryConfig.from_json(LAPTOP_CONFIG)
+    assert set(laptop.slots) == set(VisionSlot)
+    assert laptop.calibration_id == "laptop-13-slot-development-v1"
+    assert laptop.target_geometry_validated is False
 
 
 def test_multi_card_binding_is_one_to_one_and_rejects_same_slot_collision() -> None:

@@ -14,7 +14,9 @@
 | ACK 审计不完整 | 原始 ACK 永不直接 accepted；关联、传感器和单调版本通过后另记 `dealer_command_completed`；发牌成功要求 deck present | `domain/dealer.py`、`game/engine.py`、`runtime/event_log.py` |
 | 归属置信度未准入 | 低于 Runtime 阈值的 attributed action 不进入 Engine | `runtime/sequential_part_a.py` |
 | 注册不顺滑 | 注册独立 900 秒默认 deadline；取消清除临时样本；N/P 安全换角色 | `scripts/runtime/run_hand.py`、`runtime/registration.py`、`runtime/live_perception.py` |
-| 缺少跨手 Session | 整场持有 roster、筹码、Button、手牌 ID、rebuy 审计和手工清桌门；正式 Replay/Live 从 Session 创建第一手 | `runtime/session_runtime.py`、`scripts/runtime/run_hand.py` |
+| 缺少跨手 Session | 整场持有 roster、筹码、Button、手牌 ID、rebuy 审计和手工清桌门；Replay/Live 支持注册一次连续多手、作废/重试/结束 | `runtime/session_runtime.py`、`runtime/session_control.py`、`runtime/live_session.py`、`scripts/runtime/run_hand.py` |
+| 跨手结果只在内存 | 新增独占 Session JSONL 和独立 Checker，回查每手文件 Hash 与单手 Checker，不信任声明结果 | `runtime/session_log.py`、`scripts/runtime/check_session_log.py` |
+| Laptop/机器人共用占位 ROI | Laptop 使用独立 13 槽开发配置，并提供固定截图交互标定入口；机器人几何保持待定 | `configs/perception/card_slots_laptop_development_v1.json`、`scripts/perception/calibrate_card_slots.py` |
 | 暂停后不能继续 | 暂停保存恢复点；操作员确认实体/软件一致后重建 lane；冲突槽须先人工清空并审计，或整手作废 | `game/engine.py`、`runtime/hand_runtime.py` |
 | 麦克风 override 锁错资源 | CLI override 先写回 Runtime Profile，再创建资源锁和 Live 感知 | `scripts/runtime/run_hand.py` |
 | 游戏阶段绕开 ControlSource | C/F/Enter 与 Backspace/X 统一产生 `ControlObservation`，Hand Loop 记录并路由到感知；不直接改牌局 | `domain/controls.py`、`runtime/hand_loop.py`、`runtime/live_perception.py` |

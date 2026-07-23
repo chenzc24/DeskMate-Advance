@@ -161,12 +161,15 @@ development Laptop live run uses unified registration, Part A, Part B,
 SessionRuntime, event logging and recovery contracts:
 
 ```powershell
-.\.venv\Scripts\python.exe scripts\runtime\run_hand.py --profile laptop --mode live --button seat_a --consent-confirmed --development-operator-face-down --registration-timeout-seconds 900
+.\.venv\Scripts\python.exe scripts\runtime\run_hand.py --profile laptop --mode live --button seat_a --max-hands 20 --consent-confirmed --development-operator-face-down --registration-timeout-seconds 900
 ```
 
-The operator face-down switch is explicitly non-Gate evidence. The shipped
-13-slot geometry is also an unvalidated development template; calibrate the
-selected target camera before claiming a Live card-perception pass. See the
+Registration happens once. Between hands, `C` confirms that all cards have
+been returned, `S` starts the next hand, and `X` ends the session; stacks and
+Button position persist in a separately checked session log. The operator
+face-down switch is explicitly non-Gate evidence. Laptop now has its own
+unvalidated 13-slot development geometry; calibrate and evaluate the selected
+camera before claiming a Live card-perception pass. See the
 [Runtime review closure](docs/reviews/2026-07-22-runtime-review-closure.md).
 
 Before a four-participant acceptance session, run the read-only preflight,

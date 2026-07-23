@@ -18,10 +18,16 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="check integrity without requiring the hand to be settled",
     )
+    parser.add_argument(
+        "--allow-voided",
+        action="store_true",
+        help="accept an explicitly voided hand as a terminal recovery outcome",
+    )
     args = parser.parse_args(argv)
     result = check_runtime_hand_log(
         RuntimeEventLog.from_path(args.log),
         require_settled=not args.allow_incomplete,
+        allow_voided=args.allow_voided,
     )
     print(json.dumps(asdict(result), ensure_ascii=False))
     return 0 if result.passed else 2
