@@ -17,7 +17,11 @@ dev = ["pytest>=8.3,<10", "jsonschema>=4.23,<5"]
 benchmark = ["psutil>=7,<8"]
 action-pilot = ["mediapipe==0.10.35"]
 speech-pilot = ["vosk==0.3.45", "sounddevice==0.5.5"]
-training = ["torch>=2.5"]
+training = [
+  "torch==2.13.0",
+  "torchvision==0.28.0",
+  "ultralytics==8.4.104",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]

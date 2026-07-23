@@ -14,6 +14,13 @@ from .announcer import (
     EventAnnouncer,
     WindowsSpeechAnnouncer,
 )
+from .diagnostics import (
+    DiagnosticArtifact,
+    DiagnosticBundleCheck,
+    DiagnosticRun,
+    DiagnosticSink,
+    check_diagnostic_bundle,
+)
 from .hand_runtime import HandRuntime
 from .session_runtime import SessionAuditEvent, SessionRuntime
 from .session_log import (
@@ -87,6 +94,10 @@ __all__ = [
     "CameraSmokeResult",
     "ConsoleAnnouncer",
     "CoordinatorActionOutcome",
+    "DiagnosticArtifact",
+    "DiagnosticBundleCheck",
+    "DiagnosticRun",
+    "DiagnosticSink",
     "EventAnnouncer",
     "FrozenSessionRoster",
     "FrameRead",
@@ -142,5 +153,6 @@ __all__ = [
     "VisualSettleState",
     "WindowsSpeechAnnouncer",
     "check_runtime_hand_log",
+    "check_diagnostic_bundle",
     "default_replay_roster",
 ]

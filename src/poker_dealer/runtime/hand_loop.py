@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import time
-from typing import Callable
+from typing import Callable, TYPE_CHECKING, TypeVar
 
 from poker_dealer.domain import HandPhase
 from poker_dealer.game import SlotLifecycle
@@ -33,8 +33,12 @@ from .ports import (
 from .sequential_part_a import PartAPhase
 from .sequential_part_b import PartBMode, PartBPhase
 
+if TYPE_CHECKING:
+    from .diagnostics import DiagnosticSink
+
 
 Clock = Callable[[], int]
+T = TypeVar("T")
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,6 +66,7 @@ class HandRuntimeLoop:
         visual_settle_source: VisualSettleSource | None = None,
         control_source: ControlSource | None = None,
         clock_ns: Clock = time.monotonic_ns,
+        diagnostic_sink: DiagnosticSink | None = None,
     ) -> None:
         self.runtime = runtime
         self.dealer = dealer
@@ -73,9 +78,11 @@ class HandRuntimeLoop:
         self.visual_settle_source = visual_settle_source
         self.control_source = control_source
         self.clock_ns = clock_ns
+        self.diagnostic_sink = diagnostic_sink
         self.steps = 0
         self._camera_epoch = 0
         self._last_frame_read: FrameRead | None = None
+        self._last_frame_observed_at_ns: int | None = None
         self.event_writer.sync_engine(self.runtime.engine.log)
 
     def context(self) -> RuntimeObservationContext:
@@ -98,12 +105,17 @@ class HandRuntimeLoop:
     def run(self, *, max_steps: int = 10_000) -> HandLoopResult:
         if max_steps <= 0:
             raise ValueError("max_steps must be positive")
+        if self.diagnostic_sink is not None:
+            self.diagnostic_sink.emit(
+                "hand_loop_started",
+                {**self._diagnostic_context(), "max_steps": max_steps},
+            )
         while self.steps < max_steps:
             phase = self.runtime.phase
             if phase is HandPhase.SETTLED:
-                return self._result(True, "hand_settled")
+                return self._diagnostic_result(True, "hand_settled")
             if phase in {HandPhase.PAUSED_RECOVERY, HandPhase.VOIDED}:
-                return self._result(False, phase.value)
+                return self._diagnostic_result(False, phase.value)
             try:
                 self.step()
             except Exception as exc:
@@ -118,6 +130,16 @@ class HandRuntimeLoop:
                     )
                     self.runtime.sync()
                     self.event_writer.sync_engine(self.runtime.engine.log)
+                if self.diagnostic_sink is not None:
+                    self.diagnostic_sink.emit(
+                        "hand_loop_exception",
+                        {
+                            **self._diagnostic_context(),
+                            "error_type": type(exc).__name__,
+                            "reason": str(exc),
+                        },
+                        level="error",
+                    )
                 raise
         if self.runtime.phase not in {
             HandPhase.PAUSED_RECOVERY,
@@ -129,23 +151,38 @@ class HandRuntimeLoop:
                 "runtime_loop_step_budget_exhausted",
             )
             self.runtime.sync()
-        return self._result(False, "max_steps_reached")
+        return self._diagnostic_result(False, "max_steps_reached")
 
     def step(self) -> None:
+        started_ns = time.monotonic_ns()
         self.steps += 1
-        now_ns = self.clock_ns()
-        if self.runtime.check_timeout(now_ns):
+        before = self._diagnostic_context()
+        try:
+            now_ns = self.clock_ns()
+            if self.runtime.check_timeout(now_ns):
+                self.event_writer.sync_engine(self.runtime.engine.log)
+                return
+            if self.runtime.part_b is not None:
+                self._step_part_b(now_ns)
+            elif self.runtime.part_a is not None:
+                self._step_part_a(now_ns)
+            else:
+                raise RuntimeError(
+                    f"no active runtime lane in {self.runtime.phase.value}"
+                )
             self.event_writer.sync_engine(self.runtime.engine.log)
-            return
-        if self.runtime.part_b is not None:
-            self._step_part_b(now_ns)
-        elif self.runtime.part_a is not None:
-            self._step_part_a(now_ns)
-        else:
-            raise RuntimeError(
-                f"no active runtime lane in {self.runtime.phase.value}"
-            )
-        self.event_writer.sync_engine(self.runtime.engine.log)
+        finally:
+            if self.diagnostic_sink is not None:
+                elapsed_ms = (time.monotonic_ns() - started_ns) / 1_000_000
+                self.diagnostic_sink.metric(
+                    "runtime_step_duration",
+                    elapsed_ms,
+                    {
+                        **before,
+                        "after_state_version": self.runtime.engine.state.state_version,
+                        "after_hand_phase": self.runtime.phase.value,
+                    },
+                )
 
     def _step_part_b(self, now_ns: int) -> None:
         coordinator = self.runtime.part_b
@@ -153,13 +190,37 @@ class HandRuntimeLoop:
         if coordinator.phase is PartBPhase.WAITING_ROTATION_ACK:
             command = self.runtime.request_rotation(now_ns)
             self.event_writer.sync_engine(self.runtime.engine.log)
-            ack = self.dealer.execute(command, observed_at_ns=self.clock_ns())
+            ack = self._measure(
+                "dealer_command_duration",
+                {
+                    **self._diagnostic_context(),
+                    "command_id": command.command_id,
+                    "command": command.command.value,
+                    "target_slot": (
+                        command.target_slot.value if command.target_slot else None
+                    ),
+                },
+                lambda: self.dealer.execute(
+                    command, observed_at_ns=self.clock_ns()
+                ),
+            )
             self.runtime.accept_rotation_ack(ack)
             return
         if coordinator.phase is PartBPhase.WAITING_DISPENSE_ACK:
             command = self.runtime.request_dispense(now_ns)
             self.event_writer.sync_engine(self.runtime.engine.log)
-            ack = self.dealer.execute(command, observed_at_ns=self.clock_ns())
+            ack = self._measure(
+                "dealer_command_duration",
+                {
+                    **self._diagnostic_context(),
+                    "command_id": command.command_id,
+                    "command": command.command.value,
+                    "target_slot": None,
+                },
+                lambda: self.dealer.execute(
+                    command, observed_at_ns=self.clock_ns()
+                ),
+            )
             self.runtime.accept_dispense_ack(ack)
             return
         if coordinator.phase is not PartBPhase.WAITING_VISUAL_CONFIRMATION:
@@ -179,8 +240,12 @@ class HandRuntimeLoop:
                 continue
             context = self.context()
             self._dispatch_controls(now_ns, context)
-            observation = self.card_source.observe_card(
-                frame, context, slot, now_ns
+            observation = self._measure(
+                "card_observation_duration",
+                {**self._diagnostic_context(), "slot": slot.value},
+                lambda: self.card_source.observe_card(
+                    frame, context, slot, now_ns
+                ),
             )
             if observation is None:
                 return
@@ -197,7 +262,20 @@ class HandRuntimeLoop:
         if coordinator.phase is PartAPhase.WAITING_ROTATION_ACK:
             command = self.runtime.request_rotation(now_ns)
             self.event_writer.sync_engine(self.runtime.engine.log)
-            ack = self.dealer.execute(command, observed_at_ns=self.clock_ns())
+            ack = self._measure(
+                "dealer_command_duration",
+                {
+                    **self._diagnostic_context(),
+                    "command_id": command.command_id,
+                    "command": command.command.value,
+                    "target_slot": (
+                        command.target_slot.value if command.target_slot else None
+                    ),
+                },
+                lambda: self.dealer.execute(
+                    command, observed_at_ns=self.clock_ns()
+                ),
+            )
             accepted = self.runtime.accept_rotation_ack(ack)
             if (
                 accepted
@@ -216,8 +294,12 @@ class HandRuntimeLoop:
                 return
             context = self.context()
             self._dispatch_controls(now_ns, context)
-            settled = self.visual_settle_source.visual_is_settled(
-                frame, context, now_ns
+            settled = self._measure(
+                "visual_settle_duration",
+                self._diagnostic_context(),
+                lambda: self.visual_settle_source.visual_is_settled(
+                    frame, context, now_ns
+                ),
             )
             if settled is True:
                 self.runtime.accept_visual_settle()
@@ -228,8 +310,12 @@ class HandRuntimeLoop:
                 return
             context = self.context()
             self._dispatch_controls(now_ns, context)
-            observation = self.identity_source.observe_identity(
-                frame, context, now_ns
+            observation = self._measure(
+                "identity_observation_duration",
+                self._diagnostic_context(),
+                lambda: self.identity_source.observe_identity(
+                    frame, context, now_ns
+                ),
             )
             if observation is None:
                 return
@@ -246,8 +332,12 @@ class HandRuntimeLoop:
                 return
             context = self.context()
             self._dispatch_controls(now_ns, context)
-            evidence = self.action_source.observe_action(
-                frame, context, now_ns
+            evidence = self._measure(
+                "action_observation_duration",
+                self._diagnostic_context(),
+                lambda: self.action_source.observe_action(
+                    frame, context, now_ns
+                ),
             )
             if evidence is None:
                 return
@@ -320,10 +410,27 @@ class HandRuntimeLoop:
     def _read_frame(self, now_ns: int):
         if self.frame_source is None:
             return None
-        read = self.frame_source.read()
+        read = self._measure(
+            "camera_read_duration",
+            self._diagnostic_context(),
+            self.frame_source.read,
+        )
         self._last_frame_read = read
         self._camera_epoch = read.camera_epoch
+        if self._last_frame_observed_at_ns is not None and self.diagnostic_sink is not None:
+            self.diagnostic_sink.metric(
+                "camera_frame_interval",
+                (read.observed_at_ns - self._last_frame_observed_at_ns) / 1_000_000,
+                {**self._diagnostic_context(), "read_state": read.state.value},
+            )
+        self._last_frame_observed_at_ns = read.observed_at_ns
         if read.state is FrameReadState.DISCONNECTED:
+            if self.diagnostic_sink is not None:
+                self.diagnostic_sink.emit(
+                    "camera_disconnected",
+                    {**self._diagnostic_context(), "reason": read.reason},
+                    level="error",
+                )
             self.runtime.engine.pause(
                 f"runtime:{self.runtime.engine.state.hand_id}:camera-disconnected:{self.steps}",
                 "camera_disconnected",
@@ -331,6 +438,12 @@ class HandRuntimeLoop:
             self.runtime.sync()
             return None
         if read.state is FrameReadState.MISSING:
+            if self.diagnostic_sink is not None:
+                self.diagnostic_sink.emit(
+                    "camera_frame_missing",
+                    {**self._diagnostic_context(), "reason": read.reason},
+                    level="warning",
+                )
             self.event_writer.emit(
                 "camera_read",
                 observed_at_ns=read.observed_at_ns,
@@ -338,6 +451,23 @@ class HandRuntimeLoop:
             )
             return None
         return read.frame
+
+    def _measure(
+        self,
+        name: str,
+        context: dict[str, object],
+        operation: Callable[[], T],
+    ) -> T:
+        started_ns = time.monotonic_ns()
+        try:
+            return operation()
+        finally:
+            if self.diagnostic_sink is not None:
+                self.diagnostic_sink.metric(
+                    name,
+                    (time.monotonic_ns() - started_ns) / 1_000_000,
+                    context,
+                )
 
     def _result(self, completed: bool, reason: str) -> HandLoopResult:
         self.event_writer.sync_engine(self.runtime.engine.log)
@@ -349,6 +479,40 @@ class HandRuntimeLoop:
             steps=self.steps,
             state_version=state.state_version,
         )
+
+    def _diagnostic_result(self, completed: bool, reason: str) -> HandLoopResult:
+        result = self._result(completed, reason)
+        if self.diagnostic_sink is not None:
+            self.diagnostic_sink.emit(
+                "hand_loop_finished",
+                {
+                    **self._diagnostic_context(),
+                    "completed": completed,
+                    "reason": reason,
+                },
+                level="info" if completed else "warning",
+            )
+        return result
+
+    def _diagnostic_context(self) -> dict[str, object]:
+        state = self.runtime.engine.state
+        part_a_phase = (
+            self.runtime.part_a.phase.value if self.runtime.part_a is not None else None
+        )
+        part_b_phase = (
+            self.runtime.part_b.phase.value if self.runtime.part_b is not None else None
+        )
+        return {
+            "session_id": self.runtime.session_id,
+            "hand_id": state.hand_id,
+            "step": self.steps,
+            "state_version": state.state_version,
+            "hand_phase": state.phase.value,
+            "acting_seat": state.acting_seat.value if state.acting_seat else None,
+            "part_a_phase": part_a_phase,
+            "part_b_phase": part_b_phase,
+            "camera_epoch": self._camera_epoch,
+        }
 
 
 __all__ = ["HandLoopResult", "HandRuntimeLoop"]

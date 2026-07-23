@@ -167,6 +167,14 @@ SessionRuntime, event logging and recovery contracts:
 .\.venv\Scripts\python.exe scripts\runtime\run_hand.py --profile laptop --mode live --button seat_a --max-hands 20 --consent-confirmed --development-operator-face-down --registration-timeout-seconds 900
 ```
 
+Add `--diagnostics` to the same command for a bounded startup-to-shutdown field
+debug bundle containing a manifest, hash-chained lifecycle and latency JSONL,
+captured stdout/stderr, the authoritative hand/session logs and an automatic
+first-failure summary. Diagnostics do not change Runtime behavior and never
+save frames, audio or embeddings. Verify a returned bundle independently with
+`scripts/runtime/check_diagnostics.py`; the full layout and interpretation are
+documented in [Runtime diagnostics](docs/architecture/runtime-diagnostics.md).
+
 Registration happens once. Between hands, `C` confirms that all cards have
 been returned, `S` starts the next hand, and `X` ends the session; stacks and
 Button position persist in a separately checked session log. The operator
