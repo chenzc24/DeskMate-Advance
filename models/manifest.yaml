@@ -3,7 +3,7 @@
   "updated_on": "2026-07-24",
   "asset_root": "models/assets",
   "runtime_downloads_allowed": false,
-  "notes": "No Poker Dealer model is admitted for release without the required held-out metrics. The operational MediaPipe gesture/pose, Vosk English/speaker verification, YuNet and SFace assets are now selectively visible for Git LFS packaging but remain development runtime components until their admission blockers are closed. The frozen card-recognition v2 checkpoint remains a candidate under debugging; both card-recognition asset families remain tracked and are not re-ignored.",
+  "notes": "No Poker Dealer model is admitted for release without the required held-out metrics. The operational MediaPipe gesture/pose, Vosk English/speaker verification, YuNet and SFace assets are now selectively visible for Git LFS packaging but remain development runtime components until their admission blockers are closed. The chip-v2 localization checkpoint and fixed-design 10/20 rim-colour classifier are tracked development models only; physical chip evidence remains Plus-only and never replaces the digital ledger. The frozen card-recognition v2 checkpoint remains a candidate under debugging; both card-recognition asset families remain tracked and are not re-ignored.",
   "models": [
     {
       "model_id": "player-action-mediapipe-canned-gesture",
@@ -226,14 +226,14 @@
     },
     {
       "model_id": "chip-localization-yolo11n",
-      "version": "hard-negative-v3-20260723",
+      "version": "chip-v2-v1-20260724",
       "state": "development",
       "task": "single-class poker-chip localization for bounded development camera views; denomination and ledger authority are out of contract",
       "source": {
         "provider": "Poker Dealer project-owned fine-tune",
-        "training_config_path": "chip_recognition_workspace/chip_yolo11n_hard_negative_v3.json",
-        "base_checkpoint_sha256": "18e9f2cb0365d2ec265e828d5c2e18dd5a78bb4e29fb0167e8642e70bf650584",
-        "prepared_on": "2026-07-23",
+        "training_config_path": "chip_recognition_workspace/chip_yolo11n_chip_v2_v1.json",
+        "base_checkpoint_sha256": "7ab3a870bf6865127e3c65fc6c8e771a3c990aed94e97f6977bfdba1ac09e3c3",
+        "prepared_on": "2026-07-24",
         "upstream_datasets": [
           {
             "name": "Chip Counting rovys v2",
@@ -251,7 +251,7 @@
             "license": "CC BY 4.0"
           }
         ],
-        "target_negative_capture": "53 project-captured frames from one complete target-camera session; train-only with sixfold recorded exposure"
+        "target_capture": "40 project-captured fixed-design 10/20 chip images with 75 reviewed chip boxes; complete chip_v2:20 sequence held out before train-only augmentation"
       },
       "license": {
         "identifier": "AGPL-3.0 with CC-BY-4.0 training-data attribution obligations",
@@ -260,8 +260,8 @@
       },
       "asset": {
         "path": "models/assets/chip_recognition/yolo11n-localization-hard-negative-v3/best.pt",
-        "bytes": 5533594,
-        "sha256": "7ab3a870bf6865127e3c65fc6c8e771a3c990aed94e97f6977bfdba1ac09e3c3",
+        "bytes": 5532435,
+        "sha256": "80998949eb499a1c2f82045439757fdb697739fd9ab54df78fe4118109db5b20",
         "git_tracked": true,
         "storage": "git-lfs"
       },
@@ -273,38 +273,40 @@
       },
       "framework": {
         "name": "ultralytics-pytorch",
-        "tested_version": "Ultralytics 8.4.104 / Torch 2.13.0+cu130",
+        "tested_version": "Ultralytics 8.4.93 / Torch 2.5.1+cu121",
         "format": "YOLO11n PyTorch checkpoint",
         "input_size": [960, 960]
       },
       "input_contract": "one project-owned BGR camera frame; YOLO letterboxing to 960x960; bounded development view only",
       "output_contract": "zero or more poker-chip bounding boxes with confidence as non-authoritative Plus perception evidence; never a denomination, ledger mutation, game transition or robot command",
-      "dataset_manifest_sha256": "930df9e122ae7c5a311b03adea80521ed266b4b144758a90f4ec896e86fd6457",
-      "view_manifest_sha256": "930df9e122ae7c5a311b03adea80521ed266b4b144758a90f4ec896e86fd6457",
-      "dataset_yaml_sha256": "6d9809c7420148260dfe6fcd69b57835fd5aaf8ee0831fa1172736ecccc78285",
+      "dataset_manifest_sha256": "bf088a7f856c727d4b827b00d8676e824d48442382ab307a7ff41ebed1ece32b",
+      "view_manifest_sha256": "bf088a7f856c727d4b827b00d8676e824d48442382ab307a7ff41ebed1ece32b",
+      "dataset_yaml_sha256": "cecd069314392f778644ceb56ed8a0514c0882687bb955c8c8ed73e71225abd9",
       "metrics": {
-        "public_validation": {
-          "images": 429,
-          "instances": 2137,
-          "precision": 0.98065,
-          "recall": 0.96350,
-          "map50": 0.98758,
-          "map50_95": 0.88786
+        "combined_validation": {
+          "precision": 0.979,
+          "recall": 0.963,
+          "map50": 0.991,
+          "map50_95": 0.874
         },
         "public_test": {
           "images": 460,
           "instances": 1514,
-          "precision": 0.94722,
-          "recall": 0.87913,
-          "map50": 0.92734,
-          "map50_95": 0.82508
+          "precision": 0.92957,
+          "recall": 0.89564,
+          "f1": 0.91229,
+          "map50": 0.92972,
+          "map50_95": 0.81703
         },
-        "target_negative_fit_only": {
-          "images": 53,
-          "confidence_threshold": 0.25,
-          "images_with_detections": 0,
-          "detections": 0,
-          "independent_validation": false
+        "target_chip_v2_20_holdout": {
+          "images": 13,
+          "instances": 23,
+          "precision": 0.99743,
+          "recall": 1.0,
+          "f1": 0.99871,
+          "map50": 0.995,
+          "map50_95": 0.60734,
+          "independent_of_training": true
         },
         "validation_speed": {
           "hardware": "NVIDIA GeForce RTX 4060 Laptop GPU",
@@ -313,9 +315,9 @@
         }
       },
       "admission_blockers": [
-        "all target-camera negative frames contributed to training and no independent target-camera negative session is held out",
-        "public test mAP50 decreased from 0.94794 to 0.92734 versus the previous checkpoint",
-        "no target-camera positive-session precision, recall, distance, perspective or occlusion evaluation",
+        "the target-camera holdout is small and contains only denomination 20 from one capture sequence",
+        "original test precision and mAP50-95 decreased slightly versus hard-negative-v3",
+        "no independent mixed 10/20 live session covers distance, glare, occlusion, stacks or partial chips",
         "PyTorch checkpoint has no validated offline ONNX or OpenVINO export",
         "physical chip evidence is Plus-only and cannot replace the authoritative digital ledger",
         "AGPL-3.0 and CC BY 4.0 distribution obligations require review before release"
@@ -399,6 +401,71 @@
         "no per-denomination target-camera precision, recall, confusion or rejection report",
         "distance, perspective, glare, occlusion, stacks and partial-chip limits are not release calibrated",
         "1-versus-5 confusion still requires broader target-camera evidence",
+        "physical denomination evidence is Plus-only and cannot replace the authoritative digital ledger"
+      ]
+    },
+    {
+      "model_id": "chip-denomination-rim-colour-binary",
+      "version": "v1-20260724",
+      "state": "development",
+      "task": "fixed-design 10/20 chip denomination classification from the YOLO-localized outer rim; values 1 and 5 are outside the contract",
+      "source": {
+        "provider": "Poker Dealer project-owned fixed-feature training",
+        "training_entrypoint": "scripts/data/build_chip_rim_color_binary_model.py",
+        "raw_source_policy": "40 private project-captured images remain ignored; the tracked model contains only aggregate numeric features and logistic-regression parameters",
+        "prepared_on": "2026-07-24"
+      },
+      "license": {
+        "identifier": "project-captured-derived-asset",
+        "admission_note": "Confirm project-owner permission and suitability for the exact supported LAS VEGAS POKER CLUB 10/20 chip design before redistribution or release."
+      },
+      "asset": {
+        "path": "models/assets/chip_recognition/rim-colour-binary-10-20-v1/model.json",
+        "bytes": 5206,
+        "sha256": "c0be8c9dcbed5aaca933d5566e0d5275db3fc0a3cf6a81f0206f158ccfda52c2",
+        "git_tracked": true,
+        "storage": "git"
+      },
+      "class_mapping": {
+        "classes": 2,
+        "names": {
+          "0": 10,
+          "1": 20
+        }
+      },
+      "framework": {
+        "name": "opencv-numpy-fixed-feature-logistic-regression",
+        "tested_version": "OpenCV 5.0.0 / NumPy 2.x",
+        "format": "JSON with 40D feature standardization and binary logistic coefficients"
+      },
+      "input_contract": "one YOLO-localized fixed-design chip box with at least a 30-pixel minor axis; sample only the fitted outer annulus",
+      "output_contract": "a non-authoritative value-10, value-20 or unknown observation with score and evidence; temporal confirmation may expose a visible total but never mutates the authoritative digital ledger",
+      "dataset_manifest_sha256": "bf088a7f856c727d4b827b00d8676e824d48442382ab307a7ff41ebed1ece32b",
+      "view_manifest_sha256": "a8d0d45e04694b090f0c10373cf87f326bebeabe4040ba630694284bfab3039e",
+      "metrics": {
+        "pre_refit_complete_group_holdout": {
+          "group": "chip_v2:20",
+          "instances": 23,
+          "correct": 21,
+          "accuracy": 0.91304,
+          "independent_of_fit": true
+        },
+        "runtime_refit_development_set": {
+          "instances": 75,
+          "correct": 75,
+          "accuracy": 1.0,
+          "independent_validation": false
+        },
+        "feature_latency": {
+          "hardware": "development laptop",
+          "mean_ms_per_chip": 3.68
+        }
+      },
+      "admission_blockers": [
+        "the runtime-refit score is in-sample and cannot be treated as generalization evidence",
+        "a new held-out mixed 10/20 target-camera session is required",
+        "the classifier supports only the exact blue/flesh 10 and green/dark-green 20 chip design",
+        "lighting, white balance, distance, perspective, glare, occlusion, stacks and partial chips are not release calibrated",
         "physical denomination evidence is Plus-only and cannot replace the authoritative digital ledger"
       ]
     },

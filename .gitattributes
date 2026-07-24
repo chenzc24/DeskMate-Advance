@@ -3,6 +3,7 @@ models/assets/card_recognition/lgd-cards-gen3/best.pt filter=lfs diff=lfs merge=
 models/assets/card_recognition/poker-dealer-v2/best.pt filter=lfs diff=lfs merge=lfs -text
 models/assets/chip_recognition/yolo11n-localization-hard-negative-v3/best.pt filter=lfs diff=lfs merge=lfs -text
 models/assets/chip_recognition/las-vegas-denomination-templates-v1/manifest.json -text
+models/assets/chip_recognition/rim-colour-binary-10-20-v1/model.json -text
 models/assets/gesture_recognizer.task filter=lfs diff=lfs merge=lfs -text
 models/assets/pose_landmarker_lite.task filter=lfs diff=lfs merge=lfs -text
 models/assets/face_identity/*.onnx filter=lfs diff=lfs merge=lfs -text

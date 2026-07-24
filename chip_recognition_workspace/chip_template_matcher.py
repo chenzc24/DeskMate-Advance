@@ -222,6 +222,7 @@ class ChipTemplateMatcher:
         minimum_score: float = 0.58,
         minimum_margin: float = 0.035,
         rotation_step_degrees: int = ROTATION_STEP_DEGREES,
+        allowed_denominations: tuple[int, ...] | None = None,
     ) -> None:
         if not 0.0 < minimum_score <= 1.0:
             raise ValueError("minimum_score must be in (0, 1]")
@@ -233,8 +234,22 @@ class ChipTemplateMatcher:
         if not manifest_path.is_file():
             raise FileNotFoundError(f"template manifest is missing: {manifest_path}")
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        if tuple(manifest["denominations"]) != DENOMINATIONS:
+        manifest_denominations = tuple(int(value) for value in manifest["denominations"])
+        if manifest_denominations != DENOMINATIONS:
             raise ValueError(f"unexpected denomination map: {manifest['denominations']}")
+        selected_denominations = (
+            DENOMINATIONS if allowed_denominations is None else tuple(allowed_denominations)
+        )
+        if (
+            len(selected_denominations) < 2
+            or len(set(selected_denominations)) != len(selected_denominations)
+            or any(value not in manifest_denominations for value in selected_denominations)
+        ):
+            raise ValueError(
+                "allowed denominations must contain at least two unique values "
+                f"from {manifest_denominations}"
+            )
+        self._denominations = selected_denominations
 
         features: list[NDArray[np.float32]] = []
         labels: list[int] = []
@@ -244,6 +259,8 @@ class ChipTemplateMatcher:
         color_labels: list[int] = []
         for item in manifest["templates"]:
             denomination = int(item["denomination"])
+            if denomination not in self._denominations:
+                continue
             mask_path = library_dir / item["mask_file"]
             mask = cv2.imread(str(mask_path), cv2.IMREAD_GRAYSCALE)
             if mask is None:
@@ -282,6 +299,7 @@ class ChipTemplateMatcher:
                 self._color_signatures[self._color_labels == denomination], axis=0
             )
             for denomination in DENOMINATIONS
+            if denomination in self._denominations
         }
         self.minimum_score = minimum_score
         self.minimum_margin = minimum_margin
@@ -307,18 +325,18 @@ class ChipTemplateMatcher:
                     )
                     ** 2
                 )
-                for denomination in DENOMINATIONS
+                for denomination in self._denominations
             ],
             dtype=np.float32,
         )
         probabilities = _softmax(-color_distances, COLOR_TEMPERATURE)
         scores = {
             denomination: float(probabilities[index])
-            for index, denomination in enumerate(DENOMINATIONS)
+            for index, denomination in enumerate(self._denominations)
         }
         distances = {
             denomination: float(color_distances[index])
-            for index, denomination in enumerate(DENOMINATIONS)
+            for index, denomination in enumerate(self._denominations)
         }
         ranking = sorted(scores, key=scores.get, reverse=True)
         best = ranking[0]
@@ -348,7 +366,7 @@ class ChipTemplateMatcher:
                 accepted=False,
                 best_score=0.0,
                 margin=0.0,
-                scores={value: 0.0 for value in DENOMINATIONS},
+                scores={value: 0.0 for value in self._denominations},
                 source_id=None,
                 rotation_degrees=None,
                 latency_ms=(time.perf_counter_ns() - started_ns) / 1_000_000,
@@ -357,14 +375,14 @@ class ChipTemplateMatcher:
         shape_scores = np.asarray(
             [
                 np.max(similarities[self._labels == denomination])
-                for denomination in DENOMINATIONS
+                for denomination in self._denominations
             ],
             dtype=np.float32,
         )
         probabilities = _softmax(shape_scores, SHAPE_TEMPERATURE)
         scores = {
             denomination: float(probabilities[index])
-            for index, denomination in enumerate(DENOMINATIONS)
+            for index, denomination in enumerate(self._denominations)
         }
         ranking = sorted(scores, key=scores.get, reverse=True)
         best = ranking[0]
@@ -400,7 +418,7 @@ class ChipTemplateMatcher:
                 accepted=False,
                 best_score=0.0,
                 margin=0.0,
-                scores={value: 0.0 for value in DENOMINATIONS},
+                scores={value: 0.0 for value in self._denominations},
                 source_id=None,
                 rotation_degrees=None,
                 latency_ms=(time.perf_counter_ns() - started_ns) / 1_000_000,
@@ -409,7 +427,7 @@ class ChipTemplateMatcher:
         shape_scores = np.asarray(
             [
                 np.max(similarities[self._labels == denomination])
-                for denomination in DENOMINATIONS
+                for denomination in self._denominations
             ],
             dtype=np.float32,
         )
@@ -423,7 +441,7 @@ class ChipTemplateMatcher:
                     )
                     ** 2
                 )
-                for denomination in DENOMINATIONS
+                for denomination in self._denominations
             ],
             dtype=np.float32,
         )
@@ -434,7 +452,7 @@ class ChipTemplateMatcher:
         )
         scores = {
             denomination: float(fused[index])
-            for index, denomination in enumerate(DENOMINATIONS)
+            for index, denomination in enumerate(self._denominations)
         }
         ranking = sorted(scores, key=scores.get, reverse=True)
         best = ranking[0]

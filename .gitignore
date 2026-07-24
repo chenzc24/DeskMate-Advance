@@ -53,6 +53,8 @@ models/assets/chip_recognition/*
 !models/assets/chip_recognition/yolo11n-localization-hard-negative-v3/**
 !models/assets/chip_recognition/las-vegas-denomination-templates-v1/
 !models/assets/chip_recognition/las-vegas-denomination-templates-v1/**
+!models/assets/chip_recognition/rim-colour-binary-10-20-v1/
+!models/assets/chip_recognition/rim-colour-binary-10-20-v1/**
 models/**/*.pt
 models/**/*.pth
 models/**/*.ckpt
@@ -72,6 +74,7 @@ models/**/*.task
 !models/assets/card_recognition/poker-dealer-v2/**
 !models/assets/chip_recognition/yolo11n-localization-hard-negative-v3/**
 !models/assets/chip_recognition/las-vegas-denomination-templates-v1/**
+!models/assets/chip_recognition/rim-colour-binary-10-20-v1/**
 chip_recognition_workspace/pretrained/
 
 # Notebook and editor state

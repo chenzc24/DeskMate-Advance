@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import platform
 
@@ -86,6 +87,7 @@ def main() -> int:
         "development_fit_only_no_independent_validation",
         "development_no_target_camera_holdout_no_negative_samples",
         "development_hard_negative_fit_only_no_target_holdout",
+        "development_target_capture_holdout",
     }
     if config.get("status") not in allowed_statuses:
         raise SystemExit("unexpected chip training status")
@@ -93,6 +95,10 @@ def main() -> int:
     base_config = config["base_model"]
     dataset_config = config["dataset"]
     framework = config["framework"]
+    if framework.get("polars_skip_cpu_check"):
+        # Polars documents this for false-positive/unknown feature detection.
+        # It only affects the CSV metrics reader used when saving checkpoints.
+        os.environ["POLARS_SKIP_CPU_CHECK"] = "1"
     train = dict(config["train"])
     base_path = root_path(base_config["path"])
     dataset_yaml = root_path(dataset_config["yaml_path"])

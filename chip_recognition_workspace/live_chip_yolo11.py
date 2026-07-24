@@ -54,6 +54,8 @@ CLASS_COLORS = {
     "chip_10": (80, 80, 255),
     "chip_20": (255, 120, 80),
 }
+VALUE_ENGINE_NAME = "track-best-frame-raw-colour-digit-template-v2"
+DISPLAY_ENGINE_LABEL = "YOLO + template evidence only"
 
 
 def _bbox_iou(first: Sequence[int], second: Sequence[int]) -> float:
@@ -191,6 +193,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--value-score", type=float, default=0.58)
     parser.add_argument("--value-margin", type=float, default=0.035)
     parser.add_argument(
+        "--allowed-denominations",
+        type=int,
+        nargs="+",
+        default=[10, 20],
+        help="Fixed-design denominations that may be emitted (default: 10 20)",
+    )
+    parser.add_argument(
         "--value-interval",
         type=int,
         default=5,
@@ -238,6 +247,14 @@ def main() -> int:
         raise SystemExit("--value-score must be in (0, 1]")
     if not 0.0 <= args.value_margin <= 1.0:
         raise SystemExit("--value-margin must be in [0, 1]")
+    if (
+        len(args.allowed_denominations) < 2
+        or len(set(args.allowed_denominations)) != len(args.allowed_denominations)
+        or any(value not in DENOMINATION_VALUES.values() for value in args.allowed_denominations)
+    ):
+        raise SystemExit(
+            "--allowed-denominations must contain at least two unique values from 1 5 10 20"
+        )
     if args.value_interval <= 0:
         raise SystemExit("--value-interval must be positive")
     if args.best_frame_window <= 0:
@@ -282,6 +299,7 @@ def main() -> int:
         args.template_library,
         minimum_score=args.value_score,
         minimum_margin=args.value_margin,
+        allowed_denominations=tuple(args.allowed_denominations),
     )
     value_tracker = ChipValueTracker()
     best_frame_selector = ChipBestFrameSelector(
@@ -513,7 +531,7 @@ def main() -> int:
                 )
                 cv2.putText(
                     display,
-                    "YOLO + template evidence only | no ledger/robot action | Q/Esc quit",
+                    f"{DISPLAY_ENGINE_LABEL} | no ledger/robot action | Q/Esc quit",
                     (18, display.shape[0] - 18),
                     cv2.FONT_HERSHEY_SIMPLEX,
                     0.52,
@@ -552,7 +570,7 @@ def main() -> int:
                     else "completed" if frames else "no_readable_frames"
                 ),
                 "model_status": (
-                    "chip-localization-yolo11n@hard-negative-v3-20260723"
+                    "chip-localization-yolo11n@chip-v2-v1-20260724"
                 ),
                 "model_path": str(args.model.resolve()),
                 "camera_index": None if is_network_stream else args.camera_index,
@@ -576,7 +594,7 @@ def main() -> int:
                 "robot_connected": False,
                 "can_estimate_visible_value": True,
                 "authoritative_ledger_value": False,
-                "value_engine": "track-best-frame-raw-colour-digit-template-v2",
+                "value_engine": VALUE_ENGINE_NAME,
                 "best_frame_window": args.best_frame_window,
                 "value_min_minor_axis_px": args.value_min_minor_axis,
                 "value_min_aspect_ratio": args.value_min_aspect_ratio,
