@@ -67,6 +67,7 @@ class HandRuntimeLoop:
         control_source: ControlSource | None = None,
         clock_ns: Clock = time.monotonic_ns,
         diagnostic_sink: DiagnosticSink | None = None,
+        state_observer: object | None = None,
     ) -> None:
         self.runtime = runtime
         self.dealer = dealer
@@ -79,11 +80,13 @@ class HandRuntimeLoop:
         self.control_source = control_source
         self.clock_ns = clock_ns
         self.diagnostic_sink = diagnostic_sink
+        self.state_observer = state_observer
         self.steps = 0
         self._camera_epoch = 0
         self._last_frame_read: FrameRead | None = None
         self._last_frame_observed_at_ns: int | None = None
         self.event_writer.sync_engine(self.runtime.engine.log)
+        self._publish_state()
 
     def context(self) -> RuntimeObservationContext:
         required_slots = ()
@@ -172,6 +175,7 @@ class HandRuntimeLoop:
                 )
             self.event_writer.sync_engine(self.runtime.engine.log)
         finally:
+            self._publish_state()
             if self.diagnostic_sink is not None:
                 elapsed_ms = (time.monotonic_ns() - started_ns) / 1_000_000
                 self.diagnostic_sink.metric(
@@ -183,6 +187,13 @@ class HandRuntimeLoop:
                         "after_hand_phase": self.runtime.phase.value,
                     },
                 )
+
+    def _publish_state(self) -> None:
+        if self.state_observer is None:
+            return
+        publish = getattr(self.state_observer, "publish_hand_state", None)
+        if publish is not None:
+            publish(self.runtime)
 
     def _step_part_b(self, now_ns: int) -> None:
         coordinator = self.runtime.part_b

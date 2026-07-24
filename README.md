@@ -21,7 +21,7 @@ The current Part A/Part B ownership and complete simulated hand path are
 documented in [the unified hand runtime](docs/architecture/unified-hand-runtime.md).
 Laptop/robot-camera dependency selection and the fail-closed hardware boundary
 are documented in [runtime profiles](docs/architecture/runtime-profiles.md).
-The shared perception ports, complete replay loop, development Live UI and
+The shared perception ports, complete replay loop, full-session Live UI and
 remaining card/geometry gates are documented in
 [live runtime integration](docs/architecture/live-runtime-integration.md).
 The development-only physical-chip localization and fixed-design denomination
@@ -54,8 +54,11 @@ $env:PYTHONPATH = "src"
 
 Use `--mode live-preflight` to hash-check all profile-selected perception assets
 without opening devices. The unified development Live mode exists for both
-non-physical profiles, but target geometry and the hole-card back/orientation
-model are not validated; its explicit operator fallback cannot close Gate 2B.
+non-physical profiles. Sensor-valid hole-card dispense ACKs default the current
+logical slot to face down without operator confirmation. Robot camera profiles
+use state-directed view cycling and full-frame YOLO for visible cards; target
+camera/physical geometry validation remains open and card model v2 stays
+candidate.
 When speech is enabled, unified Live registration also enrolls three
 memory-only speaker samples per participant. Spoken actions are discarded
 unless the speaker matches the state-selected player; a speech-only action
@@ -164,7 +167,7 @@ development Laptop live run uses unified registration, Part A, Part B,
 SessionRuntime, event logging and recovery contracts:
 
 ```powershell
-.\.venv\Scripts\python.exe scripts\runtime\run_hand.py --profile laptop --mode live --button seat_a --max-hands 20 --consent-confirmed --development-operator-face-down --registration-timeout-seconds 900
+.\.venv\Scripts\python.exe scripts\runtime\run_hand.py --profile laptop --mode live --button seat_a --max-hands 20 --consent-confirmed --web-console --announcer windows --registration-timeout-seconds 900
 ```
 
 Add `--diagnostics` to the same command for a bounded startup-to-shutdown field
@@ -177,8 +180,8 @@ documented in [Runtime diagnostics](docs/architecture/runtime-diagnostics.md).
 
 Registration happens once. Between hands, `C` confirms that all cards have
 been returned, `S` starts the next hand, and `X` ends the session; stacks and
-Button position persist in a separately checked session log. The operator
-face-down switch is explicitly non-Gate evidence. Laptop now has its own
+Button position persist in a separately checked session log. A sensor-valid
+dispense ACK is the face-down evidence for hole cards. Laptop still has its own
 unvalidated 13-slot development geometry; calibrate and evaluate the selected
 camera before claiming a Live card-perception pass. See the
 [Runtime review closure](docs/reviews/2026-07-22-runtime-review-closure.md).

@@ -1,4 +1,4 @@
-"""Explicit 13-slot geometry and deterministic multi-card spatial binding."""
+"""Logical card-slot geometry and deterministic spatial binding policies."""
 
 from __future__ import annotations
 
@@ -17,6 +17,7 @@ class CardSlotGeometryConfig:
     schema_version: str
     calibration_id: str
     target_geometry_validated: bool
+    binding_mode: str
     slots: Mapping[VisionSlot, NormalizedCardRoi]
 
     def __post_init__(self) -> None:
@@ -24,6 +25,17 @@ class CardSlotGeometryConfig:
             raise ValueError("unsupported card-slot geometry schema version")
         if not self.calibration_id.strip():
             raise ValueError("card-slot calibration ID is required")
+        if self.binding_mode not in {
+            "fixed_slot_rois",
+            "state_directed_full_frame",
+        }:
+            raise ValueError("unsupported card-slot binding mode")
+        if self.binding_mode == "state_directed_full_frame":
+            if self.slots:
+                raise ValueError(
+                    "state-directed full-frame geometry must not define pixel ROIs"
+                )
+            return
         missing = set(VisionSlot) - set(self.slots)
         extra = set(self.slots) - set(VisionSlot)
         if missing or extra:
@@ -59,6 +71,7 @@ class CardSlotGeometryConfig:
             target_geometry_validated=bool(
                 value.get("target_geometry_validated", False)
             ),
+            binding_mode=str(value.get("binding_mode", "fixed_slot_rois")),
             slots={
                 VisionSlot(name): NormalizedCardRoi(**coordinates)
                 for name, coordinates in raw_slots.items()
@@ -66,6 +79,8 @@ class CardSlotGeometryConfig:
         )
 
     def roi_for(self, slot: VisionSlot) -> NormalizedCardRoi:
+        if self.binding_mode != "fixed_slot_rois":
+            raise ValueError("state-directed full-frame mode has no pixel ROI")
         return self.slots[slot]
 
 
@@ -104,6 +119,8 @@ def bind_detections_to_slots(
 ) -> SlotBindingResult:
     """Bind detection centres to one logical slot; ambiguity stays rejected."""
 
+    if geometry.binding_mode != "fixed_slot_rois":
+        raise ValueError("full-frame view-cycle detections bind via runtime state")
     candidates: dict[VisionSlot, list[int]] = {}
     unbound: list[int] = []
     for index, detection in enumerate(detections):

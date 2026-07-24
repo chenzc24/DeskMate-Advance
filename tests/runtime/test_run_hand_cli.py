@@ -42,17 +42,87 @@ def test_audiorelay_profile_and_announcer_arguments_are_resolved() -> None:
     args = module.parse_args(
         [
             "--profile",
-            "configs/runtime/laptop_audiorelay.json",
+            "laptop_audiorelay",
             "--announcer",
             "windows",
             "--announcement-tail-guard-ms",
             "500",
+            "--announcement-voice",
+            "Microsoft Zira Desktop",
         ]
     )
     profile = module._load_profile(args)
     assert profile.speech_device == "Virtual Mic (AudioRelay Wave)"
+    assert profile.speech_capture_sample_rate_hz == 44_100
     assert args.announcer == "windows"
     assert args.announcement_tail_guard_ms == 500
+    assert args.announcement_voice == "Microsoft Zira Desktop"
+
+
+def test_robot_camera_audiorelay_profile_combines_mjpeg_and_native_audio() -> None:
+    module = _load_script()
+    args = module.parse_args(
+        [
+            "--profile",
+            "robot_camera_audiorelay",
+            "--mode",
+            "registration-smoke",
+            "--button",
+            "seat_a",
+            "--consent-confirmed",
+            "--announcer",
+            "windows",
+        ]
+    )
+    profile = module._load_profile(args)
+    assert profile.camera.stream_url == "http://100.80.46.54:5000/video_feed"
+    assert profile.speech_device == "Virtual Mic (AudioRelay Wave)"
+    assert profile.speech_capture_sample_rate_hz == 44_100
+    assert args.mode == "registration-smoke"
+
+
+def test_registration_mobile_web_console_arguments_are_explicit() -> None:
+    module = _load_script()
+    args = module.parse_args(
+        [
+            "--profile",
+            "robot_camera_audiorelay",
+            "--mode",
+            "registration-smoke",
+            "--button",
+            "seat_a",
+            "--consent-confirmed",
+            "--web-console",
+            "--headless",
+            "--web-host",
+            "127.0.0.1",
+            "--web-port",
+            "9876",
+        ]
+    )
+
+    assert args.web_console is True
+    assert args.headless is True
+    assert args.web_host == "127.0.0.1"
+    assert args.web_port == 9876
+
+
+def test_registration_smoke_requires_consent_before_opening_devices(capsys) -> None:
+    module = _load_script()
+    assert module.main(
+        [
+            "--profile",
+            "robot_camera_audiorelay",
+            "--mode",
+            "registration-smoke",
+            "--button",
+            "seat_a",
+            "--announcer",
+            "windows",
+        ]
+    ) == 1
+    error = json.loads(capsys.readouterr().err)
+    assert "--consent-confirmed is required" in error["reason"]
 
 
 def test_real_hardware_config_check_fails_closed(capsys) -> None:
@@ -171,11 +241,9 @@ def test_exact_replay_rejects_context_override_before_output(
     assert not destination.exists()
 
 
-def test_live_mode_refuses_unvalidated_hole_orientation_before_device_open(
-    capsys,
-) -> None:
+def test_live_mode_no_longer_has_operator_face_down_override() -> None:
     module = _load_script()
-    assert module.main(
+    args = module.parse_args(
         [
             "--profile",
             "robot_camera",
@@ -185,9 +253,8 @@ def test_live_mode_refuses_unvalidated_hole_orientation_before_device_open(
             "seat_a",
             "--consent-confirmed",
         ]
-    ) == 1
-    error = json.loads(capsys.readouterr().err)
-    assert "face-down occupancy/orientation model is not admitted" in error["reason"]
+    )
+    assert not hasattr(args, "development_operator_face_down")
 
 
 def test_live_asset_preflight_hashes_models_without_opening_devices(capsys) -> None:
@@ -199,7 +266,25 @@ def test_live_asset_preflight_hashes_models_without_opening_devices(capsys) -> N
     assert output["assets_valid"] is True
     assert output["target_geometry_validated"] is False
     assert output["development_live_available"] is True
-    assert output["full_live_hand_integrated"] is False
+    assert output["full_live_hand_integrated"] is True
+    assert output["card_binding_mode"] == "state_directed_full_frame"
+    assert output["logical_card_slot_count"] == 13
+    assert output["card_pixel_roi_count"] == 0
+    assert output["announcement_language"] == "en-US"
+    assert output["announcement_count"] >= 40
+    assert output["speech_capture_sample_rate_hz"] == 16_000
+    assert output["speech_resampling_enabled"] is False
+
+
+def test_audiorelay_preflight_reports_native_capture_resampling(capsys) -> None:
+    module = _load_script()
+    assert module.main(
+        ["--profile", "laptop_audiorelay", "--mode", "live-preflight"]
+    ) == 0
+    output = json.loads(capsys.readouterr().out)
+    assert output["speech_capture_sample_rate_hz"] == 44_100
+    assert output["speech_model_sample_rate_hz"] == 16_000
+    assert output["speech_resampling_enabled"] is True
 
 
 def test_hardware_profile_cannot_be_used_for_replay_fallback(tmp_path, capsys) -> None:

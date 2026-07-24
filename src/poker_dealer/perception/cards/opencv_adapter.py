@@ -157,7 +157,7 @@ def decode_card_detections(
 
 
 class OpenCvCardRecognitionAdapter:
-    """Run bounded fixed-ROI inference and return project-owned frame evidence."""
+    """Run bounded YOLO inference on either a fixed crop or a full camera frame."""
 
     def __init__(self, config: CardPilotConfig) -> None:
         config.verify_assets()

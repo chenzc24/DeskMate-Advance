@@ -21,7 +21,7 @@ Diagnostics 用于回答现场运行的因果问题；原有 hand/session JSONL 
   --profile laptop --mode live `
   --session-id field-debug-001 --hand-id hand `
   --button seat_a --max-hands 20 `
-  --consent-confirmed --development-operator-face-down `
+  --consent-confirmed --web-console --announcer windows `
   --registration-timeout-seconds 900 `
   --diagnostics
 ```

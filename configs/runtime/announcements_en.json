@@ -1,0 +1,206 @@
+{
+  "schema_version": "1.0",
+  "catalog_id": "poker-dealer-en-us",
+  "catalog_version": "1.4.0",
+  "language": "en-US",
+  "speech_rate": 0,
+  "speech_volume": 100,
+  "voice_preferences": [
+    "Microsoft Zira Desktop",
+    "Microsoft David Desktop"
+  ],
+  "entries": {
+    "system_ready": {
+      "text": "System ready.",
+      "priority": "information"
+    },
+    "audio_link_lost": {
+      "text": "Audio link lost. Reconnecting.",
+      "priority": "recovery"
+    },
+    "audio_link_restored": {
+      "text": "Audio link restored.",
+      "priority": "information"
+    },
+    "microphone_unavailable": {
+      "text": "Microphone unavailable. Operator assistance is required.",
+      "priority": "recovery"
+    },
+    "camera_disconnected": {
+      "text": "Camera disconnected. The hand is paused.",
+      "priority": "recovery"
+    },
+    "reconnecting": {
+      "text": "Reconnecting. Please wait.",
+      "priority": "information"
+    },
+    "registration_focus_changed": {
+      "text": "{role}, please look at the camera and press the E key.",
+      "priority": "information"
+    },
+    "duplicate_face_rejected": {
+      "text": "This player is already registered as {existing_role}. A different player must register as {role}. Press the E key to try again.",
+      "priority": "recovery"
+    },
+    "enrollment_completed": {
+      "text": "{role} registration complete.",
+      "priority": "information"
+    },
+    "roster_ready": {
+      "text": "All four players are registered. Ready to start.",
+      "priority": "information"
+    },
+    "voice_enrollment_started": {
+      "text": "{role} voice enrollment. Say check, then pause.",
+      "priority": "information"
+    },
+    "voice_enrollment_sample_accepted": {
+      "text": "{phrase} accepted. Say {next_phrase}, then pause.",
+      "priority": "information"
+    },
+    "voice_enrollment_retry": {
+      "text": "Voice sample too short. Repeat word {phrase_number}, then pause.",
+      "priority": "information"
+    },
+    "voice_enrollment_completed": {
+      "text": "{role} voice enrollment complete.",
+      "priority": "information"
+    },
+    "voice_enrollment_cancelled": {
+      "text": "{role} voice enrollment cancelled.",
+      "priority": "information"
+    },
+    "dealing_hole_cards": {
+      "text": "Dealing hole cards.",
+      "priority": "information"
+    },
+    "blind_posted": {
+      "text": "{role} posts {amount_units}.",
+      "priority": "information"
+    },
+    "turn_started": {
+      "text": "{role} to act.",
+      "priority": "turn"
+    },
+    "action_pending_confirmation": {
+      "text": "{action} detected. Say confirm or cancel.",
+      "priority": "turn"
+    },
+    "action_committed": {
+      "text": "{role} {action}.",
+      "priority": "information"
+    },
+    "action_committed_with_amount": {
+      "text": "{role} {action} {amount_units}.",
+      "priority": "information"
+    },
+    "action_cancelled": {
+      "text": "Action cancelled.",
+      "priority": "information"
+    },
+    "command_not_understood": {
+      "text": "Command not understood. Please repeat.",
+      "priority": "information"
+    },
+    "illegal_action": {
+      "text": "That action is not legal. Please choose another action.",
+      "priority": "information"
+    },
+    "action_timeout": {
+      "text": "Action timed out. Operator assistance is required.",
+      "priority": "recovery"
+    },
+    "action_confirmation_timeout": {
+      "text": "Confirmation timed out. Please state your action again.",
+      "priority": "information"
+    },
+    "street_started": {
+      "text": "{street}.",
+      "priority": "information"
+    },
+    "dealing_flop": {
+      "text": "Dealing the flop.",
+      "priority": "information"
+    },
+    "dealing_turn": {
+      "text": "Dealing the turn.",
+      "priority": "information"
+    },
+    "dealing_river": {
+      "text": "Dealing the river.",
+      "priority": "information"
+    },
+    "card_unknown": {
+      "text": "Card not recognized. Operator assistance is required.",
+      "priority": "recovery"
+    },
+    "duplicate_card": {
+      "text": "Duplicate card detected. The hand is paused.",
+      "priority": "recovery"
+    },
+    "card_delivery_failed": {
+      "text": "Card delivery failed. The hand is paused.",
+      "priority": "recovery"
+    },
+    "showdown_started": {
+      "text": "Showdown.",
+      "priority": "information"
+    },
+    "pot_awarded": {
+      "text": "{winner} wins {amount_units}.",
+      "priority": "information"
+    },
+    "split_pot": {
+      "text": "The pot is split.",
+      "priority": "information"
+    },
+    "hand_completed": {
+      "text": "Hand complete.",
+      "priority": "information"
+    },
+    "hand_voided": {
+      "text": "The hand is void. Operator recovery is required.",
+      "priority": "recovery"
+    },
+    "hand_paused": {
+      "text": "The hand is paused. Operator assistance is required.",
+      "priority": "recovery"
+    },
+    "recovery_resumed": {
+      "text": "Recovery complete. Resuming the hand.",
+      "priority": "information"
+    },
+    "dealer_timeout": {
+      "text": "Dealer timeout. The hand is paused.",
+      "priority": "recovery"
+    },
+    "dealer_jam": {
+      "text": "Dealer jam detected. Keep clear and request operator assistance.",
+      "priority": "safety"
+    },
+    "table_not_clear": {
+      "text": "Clear the table before the next hand.",
+      "priority": "recovery"
+    },
+    "operator_adjustment": {
+      "text": "Operator adjustment recorded.",
+      "priority": "information"
+    },
+    "rebuy_confirmed": {
+      "text": "{role} rebuy confirmed.",
+      "priority": "information"
+    },
+    "next_hand_ready": {
+      "text": "Ready for the next hand.",
+      "priority": "information"
+    },
+    "safety_stop": {
+      "text": "Safety stop. Keep clear of the robot.",
+      "priority": "safety"
+    },
+    "session_completed": {
+      "text": "Session complete.",
+      "priority": "information"
+    }
+  }
+}

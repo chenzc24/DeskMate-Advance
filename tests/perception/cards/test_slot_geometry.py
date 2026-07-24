@@ -10,6 +10,9 @@ from poker_dealer.perception.cards import (
 
 CONFIG = Path("configs/perception/card_slots_development_v1.json")
 LAPTOP_CONFIG = Path("configs/perception/card_slots_laptop_development_v1.json")
+ROBOT_VIEW_CYCLE_CONFIG = Path(
+    "configs/perception/card_view_cycle_robot_development_v1.json"
+)
 
 
 def test_geometry_defines_all_thirteen_slots_and_is_not_target_validated() -> None:
@@ -21,6 +24,13 @@ def test_geometry_defines_all_thirteen_slots_and_is_not_target_validated() -> No
     assert set(laptop.slots) == set(VisionSlot)
     assert laptop.calibration_id == "laptop-13-slot-development-v1"
     assert laptop.target_geometry_validated is False
+
+
+def test_robot_view_cycle_uses_full_frame_without_pixel_rois() -> None:
+    geometry = CardSlotGeometryConfig.from_json(ROBOT_VIEW_CYCLE_CONFIG)
+    assert geometry.binding_mode == "state_directed_full_frame"
+    assert geometry.slots == {}
+    assert geometry.target_geometry_validated is False
 
 
 def test_multi_card_binding_is_one_to_one_and_rejects_same_slot_collision() -> None:

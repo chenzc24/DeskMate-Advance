@@ -26,8 +26,8 @@
     "speaker_config": "configs/perception/speaker_verification_session.json",
     "attribution_config": "configs/perception/actor_binding_session.json",
     "card_config": "configs/perception/cards_lgd_pilot.json",
-    "card_geometry_config": "configs/perception/card_slots_development_v1.json",
-    "calibration_id": "robot-camera-target-geometry-pending-v1",
+    "card_geometry_config": "configs/perception/card_view_cycle_robot_development_v1.json",
+    "calibration_id": "robot-state-directed-full-frame-development-v1",
     "target_geometry_validated": false
   },
   "controls": ["laptop_keyboard"],

@@ -5,10 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 import time
 
-from poker_dealer.domain import SEAT_ORDER
+from poker_dealer.domain import SEAT_ORDER, role_seats
 
-from .live_perception import InteractiveOpenCVFrameSource, LiveKeyboardControlSource
-from .ports import FrameReadState
+from .live_perception import InteractiveOpenCVFrameSource
+from .ports import ControlSource, FrameReadState
 from .session_control import (
     SessionOperatorController,
     SessionOperatorOutcome,
@@ -27,10 +27,15 @@ class LiveSessionOperatorUI:
     def __init__(
         self,
         frame_source: InteractiveOpenCVFrameSource,
-        control_source: LiveKeyboardControlSource,
+        control_source: ControlSource,
+        *,
+        state_observer: object | None = None,
+        event_announcer: object | None = None,
     ) -> None:
         self.frame_source = frame_source
         self.control_source = control_source
+        self.state_observer = state_observer
+        self.event_announcer = event_announcer
 
     def wait_for_decision(
         self,
@@ -49,6 +54,16 @@ class LiveSessionOperatorUI:
         )
         last_reason = "waiting_for_operator"
         while deadline is None or time.monotonic_ns() < deadline:
+            if self.state_observer is not None:
+                publish = getattr(self.state_observer, "publish_session_state", None)
+                if publish is not None:
+                    publish(
+                        session,
+                        last_reason=last_reason,
+                        stop_after_clear=stop_after_clear,
+                        selected_seat=controller.selected_low_stack_seat,
+                        selected_slot=controller.selected_conflict_slot,
+                    )
             self.frame_source.set_status(
                 *self._status_lines(
                     session, controller, last_reason, stop_after_clear=stop_after_clear
@@ -60,6 +75,7 @@ class LiveSessionOperatorUI:
             for control in self.control_source.poll_controls(read.observed_at_ns):
                 outcome = controller.accept(control)
                 last_reason = outcome.reason
+                self._announce_outcome(session, outcome)
                 if outcome.accepted and outcome.reason == "table_cleared" and stop_after_clear:
                     session.end_session(
                         operator_id=controller.operator_id,
@@ -72,6 +88,37 @@ class LiveSessionOperatorUI:
                 if outcome.accepted and outcome.signal is not SessionOperatorSignal.CONTINUE_WAITING:
                     return LiveSessionBoundaryResult(outcome.signal, outcome.reason)
         raise TimeoutError("session operator decision deadline expired")
+
+    def _announce_outcome(
+        self,
+        session: SessionRuntime,
+        outcome: SessionOperatorOutcome,
+    ) -> None:
+        if not outcome.accepted or self.event_announcer is None:
+            return
+        publish = getattr(self.event_announcer, "publish", None)
+        if publish is None:
+            return
+        if outcome.reason == "table_cleared":
+            publish(
+                "next_hand_ready"
+                if not session.low_stack_seats
+                else "operator_adjustment"
+            )
+        elif outcome.reason == "rebuy_applied" and outcome.selected_seat is not None:
+            roles = {
+                seat: role.value for role, seat in role_seats(session.button).items()
+            }
+            publish(
+                "rebuy_confirmed",
+                role=roles[outcome.selected_seat],
+            )
+        elif outcome.reason == "slot_reconciled":
+            publish("operator_adjustment")
+        elif outcome.reason == "hand_retry_started":
+            publish("recovery_resumed")
+        elif outcome.reason == "hand_voided":
+            publish("hand_voided")
 
     @staticmethod
     def _status_lines(

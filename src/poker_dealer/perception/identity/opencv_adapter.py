@@ -44,6 +44,14 @@ class FaceFrameEvidence:
     inference_latency_ms: float
 
 
+@dataclass(frozen=True, slots=True)
+class FacePreviewEvidence:
+    observed_at_ns: int
+    detected_face_count: int
+    boxes_xywh: tuple[tuple[int, int, int, int], ...]
+    inference_latency_ms: float
+
+
 class FaceIdentityModelError(RuntimeError):
     """Raised when local face detection/embedding cannot run."""
 
@@ -125,5 +133,35 @@ class OpenCvFaceIdentityAdapter:
             detected_face_count=int(len(faces)),
             low_quality_face_count=low_quality,
             features=tuple(features),
+            inference_latency_ms=(time.perf_counter_ns() - started_ns) / 1_000_000,
+        )
+
+    def preview(self, frame: FramePacket) -> FacePreviewEvidence:
+        """Detect face boxes for live UI guidance without computing embeddings."""
+
+        if frame.color_space is not ColorSpace.BGR:
+            raise FaceIdentityModelError("face adapter requires a BGR FramePacket")
+        image = np.asarray(frame.image)
+        if image.dtype != np.uint8 or image.ndim != 3 or image.shape[2] != 3:
+            raise FaceIdentityModelError("face adapter requires HxWx3 uint8 input")
+        height, width = image.shape[:2]
+        started_ns = time.perf_counter_ns()
+        try:
+            self._detector.setInputSize((width, height))
+            _retval, faces = self._detector.detect(image)
+        except cv2.error as exc:
+            raise FaceIdentityModelError(f"face detection failed: {exc}") from exc
+        boxes = (
+            ()
+            if faces is None
+            else tuple(
+                tuple(int(max(0, value)) for value in face[:4])
+                for face in faces
+            )
+        )
+        return FacePreviewEvidence(
+            observed_at_ns=frame.captured_at_ns,
+            detected_face_count=len(boxes),
+            boxes_xywh=boxes,
             inference_latency_ms=(time.perf_counter_ns() - started_ns) / 1_000_000,
         )

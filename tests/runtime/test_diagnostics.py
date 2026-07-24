@@ -155,7 +155,9 @@ def test_formal_replay_cli_places_audited_logs_in_diagnostics_bundle(
     summary = json.loads((bundle / "summary.json").read_text(encoding="utf-8"))
     assert summary["status"] == "passed"
     assert summary["result"]["session_log_check_passed"] is True
-    assert summary["metrics"]["runtime_step_duration"]["count"] == 111
+    # Eight hole-card visual-confirmation steps were removed: each sensor-valid
+    # dispense ACK now atomically records one face-down logical slot.
+    assert summary["metrics"]["runtime_step_duration"]["count"] == 103
     returned = tmp_path / "returned-bundle"
     shutil.copytree(bundle, returned)
     assert check_diagnostic_bundle(returned).passed

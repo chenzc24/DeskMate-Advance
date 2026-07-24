@@ -18,6 +18,7 @@ class ControlIntent(StrEnum):
 class ControlSource(StrEnum):
     LAPTOP_KEYBOARD = "laptop_keyboard"
     ROBOT_BUTTON = "robot_button"
+    WEB_CONSOLE = "web_console"
     SIMULATOR = "simulator"
 
 

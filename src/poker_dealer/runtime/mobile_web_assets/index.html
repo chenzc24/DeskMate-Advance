@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#10130e">
+    <title>Poker Dealer Console</title>
+    <link rel="stylesheet" href="/assets/styles.css">
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">POKER DEALER</p>
+          <h1 id="consoleTitle">Player registration</h1>
+        </div>
+        <div class="links">
+          <button id="voiceToggle" class="voice-toggle" type="button">Phone voice on</button>
+          <span id="cameraStatus" class="status"><i></i> Camera</span>
+          <span id="micStatus" class="status"><i></i> Mic</span>
+          <span id="linkStatus" class="status warning"><i></i> Connecting</span>
+        </div>
+      </header>
+
+      <section class="workspace">
+        <article class="video-card">
+          <div class="video-stage" id="videoStage">
+            <img id="video" src="/video.mjpeg" alt="Live dealer camera">
+            <div id="faceLayer" class="face-layer"></div>
+            <div class="live-pill"><i></i> LIVE · NO RECORDING</div>
+            <div id="faceStatus" class="face-message">Waiting for camera</div>
+          </div>
+        </article>
+
+        <aside class="side-card">
+          <p class="eyebrow">CURRENT STATE</p>
+          <div class="step-row">
+            <span id="stepNumber" class="step-number">1</span>
+            <div class="board-block">
+              <h2 id="stepTitle">Starting</h2>
+              <p id="stepDetail">Waiting for registration state.</p>
+            </div>
+          </div>
+
+          <div class="player-card registration-only">
+            <span class="label">CURRENT PLAYER</span>
+            <strong id="role">Button</strong>
+            <small id="seat">Seat —</small>
+          </div>
+
+          <div class="progress-block face-progress registration-only">
+            <div class="progress-label">
+              <span>Face samples</span><b id="faceCount">0 / 0</b>
+            </div>
+            <div class="track"><span id="faceProgress"></span></div>
+          </div>
+
+          <div class="progress-block voice-progress registration-only">
+            <div class="progress-label">
+              <span>Voice samples</span><b id="voiceCount">0 / 0</b>
+            </div>
+            <div class="track"><span id="voiceProgress"></span></div>
+          </div>
+
+          <div class="progress-block mic-progress registration-only">
+            <div class="progress-label">
+              <span>AudioRelay input</span><b id="micLevelText">Waiting</b>
+            </div>
+            <div class="track mic-track"><span id="micLevel"></span></div>
+          </div>
+
+          <div id="alert" class="alert" hidden>
+            <strong id="alertTitle"></strong>
+            <span id="alertDetail"></span>
+          </div>
+
+          <div class="roster-block registration-only">
+            <p class="label">REGISTRATION ROSTER</p>
+            <div id="roster" class="roster"></div>
+          </div>
+
+          <div id="gamePanel" class="game-panel" hidden>
+            <div class="game-summary">
+              <div><span class="label">STREET</span><strong id="gameStreet">—</strong></div>
+              <div><span class="label">POT</span><strong id="gamePot">0</strong></div>
+              <div><span class="label">ACTING</span><strong id="gameActing">—</strong></div>
+              <div><span class="label">TARGET</span><strong id="gameTarget">—</strong></div>
+            </div>
+            <div class="ledger-block">
+              <p class="label">BOARD</p>
+              <div id="boardCards" class="board-cards"></div>
+            </div>
+            <div>
+              <p class="label">PLAYERS &amp; DIGITAL LEDGER</p>
+              <div id="playerLedger" class="player-ledger"></div>
+            </div>
+            <div id="legalActionsBlock" class="legal-actions-block">
+              <p class="label">LEGAL ACTIONS</p>
+              <div id="legalActions" class="legal-actions"></div>
+            </div>
+          </div>
+        </aside>
+      </section>
+
+      <section class="control-card">
+        <div>
+          <p class="eyebrow">TOUCH CONTROLS</p>
+          <p id="feedback" class="feedback">Connecting to Windows…</p>
+        </div>
+        <div class="controls">
+          <button data-intent="confirm" class="primary"><kbd>E</kbd><span id="confirmLabel">Confirm</span></button>
+          <button data-intent="cancel"><kbd>⌫</kbd><span>Cancel</span></button>
+          <button data-intent="start"><kbd>S</kbd><span id="startLabel">Start</span></button>
+          <button data-intent="previous_option"><kbd>P</kbd><span>Previous</span></button>
+          <button data-intent="next_option"><kbd>N</kbd><span>Next</span></button>
+          <button data-intent="repeat_prompt"><kbd>R</kbd><span>Replay</span></button>
+          <button data-intent="clear" data-confirm="Apply this destructive clear or void action?"><kbd>X</kbd><span id="clearLabel">Clear / Void</span></button>
+          <button data-intent="quit" data-confirm="Exit the dealer runtime?"><kbd>Q</kbd><span>Exit</span></button>
+        </div>
+      </section>
+    </main>
+
+    <dialog id="confirmDialog">
+      <form method="dialog">
+        <p class="eyebrow">CONFIRM ACTION</p>
+        <h2 id="confirmText">Continue?</h2>
+        <div class="dialog-actions">
+          <button value="cancel">Cancel</button>
+          <button id="confirmButton" value="confirm" class="danger">Confirm</button>
+        </div>
+      </form>
+    </dialog>
+    <script src="/assets/app.js" defer></script>
+  </body>
+</html>

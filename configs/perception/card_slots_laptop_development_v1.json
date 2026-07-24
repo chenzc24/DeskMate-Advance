@@ -2,6 +2,7 @@
   "schema_version": "1.0",
   "calibration_id": "laptop-13-slot-development-v1",
   "target_geometry_validated": false,
+  "binding_mode": "fixed_slot_rois",
   "slots": {
     "board_flop_1": {"x_min": 0.28, "y_min": 0.43, "x_max": 0.36, "y_max": 0.58},
     "board_flop_2": {"x_min": 0.38, "y_min": 0.43, "x_max": 0.46, "y_max": 0.58},

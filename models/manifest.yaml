@@ -1,9 +1,9 @@
 {
   "schema_version": "1.0",
-  "updated_on": "2026-07-23",
+  "updated_on": "2026-07-24",
   "asset_root": "models/assets",
   "runtime_downloads_allowed": false,
-  "notes": "No Poker Dealer model is admitted for release. The frozen card-recognition v2 checkpoint is a non-runtime-selected candidate; MediaPipe gesture/pose, Vosk English/speaker verification, YuNet face detection, SFace embedding, the untrained landmark TCN draft, the LGD card baseline, chip localization and the fixed-design chip denomination templates remain development-only feasibility evidence.",
+  "notes": "No Poker Dealer model is admitted for release without the required held-out metrics. The operational MediaPipe gesture/pose, Vosk English/speaker verification, YuNet and SFace assets are now selectively visible for Git LFS packaging but remain development runtime components until their admission blockers are closed. The frozen card-recognition v2 checkpoint remains a candidate under debugging; both card-recognition asset families remain tracked and are not re-ignored.",
   "models": [
     {
       "model_id": "player-action-mediapipe-canned-gesture",

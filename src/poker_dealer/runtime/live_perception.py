@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import ctypes
 from dataclasses import dataclass, replace
 from pathlib import Path
 import queue
 import time
 from typing import Mapping
+
+import numpy as np
 
 from poker_dealer.domain import (
     ActionEvidenceState,
@@ -55,6 +58,7 @@ from poker_dealer.perception.cards import (
     crop_fixed_card_roi,
 )
 from poker_dealer.perception.identity import (
+    DuplicateFaceEnrollmentError,
     FaceIdentityConfig,
     FaceIdentityContext,
     FaceIdentityObservation,
@@ -65,6 +69,7 @@ from poker_dealer.perception.identity import (
 )
 
 from .announcer import SpeechPlaybackGate
+from .audio_input import AudioInputHealth, StreamingPcm16Resampler
 from .ports import (
     ActionEvidence,
     ControlSource,
@@ -105,13 +110,38 @@ class LivePerceptionConfig:
     consent_confirmed: bool
     speech_enabled: bool
     speech_device: int | str | None
+    speech_capture_sample_rate_hz: int | None
     runtime_calibration_id: str
     target_geometry_validated: bool = False
-    operator_face_down_confirmation: bool = True
 
     def __post_init__(self) -> None:
         if not self.runtime_calibration_id.strip():
             raise ValueError("runtime calibration ID is required")
+        if (
+            self.speech_capture_sample_rate_hz is not None
+            and self.speech_capture_sample_rate_hz <= 0
+        ):
+            raise ValueError("speech capture sample rate must be positive")
+
+
+@dataclass(frozen=True, slots=True)
+class RegistrationUiState:
+    phase: str
+    role: str
+    seat: str
+    completed_roles: tuple[str, ...]
+    face_samples: int
+    face_target: int
+    voice_samples: int
+    voice_target: int
+    voice_active: bool
+    prompt_playing: bool
+    speech_enabled: bool
+    alert_title: str | None
+    alert_detail: str | None
+    microphone_live: bool = False
+    microphone_level: float = 0.0
+    microphone_callback_blocks: int = 0
 
 
 def validate_live_perception_assets(
@@ -143,11 +173,24 @@ def validate_live_perception_assets(
         "gesture_hash": gesture_hash,
         "pose_hash": attribution.pose_asset_sha256,
         "card_hashes": list(card_hashes),
+        "card_binding_mode": geometry.binding_mode,
+        "logical_card_slot_count": len(VisionSlot),
+        "card_pixel_roi_count": len(geometry.slots),
         "card_slot_count": len(geometry.slots),
         "card_geometry_calibration_id": geometry.calibration_id,
         "card_target_geometry_validated": geometry.target_geometry_validated,
         "speech_hash": speech_hash,
         "speaker_hash": speaker_hash,
+        "speech_capture_sample_rate_hz": (
+            config.speech_capture_sample_rate_hz
+            or int(speech.audio["sample_rate_hz"])
+        ),
+        "speech_model_sample_rate_hz": int(speech.audio["sample_rate_hz"]),
+        "speech_resampling_enabled": (
+            config.speech_capture_sample_rate_hz is not None
+            and config.speech_capture_sample_rate_hz
+            != int(speech.audio["sample_rate_hz"])
+        ),
         "runtime_calibration_id": config.runtime_calibration_id,
         "runtime_downloads": False,
         "frames_saved": False,
@@ -164,14 +207,20 @@ class InteractiveOpenCVFrameSource:
         *,
         display: bool = True,
         window_name: str = "Poker Dealer - Unified Live Runtime",
+        registration_observer: object | None = None,
     ) -> None:
         self.camera = camera
         self.display = display
         self.window_name = window_name
+        self.registration_observer = registration_observer
         self.camera_epoch = 0
         self._last_key: int | None = None
         self._quit = False
         self._status_lines: tuple[str, ...] = ()
+        self._registration_ui: RegistrationUiState | None = None
+        self._face_boxes: tuple[tuple[int, int, int, int], ...] = ()
+        self._face_status: str | None = None
+        self._window_initialized = False
 
     def open(self) -> None:
         if not self.camera.is_open:
@@ -180,7 +229,64 @@ class InteractiveOpenCVFrameSource:
     def set_status(self, *lines: str) -> None:
         self._status_lines = tuple(line for line in lines if line)
 
+    def set_registration_status(
+        self,
+        *,
+        phase: str,
+        role: str,
+        seat: str,
+        completed_roles: tuple[str, ...],
+        face_samples: int,
+        face_target: int,
+        voice_samples: int,
+        voice_target: int,
+        voice_active: bool,
+        prompt_playing: bool,
+        speech_enabled: bool,
+        alert_title: str | None,
+        alert_detail: str | None,
+        microphone_live: bool = False,
+        microphone_level: float = 0.0,
+        microphone_callback_blocks: int = 0,
+    ) -> None:
+        self._registration_ui = RegistrationUiState(
+            phase=phase,
+            role=role,
+            seat=seat,
+            completed_roles=completed_roles,
+            face_samples=face_samples,
+            face_target=face_target,
+            voice_samples=voice_samples,
+            voice_target=voice_target,
+            voice_active=voice_active,
+            prompt_playing=prompt_playing,
+            speech_enabled=speech_enabled,
+            alert_title=alert_title,
+            alert_detail=alert_detail,
+            microphone_live=microphone_live,
+            microphone_level=microphone_level,
+            microphone_callback_blocks=microphone_callback_blocks,
+        )
+        observer = self.registration_observer
+        if observer is not None:
+            observer.publish_registration_status(self._registration_ui)
+
+    def set_face_detections(
+        self,
+        boxes: tuple[tuple[int, int, int, int], ...],
+        *,
+        status: str | None,
+    ) -> None:
+        self._face_boxes = boxes
+        self._face_status = status
+        observer = self.registration_observer
+        if observer is not None:
+            observer.publish_face_detections(boxes, status=status)
+
     def read(self) -> FrameRead:
+        observer = self.registration_observer
+        if observer is not None and observer.consume_quit_request():
+            self._quit = True
         if self._quit:
             return FrameRead(
                 FrameReadState.DISCONNECTED,
@@ -196,24 +302,25 @@ class InteractiveOpenCVFrameSource:
             CameraReadStatus.MISSING: FrameReadState.MISSING,
             CameraReadStatus.DISCONNECTED: FrameReadState.DISCONNECTED,
         }[read.status]
+        if state is FrameReadState.OK and read.frame is not None:
+            if observer is not None:
+                observer.publish_frame(
+                    read.frame.image,
+                    observed_at_ns=read.observed_at_ns,
+                )
         if state is FrameReadState.OK and read.frame is not None and self.display:
             if cv2 is None:
                 raise RuntimeError("OpenCV UI is unavailable")
-            display = read.frame.image.copy()
-            for index, line in enumerate(self._status_lines):
-                cv2.putText(
-                    display,
-                    line,
-                    (18, 30 + index * 28),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.62,
-                    (255, 255, 255),
-                    2,
-                )
+            display = self._render_display(read.frame.image)
+            self._ensure_window()
             cv2.imshow(self.window_name, display)
             key = cv2.waitKey(1) & 0xFF
             self._last_key = None if key == 255 else key
             if self._last_key in (ord("q"), 27):
+                self._quit = True
+            elif cv2.getWindowProperty(
+                self.window_name, cv2.WND_PROP_VISIBLE
+            ) < 1:
                 self._quit = True
         return FrameRead(
             state,
@@ -221,6 +328,429 @@ class InteractiveOpenCVFrameSource:
             read.frame,
             self.camera_epoch,
             read.reason,
+        )
+
+    def _render_display(self, image: np.ndarray) -> np.ndarray:
+        if self._registration_ui is not None:
+            return self._render_registration_dashboard(
+                image, self._registration_ui
+            )
+        display = image.copy()
+        for index, line in enumerate(self._status_lines):
+            cv2.putText(
+                display,
+                line,
+                (18, 30 + index * 28),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.62,
+                (255, 255, 255),
+                2,
+                cv2.LINE_AA,
+            )
+        return display
+
+    def _render_registration_dashboard(
+        self,
+        image: np.ndarray,
+        state: RegistrationUiState,
+    ) -> np.ndarray:
+        canvas_width, canvas_height = 1280, 720
+        background = (22, 18, 14)
+        panel = (34, 29, 24)
+        panel_light = (44, 38, 31)
+        border = (68, 59, 49)
+        text = (238, 238, 235)
+        muted = (157, 157, 151)
+        accent = (184, 213, 55)
+        accent_soft = (92, 102, 40)
+        success = (137, 214, 92)
+        canvas = np.full(
+            (canvas_height, canvas_width, 3), background, dtype=np.uint8
+        )
+
+        self._text(canvas, "POKER DEALER", (28, 37), 0.52, accent, 1)
+        self._text(canvas, "PLAYER REGISTRATION", (28, 70), 0.94, text, 2)
+        self._text(
+            canvas, "Face + voice enrollment", (358, 67), 0.5, muted, 1
+        )
+        cv2.circle(canvas, (1012, 46), 6, success, -1, cv2.LINE_AA)
+        self._text(canvas, "CAMERA LIVE", (1027, 52), 0.42, text, 1)
+        mic_color = success if state.speech_enabled else muted
+        cv2.circle(canvas, (1141, 46), 6, mic_color, -1, cv2.LINE_AA)
+        self._text(
+            canvas,
+            "MIC ON" if state.speech_enabled else "MIC OFF",
+            (1156, 52),
+            0.42,
+            text if state.speech_enabled else muted,
+            1,
+        )
+
+        video_x, video_y, video_w, video_h = 28, 86, 844, 552
+        cv2.rectangle(
+            canvas,
+            (video_x - 2, video_y - 2),
+            (video_x + video_w + 2, video_y + video_h + 2),
+            border,
+            2,
+            cv2.LINE_AA,
+        )
+        cv2.rectangle(
+            canvas,
+            (video_x, video_y),
+            (video_x + video_w, video_y + video_h),
+            panel,
+            -1,
+        )
+        image_height, image_width = image.shape[:2]
+        scale = min(video_w / image_width, video_h / image_height)
+        scaled_width = max(1, int(round(image_width * scale)))
+        scaled_height = max(1, int(round(image_height * scale)))
+        resized = cv2.resize(
+            image,
+            (scaled_width, scaled_height),
+            interpolation=cv2.INTER_AREA if scale < 1.0 else cv2.INTER_LINEAR,
+        )
+        image_x = video_x + (video_w - scaled_width) // 2
+        image_y = video_y + (video_h - scaled_height) // 2
+        canvas[
+            image_y : image_y + scaled_height,
+            image_x : image_x + scaled_width,
+        ] = resized
+        for x, y, width, height in self._face_boxes:
+            x1 = image_x + int(round(x * scale))
+            y1 = image_y + int(round(y * scale))
+            x2 = image_x + int(round((x + width) * scale))
+            y2 = image_y + int(round((y + height) * scale))
+            cv2.rectangle(canvas, (x1, y1), (x2, y2), accent, 3, cv2.LINE_AA)
+            label = self._face_status or "FACE DETECTED"
+            label_width = min(max(150, 10 + len(label) * 10), max(150, x2 - x1))
+            label_y = max(image_y + 26, y1)
+            cv2.rectangle(
+                canvas,
+                (x1, label_y - 25),
+                (x1 + label_width, label_y),
+                accent,
+                -1,
+            )
+            self._text(
+                canvas,
+                label,
+                (x1 + 7, label_y - 7),
+                0.42,
+                background,
+                1,
+            )
+        cv2.rectangle(
+            canvas,
+            (video_x + 16, video_y + 16),
+            (video_x + 188, video_y + 47),
+            panel,
+            -1,
+        )
+        cv2.circle(canvas, (video_x + 31, video_y + 31), 5, success, -1)
+        self._text(
+            canvas,
+            "LIVE  /  NO RECORDING",
+            (video_x + 43, video_y + 37),
+            0.38,
+            text,
+            1,
+        )
+
+        side_x, side_y, side_w, side_h = 896, 86, 356, 552
+        cv2.rectangle(
+            canvas,
+            (side_x, side_y),
+            (side_x + side_w, side_y + side_h),
+            panel,
+            -1,
+        )
+        cv2.rectangle(
+            canvas,
+            (side_x, side_y),
+            (side_x + side_w, side_y + side_h),
+            border,
+            1,
+            cv2.LINE_AA,
+        )
+        stage, instruction, detail, stage_color = self._registration_copy(state)
+        cv2.rectangle(
+            canvas,
+            (side_x + 22, side_y + 22),
+            (side_x + side_w - 22, side_y + 58),
+            stage_color,
+            -1,
+        )
+        self._text(
+            canvas, stage, (side_x + 36, side_y + 47), 0.5, background, 2
+        )
+        self._text(
+            canvas, "CURRENT PLAYER", (side_x + 22, side_y + 94), 0.39, muted, 1
+        )
+        role_label = state.role.replace("_", " ").upper()
+        self._text(canvas, role_label, (side_x + 22, side_y + 133), 0.8, text, 2)
+        self._text(
+            canvas,
+            state.seat.replace("_", " ").upper(),
+            (side_x + side_w - 104, side_y + 130),
+            0.43,
+            muted,
+            1,
+        )
+        cv2.line(
+            canvas,
+            (side_x + 22, side_y + 154),
+            (side_x + side_w - 22, side_y + 154),
+            border,
+            1,
+        )
+        self._text(
+            canvas, "CURRENT STEP", (side_x + 22, side_y + 188), 0.39, muted, 1
+        )
+        self._text(
+            canvas, instruction, (side_x + 22, side_y + 226), 0.66, text, 2
+        )
+        self._text(canvas, detail, (side_x + 22, side_y + 256), 0.43, muted, 1)
+
+        if state.voice_active:
+            progress_value, progress_total = state.voice_samples, state.voice_target
+        else:
+            progress_value, progress_total = state.face_samples, state.face_target
+        self._progress_bar(
+            canvas,
+            (side_x + 22, side_y + 278),
+            side_w - 44,
+            progress_value,
+            progress_total,
+            accent,
+            panel_light,
+        )
+        self._text(
+            canvas,
+            f"{progress_value} / {progress_total}",
+            (side_x + side_w - 70, side_y + 310),
+            0.4,
+            muted,
+            1,
+        )
+
+        self._text(
+            canvas, "TABLE ROSTER", (side_x + 22, side_y + 332), 0.39, muted, 1
+        )
+        roles = (
+            ("button", "BTN"),
+            ("small_blind", "SB"),
+            ("big_blind", "BB"),
+            ("under_the_gun", "UTG"),
+        )
+        for index, (role, short_label) in enumerate(roles):
+            row_y = side_y + 354 + index * 45
+            completed = role in state.completed_roles
+            current = role == state.role
+            row_color = panel_light if not current else accent_soft
+            cv2.rectangle(
+                canvas,
+                (side_x + 22, row_y),
+                (side_x + side_w - 22, row_y + 36),
+                row_color,
+                -1,
+            )
+            dot_color = success if completed else accent if current else muted
+            cv2.circle(canvas, (side_x + 41, row_y + 18), 6, dot_color, -1)
+            self._text(
+                canvas,
+                short_label,
+                (side_x + 58, row_y + 24),
+                0.47,
+                text,
+                1,
+            )
+            status = "COMPLETE" if completed else "ACTIVE" if current else "PENDING"
+            self._text(
+                canvas,
+                status,
+                (side_x + side_w - 102, row_y + 24),
+                0.37,
+                dot_color,
+                1,
+            )
+
+        footer_y = 666
+        self._text(canvas, "CONTROLS", (28, footer_y + 25), 0.4, muted, 1)
+        controls = (
+            ("E", "Capture face"),
+            ("S", "Start session"),
+            ("X", "Clear roster"),
+            ("Q", "Quit"),
+        )
+        enabled_controls = {
+            "E": (
+                state.phase == RegistrationPhase.READY_FOR_FACE.value
+                and not state.voice_active
+            ),
+            "S": (
+                state.phase == RegistrationPhase.READY_TO_START.value
+                and not state.voice_active
+            ),
+            "X": state.phase != RegistrationPhase.STARTED.value,
+            "Q": True,
+        }
+        cursor_x = 126
+        for key, label in controls:
+            cv2.rectangle(
+                canvas,
+                (cursor_x, footer_y),
+                (cursor_x + 34, footer_y + 34),
+                panel_light,
+                -1,
+            )
+            cv2.rectangle(
+                canvas,
+                (cursor_x, footer_y),
+                (cursor_x + 34, footer_y + 34),
+                border,
+                1,
+            )
+            control_color = accent if enabled_controls[key] else muted
+            self._text(
+                canvas,
+                key,
+                (cursor_x + 11, footer_y + 24),
+                0.48,
+                control_color,
+                2,
+            )
+            self._text(
+                canvas,
+                label,
+                (cursor_x + 45, footer_y + 24),
+                0.43,
+                text if enabled_controls[key] else muted,
+                1,
+            )
+            cursor_x += 196 if key != "S" else 210
+        self._text(
+            canvas,
+            "ESC also quits",
+            (canvas_width - 125, footer_y + 24),
+            0.36,
+            muted,
+            1,
+        )
+        return canvas
+
+    def _ensure_window(self) -> None:
+        if self._window_initialized:
+            return
+        cv2.namedWindow(
+            self.window_name,
+            cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO,
+        )
+        initial_width, initial_height = 1280, 720
+        try:
+            screen_width = int(ctypes.windll.user32.GetSystemMetrics(0))
+            screen_height = int(ctypes.windll.user32.GetSystemMetrics(1))
+            scale = min(
+                1.0,
+                max(0.5, (screen_width - 80) / initial_width),
+                max(0.5, (screen_height - 140) / initial_height),
+            )
+            initial_width = int(round(initial_width * scale))
+            initial_height = int(round(initial_height * scale))
+        except (AttributeError, OSError, ValueError):
+            pass
+        cv2.resizeWindow(self.window_name, initial_width, initial_height)
+        self._window_initialized = True
+
+    def _registration_copy(
+        self,
+        state: RegistrationUiState,
+    ) -> tuple[str, str, str, tuple[int, int, int]]:
+        phrases = ("CHECK", "CALL", "RAISE")
+        if state.alert_title is not None:
+            return (
+                "DUPLICATE PLAYER",
+                state.alert_title,
+                state.alert_detail or "Press E to try again",
+                (79, 181, 246),
+            )
+        if state.voice_active:
+            if state.prompt_playing:
+                return (
+                    "PLAYING PROMPT",
+                    "Listen to the prompt",
+                    "The microphone will resume automatically",
+                    (79, 181, 246),
+                )
+            phrase_index = min(state.voice_samples, len(phrases) - 1)
+            return (
+                "RECORDING VOICE",
+                f"Say {phrases[phrase_index]}",
+                "Speak clearly, then pause",
+                (184, 213, 55),
+            )
+        if state.phase == RegistrationPhase.CAPTURING_FACE.value:
+            return (
+                "CAPTURING FACE",
+                "Look at the camera",
+                self._face_status or "Keep one face centered and hold still",
+                (184, 213, 55),
+            )
+        if state.phase == RegistrationPhase.READY_TO_START.value:
+            return (
+                "ROSTER READY",
+                "Press S to continue",
+                "All four players are registered",
+                (137, 214, 92),
+            )
+        return (
+            "READY FOR FACE",
+            "Press E to begin",
+            self._face_status or "Look at the camera before you start",
+            (137, 214, 92),
+        )
+
+    @staticmethod
+    def _progress_bar(
+        canvas: np.ndarray,
+        origin: tuple[int, int],
+        width: int,
+        value: int,
+        total: int,
+        foreground: tuple[int, int, int],
+        background: tuple[int, int, int],
+    ) -> None:
+        x, y = origin
+        cv2.rectangle(canvas, (x, y), (x + width, y + 10), background, -1)
+        ratio = min(1.0, max(0.0, value / max(1, total)))
+        if ratio > 0:
+            cv2.rectangle(
+                canvas,
+                (x, y),
+                (x + int(round(width * ratio)), y + 10),
+                foreground,
+                -1,
+            )
+
+    @staticmethod
+    def _text(
+        canvas: np.ndarray,
+        value: str,
+        origin: tuple[int, int],
+        scale: float,
+        color: tuple[int, int, int],
+        thickness: int,
+    ) -> None:
+        cv2.putText(
+            canvas,
+            value,
+            origin,
+            cv2.FONT_HERSHEY_SIMPLEX,
+            scale,
+            color,
+            thickness,
+            cv2.LINE_AA,
         )
 
     def consume_key(self, *keys: int) -> int | None:
@@ -234,8 +764,12 @@ class InteractiveOpenCVFrameSource:
         return self._last_key
 
     def close(self) -> None:
-        if self.display and cv2 is not None:
-            cv2.destroyWindow(self.window_name)
+        if self.display and cv2 is not None and self._window_initialized:
+            try:
+                cv2.destroyWindow(self.window_name)
+            except cv2.error:
+                pass
+            self._window_initialized = False
 
 
 class LiveKeyboardControlSource:
@@ -331,8 +865,25 @@ class LivePerceptionSession:
             maxsize=int(self.speech_config.audio["queue_max_blocks"])
         )
         self._audio_stream = None
+        self._audio_event_sink: RuntimeEventSink | None = None
+        self._audio_health = AudioInputHealth()
+        self._audio_disconnected = False
+        self._audio_unavailable_reported = False
+        self._audio_last_reconnect_attempt_ns: int | None = None
+        self._audio_last_status_events = 0
+        self._audio_stale_after_ms = 2000
+        self._audio_reconnect_cooldown_ms = 2000
+        self._audio_capture_rate_hz = (
+            config.speech_capture_sample_rate_hz
+            or int(self.speech_config.audio["sample_rate_hz"])
+        )
+        self._audio_resampler = StreamingPcm16Resampler(
+            self._audio_capture_rate_hz,
+            int(self.speech_config.audio["sample_rate_hz"]),
+        )
         self._speech_playback_gate = speech_playback_gate
         self._speech_was_suppressed = False
+        self._last_speech_feedback_ns: int | None = None
         self._speech_recognizer: VoskSpeechRecognizer | None = None
         self._speech_adapter = SpeechObservationAdapter(self.speech_config)
         self._speech_confirmation = SpeechConfirmationController(
@@ -363,27 +914,69 @@ class LivePerceptionSession:
             self._speech_recognizer = VoskSpeechRecognizer(
                 self.speech_config, self.speaker_config
             )
+            self._start_audio_stream()
 
-            def callback(indata: bytes, _frames: int, _time, _status) -> None:
-                if (
-                    self._speech_playback_gate is not None
-                    and self._speech_playback_gate.is_suppressed()
-                ):
-                    return
-                try:
-                    self._audio_queue.put_nowait(bytes(indata))
-                except queue.Full:
-                    pass
+    def _start_audio_stream(self) -> None:
+        if sd is None:
+            raise RuntimeError("sounddevice is unavailable")
+        model_rate_hz = int(self.speech_config.audio["sample_rate_hz"])
+        model_blocksize = int(self.speech_config.audio["blocksize_frames"])
+        capture_blocksize = max(
+            1,
+            round(
+                model_blocksize
+                * self._audio_capture_rate_hz
+                / model_rate_hz
+            ),
+        )
+        self._audio_resampler.reset()
+        self._audio_health.reset_opened()
 
-            self._audio_stream = sd.RawInputStream(
-                samplerate=int(self.speech_config.audio["sample_rate_hz"]),
-                blocksize=int(self.speech_config.audio["blocksize_frames"]),
-                device=self.config.speech_device,
-                dtype=str(self.speech_config.audio["dtype"]),
-                channels=1,
-                callback=callback,
+        def callback(indata: bytes, frames: int, _time, status) -> None:
+            raw_pcm = bytes(indata)
+            samples = np.frombuffer(raw_pcm, dtype="<i2").astype(
+                np.float32, copy=False
             )
-            self._audio_stream.start()
+            if len(samples):
+                rms_level = min(
+                    1.0,
+                    float(np.sqrt(np.mean(samples * samples))) / 32768.0,
+                )
+                peak_level = min(
+                    1.0,
+                    float(np.max(np.abs(samples))) / 32768.0,
+                )
+            else:
+                rms_level = 0.0
+                peak_level = 0.0
+            self._audio_health.record_callback(
+                frames,
+                status,
+                rms_level=rms_level,
+                peak_level=peak_level,
+            )
+            if (
+                self._speech_playback_gate is not None
+                and self._speech_playback_gate.is_suppressed()
+            ):
+                return
+            pcm = self._audio_resampler.process(raw_pcm)
+            if not pcm:
+                return
+            try:
+                self._audio_queue.put_nowait(pcm)
+            except queue.Full:
+                pass
+
+        self._audio_stream = sd.RawInputStream(
+            samplerate=self._audio_capture_rate_hz,
+            blocksize=capture_blocksize,
+            device=self.config.speech_device,
+            dtype=str(self.speech_config.audio["dtype"]),
+            channels=1,
+            callback=callback,
+        )
+        self._audio_stream.start()
 
     def close(self) -> None:
         if self._audio_stream is not None:
@@ -402,6 +995,145 @@ class LivePerceptionSession:
         self.person_tracker.clear()
         self.multimodal.clear()
         self._speech_confirmation.clear()
+
+    def set_runtime_event_sink(self, event_sink: RuntimeEventSink) -> None:
+        self._audio_event_sink = event_sink
+        if self.config.speech_enabled:
+            self._emit_audio_event(
+                "audio_input_opened",
+                observed_at_ns=time.monotonic_ns(),
+                payload={
+                    "device": self.config.speech_device,
+                    "capture_sample_rate_hz": self._audio_capture_rate_hz,
+                    "model_sample_rate_hz": int(
+                        self.speech_config.audio["sample_rate_hz"]
+                    ),
+                    "resampling_enabled": (
+                        self._audio_capture_rate_hz
+                        != int(self.speech_config.audio["sample_rate_hz"])
+                    ),
+                },
+            )
+
+    def _emit_audio_event(
+        self,
+        kind: str,
+        *,
+        observed_at_ns: int,
+        payload: Mapping[str, object] | None = None,
+    ) -> None:
+        if self._audio_event_sink is not None:
+            self._audio_event_sink.emit(
+                kind,
+                observed_at_ns=observed_at_ns,
+                payload=payload or {},
+            )
+
+    def _emit_speech_feedback(
+        self,
+        kind: str,
+        *,
+        observed_at_ns: int,
+        payload: Mapping[str, object] | None = None,
+        cooldown_ms: int = 1500,
+    ) -> None:
+        if (
+            self._last_speech_feedback_ns is not None
+            and observed_at_ns - self._last_speech_feedback_ns
+            < cooldown_ms * 1_000_000
+        ):
+            return
+        self._last_speech_feedback_ns = observed_at_ns
+        self._emit_audio_event(
+            kind,
+            observed_at_ns=observed_at_ns,
+            payload=payload,
+        )
+
+    def _restart_audio_stream(self) -> None:
+        if self._audio_stream is not None:
+            try:
+                self._audio_stream.stop()
+            except Exception:
+                pass
+            try:
+                self._audio_stream.close()
+            except Exception:
+                pass
+            self._audio_stream = None
+        self._discard_audio_queue()
+        self._start_audio_stream()
+
+    def _audio_input_is_healthy(self, observed_at_ns: int) -> bool:
+        if not self.config.speech_enabled:
+            return True
+        snapshot = self._audio_health.snapshot()
+        try:
+            stream_active = bool(
+                self._audio_stream is not None
+                and getattr(self._audio_stream, "active", False)
+            )
+        except Exception:
+            stream_active = False
+        if snapshot.status_events > self._audio_last_status_events:
+            self._audio_last_status_events = snapshot.status_events
+            self._emit_audio_event(
+                "microphone_status",
+                observed_at_ns=observed_at_ns,
+                payload={
+                    "status_events": snapshot.status_events,
+                    "last_status": snapshot.last_status,
+                    "capture_sample_rate_hz": self._audio_capture_rate_hz,
+                },
+            )
+        stale = snapshot.is_stale(
+            observed_at_ns, self._audio_stale_after_ms
+        )
+        if stream_active and not stale:
+            if self._audio_disconnected:
+                self._emit_audio_event(
+                    "audio_link_restored",
+                    observed_at_ns=observed_at_ns,
+                    payload={
+                        "capture_sample_rate_hz": self._audio_capture_rate_hz,
+                        "model_sample_rate_hz": int(
+                            self.speech_config.audio["sample_rate_hz"]
+                        ),
+                    },
+                )
+            self._audio_disconnected = False
+            self._audio_unavailable_reported = False
+            return True
+        if not self._audio_disconnected:
+            self._emit_audio_event(
+                "audio_link_lost",
+                observed_at_ns=observed_at_ns,
+                payload={
+                    "stream_active": stream_active,
+                    "stale": stale,
+                    "last_callback_at_ns": snapshot.last_callback_at_ns,
+                },
+            )
+            self._audio_disconnected = True
+        if (
+            self._audio_last_reconnect_attempt_ns is not None
+            and observed_at_ns - self._audio_last_reconnect_attempt_ns
+            < self._audio_reconnect_cooldown_ms * 1_000_000
+        ):
+            return False
+        self._audio_last_reconnect_attempt_ns = observed_at_ns
+        try:
+            self._restart_audio_stream()
+        except Exception as exc:
+            if not self._audio_unavailable_reported:
+                self._emit_audio_event(
+                    "microphone_unavailable",
+                    observed_at_ns=observed_at_ns,
+                    payload={"reason": type(exc).__name__},
+                )
+                self._audio_unavailable_reported = True
+            raise RuntimeError("speech input is unavailable") from exc
+        return False
 
     def acquire_roster(
         self,
@@ -422,9 +1154,15 @@ class LivePerceptionSession:
         registration = RegistrationRuntime(session_id, button)
         samples = []
         last_sample_ns: int | None = None
+        last_face_preview_ns: int | None = None
         voice_player_id: str | None = None
         voice_seat: Seat | None = None
         voice_samples = []
+        alert_title: str | None = None
+        alert_detail: str | None = None
+        camera_outage_started_ns: int | None = None
+        last_camera_frame_ns: int | None = None
+        last_camera_epoch = frame_source.camera_epoch
 
         def advance_registration_role() -> None:
             remaining = [
@@ -435,15 +1173,130 @@ class LivePerceptionSession:
             if remaining:
                 registration.select_role(remaining[0])
 
-        self.frame_source.set_status(
-            "REGISTER: E/Enter capture current role | S start | X clear | Q quit",
-            f"Current role: {registration.focus_role.value}",
-        )
+        def update_registration_ui() -> None:
+            voice_active = voice_player_id is not None
+            prompt_playing = bool(
+                voice_active
+                and self._speech_playback_gate is not None
+                and self._speech_playback_gate.is_suppressed()
+            )
+            completed_roles = tuple(
+                participant.initial_role.value
+                for participant in registration.participants
+                if participant.voice_enrolled or not self.config.speech_enabled
+            )
+            if self.config.speech_enabled:
+                audio_snapshot = self._audio_health.snapshot()
+                microphone_live = bool(
+                    self._audio_stream is not None
+                    and getattr(self._audio_stream, "active", False)
+                    and not audio_snapshot.is_stale(
+                        time.monotonic_ns(), self._audio_stale_after_ms
+                    )
+                )
+                microphone_level = audio_snapshot.peak_level
+                microphone_callback_blocks = audio_snapshot.callback_blocks
+            else:
+                microphone_live = False
+                microphone_level = 0.0
+                microphone_callback_blocks = 0
+            self.frame_source.set_registration_status(
+                phase=registration.phase.value,
+                role=registration.focus_role.value,
+                seat=registration.focus_seat.value,
+                completed_roles=completed_roles,
+                face_samples=len(samples),
+                face_target=self.identity_config.minimum_samples,
+                voice_samples=len(voice_samples),
+                voice_target=self.speaker_config.minimum_samples,
+                voice_active=voice_active,
+                prompt_playing=prompt_playing,
+                speech_enabled=self.config.speech_enabled,
+                alert_title=alert_title,
+                alert_detail=alert_detail,
+                microphone_live=microphone_live,
+                microphone_level=microphone_level,
+                microphone_callback_blocks=microphone_callback_blocks,
+            )
+            if voice_active or registration.phase in {
+                RegistrationPhase.READY_TO_START,
+                RegistrationPhase.STARTED,
+            }:
+                self.frame_source.set_face_detections((), status=None)
+
         while time.monotonic_ns() < deadline_ns:
+            update_registration_ui()
             read = frame_source.read()
+            if read.camera_epoch != last_camera_epoch:
+                event_sink.emit(
+                    "camera_reconnected",
+                    observed_at_ns=read.observed_at_ns,
+                    payload={
+                        "previous_camera_epoch": last_camera_epoch,
+                        "camera_epoch": read.camera_epoch,
+                        "reconnect_count": read.camera_epoch,
+                    },
+                )
+                last_camera_epoch = read.camera_epoch
             if read.state is FrameReadState.DISCONNECTED:
+                event_sink.emit(
+                    "camera_disconnected",
+                    observed_at_ns=read.observed_at_ns,
+                    payload={
+                        "reason": read.reason or "unknown",
+                        "camera_epoch": read.camera_epoch,
+                    },
+                )
                 raise RuntimeError(read.reason or "camera disconnected during registration")
+            if read.state is FrameReadState.MISSING:
+                if camera_outage_started_ns is None:
+                    camera_outage_started_ns = read.observed_at_ns
+                    event_sink.emit(
+                        "camera_link_lost",
+                        observed_at_ns=read.observed_at_ns,
+                        payload={
+                            "reason": read.reason or "unknown",
+                            "camera_epoch": read.camera_epoch,
+                        },
+                    )
+                continue
             if read.frame is None:
+                continue
+            if camera_outage_started_ns is not None:
+                event_sink.emit(
+                    "camera_link_restored",
+                    observed_at_ns=read.observed_at_ns,
+                    payload={
+                        "outage_ms": max(
+                            0,
+                            (read.observed_at_ns - camera_outage_started_ns)
+                            // 1_000_000,
+                        ),
+                        "camera_epoch": read.camera_epoch,
+                    },
+                )
+                camera_outage_started_ns = None
+            if (
+                last_camera_frame_ns is not None
+                and read.observed_at_ns - last_camera_frame_ns >= 500_000_000
+            ):
+                event_sink.emit(
+                    "camera_frame_gap",
+                    observed_at_ns=read.observed_at_ns,
+                    payload={
+                        "gap_ms": (
+                            read.observed_at_ns - last_camera_frame_ns
+                        )
+                        // 1_000_000,
+                        "dropped_before": read.frame.dropped_before,
+                        "camera_epoch": read.camera_epoch,
+                    },
+                )
+            last_camera_frame_ns = read.observed_at_ns
+            if (
+                self.config.speech_enabled
+                and not self._audio_input_is_healthy(read.observed_at_ns)
+            ):
                 continue
             frame = read.frame
             for control in control_source.poll_controls(read.observed_at_ns):
@@ -452,6 +1305,7 @@ class LivePerceptionSession:
                         "registration_control",
                         observed_at_ns=control.observed_at_ns,
                         payload={
+                            "observation_id": control.observation_id,
                             "intent": control.intent.value,
                             "accepted": False,
                             "reason": "voice_enrollment_pending",
@@ -464,6 +1318,7 @@ class LivePerceptionSession:
                     "registration_control",
                     observed_at_ns=control.observed_at_ns,
                     payload={
+                        "observation_id": control.observation_id,
                         "intent": control.intent.value,
                         "accepted": outcome.accepted,
                         "reason": outcome.reason,
@@ -480,6 +1335,8 @@ class LivePerceptionSession:
                         sample.fill(0.0)
                     voice_samples = []
                     last_sample_ns = None
+                    alert_title = None
+                    alert_detail = None
                 if control.intent is ControlIntent.CANCEL and outcome.accepted:
                     for sample in samples:
                         embedding = getattr(sample, "embedding", None)
@@ -487,8 +1344,40 @@ class LivePerceptionSession:
                             embedding.fill(0.0)
                     samples = []
                     last_sample_ns = None
+                if (
+                    control.intent is ControlIntent.CONFIRM
+                    and outcome.accepted
+                ):
+                    alert_title = None
+                    alert_detail = None
+                    self.frame_source.set_face_detections(
+                        (), status="SEARCHING FOR ONE FACE"
+                    )
                 if outcome.roster is not None:
                     return outcome.roster
+            if (
+                registration.phase is RegistrationPhase.READY_FOR_FACE
+                and voice_player_id is None
+                and (
+                    last_face_preview_ns is None
+                    or frame.captured_at_ns - last_face_preview_ns
+                    >= 100_000_000
+                )
+            ):
+                preview = self.face_model.preview(frame)
+                last_face_preview_ns = frame.captured_at_ns
+                if preview.detected_face_count == 0:
+                    preview_status = "NO FACE - MOVE INTO VIEW"
+                elif preview.detected_face_count > 1:
+                    preview_status = "ONE PERSON ONLY"
+                elif alert_title is not None:
+                    preview_status = "CHANGE PLAYER - PRESS E"
+                else:
+                    preview_status = "FACE READY - PRESS E"
+                self.frame_source.set_face_detections(
+                    preview.boxes_xywh,
+                    status=preview_status,
+                )
             if (
                 registration.phase is RegistrationPhase.CAPTURING_FACE
                 and voice_player_id is None
@@ -505,15 +1394,76 @@ class LivePerceptionSession:
                 if can_sample:
                     samples.append(evidence.features[0])
                     last_sample_ns = evidence.observed_at_ns
+                if evidence.detected_face_count == 0:
+                    face_status = "NO FACE - MOVE INTO VIEW"
+                elif evidence.detected_face_count > 1:
+                    face_status = "ONE PERSON ONLY"
+                elif len(evidence.features) != 1:
+                    face_status = "MOVE CLOSER TO THE CAMERA"
+                else:
+                    face_status = (
+                        f"FACE DETECTED  "
+                        f"{len(samples)} / {self.identity_config.minimum_samples}"
+                    )
+                self.frame_source.set_face_detections(
+                    tuple(feature.bbox_xywh for feature in evidence.features),
+                    status=face_status,
+                )
                 if len(samples) >= self.identity_config.minimum_samples:
                     player_id = registration.participant_id
                     seat = registration.focus_seat
-                    self.gallery.enroll(
-                        player_id,
-                        seat,
-                        samples,
-                        consent_granted=self.config.consent_confirmed,
-                    )
+                    try:
+                        self.gallery.enroll(
+                            player_id,
+                            seat,
+                            samples,
+                            consent_granted=self.config.consent_confirmed,
+                        )
+                    except DuplicateFaceEnrollmentError as exc:
+                        existing_role = next(
+                            role
+                            for role, mapped_seat in role_seats(button).items()
+                            if mapped_seat is exc.existing_seat
+                        )
+                        attempted_role = registration.focus_role
+                        registration.reject_face_enrollment()
+                        samples = []
+                        last_sample_ns = None
+                        alert_title = (
+                            "Already registered as "
+                            f"{existing_role.value.replace('_', ' ').title()}"
+                        )
+                        alert_detail = (
+                            f"{attempted_role.value.replace('_', ' ').title()} "
+                            "requires a different player"
+                        )
+                        self.frame_source.set_face_detections(
+                            tuple(
+                                feature.bbox_xywh
+                                for feature in evidence.features
+                            ),
+                            status=(
+                                "ALREADY REGISTERED: "
+                                f"{existing_role.value.replace('_', ' ').upper()}"
+                            ),
+                        )
+                        event_sink.emit(
+                            "registration_face_rejected",
+                            observed_at_ns=evidence.observed_at_ns,
+                            payload={
+                                "reason": "duplicate_face",
+                                "role": attempted_role.value,
+                                "seat": seat.value,
+                                "existing_role": existing_role.value,
+                                "existing_seat": exc.existing_seat.value,
+                                "similarity": round(exc.similarity, 6),
+                                "threshold": exc.threshold,
+                                "retryable": True,
+                                "frames_saved": False,
+                                "embeddings_logged": False,
+                            },
+                        )
+                        continue
                     participant = registration.complete_face_enrollment(len(samples))
                     event_sink.emit(
                         "registration_enrolled",
@@ -553,14 +1503,38 @@ class LivePerceptionSession:
                     voice = self._speech_recognizer.accept_audio(
                         pcm, time.monotonic_ns()
                     )
+                    if voice is None:
+                        continue
                     if (
-                        voice is None
-                        or voice.speaker_embedding is None
+                        voice.speaker_embedding is None
                         or voice.speaker_frames
                         < self.speaker_config.minimum_speaker_frames
                     ):
+                        self._emit_audio_event(
+                            "voice_enrollment_sample_rejected",
+                            observed_at_ns=voice.observed_at_ns,
+                            payload={
+                                "seat": voice_seat.value,
+                                "sample_number": len(voice_samples) + 1,
+                                "speaker_frames": voice.speaker_frames,
+                                "minimum_speaker_frames": (
+                                    self.speaker_config.minimum_speaker_frames
+                                ),
+                                "reason": "sample_too_short",
+                                "audio_saved": False,
+                            },
+                        )
                         continue
                     voice_samples.append(voice.speaker_embedding.copy())
+                    self._emit_audio_event(
+                        "voice_enrollment_sample_accepted",
+                        observed_at_ns=voice.observed_at_ns,
+                        payload={
+                            "seat": voice_seat.value,
+                            "sample_number": len(voice_samples),
+                            "total_samples": self.speaker_config.minimum_samples,
+                        },
+                    )
                 if len(voice_samples) >= self.speaker_config.minimum_samples:
                     self.speaker_gallery.enroll(voice_player_id, voice_samples)
                     registration.mark_voice_enrolled(voice_seat)
@@ -582,17 +1556,6 @@ class LivePerceptionSession:
                     voice_seat = None
                     self._speech_recognizer.reset_window()
                     advance_registration_role()
-            self.frame_source.set_status(
-                "REGISTER: E/Enter capture current role | S start | X clear | Q quit",
-                f"Current role: {registration.focus_role.value}",
-                f"Faces: {len(registration.registered_seats)}/4 | samples: {len(samples)}",
-                (
-                    f"VOICE: say a command {len(voice_samples)}/"
-                    f"{self.speaker_config.minimum_samples}"
-                    if voice_player_id is not None
-                    else ""
-                ),
-            )
         raise TimeoutError("registration deadline expired")
 
     def accept_runtime_controls(
@@ -771,13 +1734,28 @@ class LivePerceptionSession:
         )
         fused = self.multimodal.add(gesture_observation)
         speaker_confirmed = False
+        expiring = self._speech_confirmation.pending
         if self._speech_confirmation.expire(observed_at_ns):
             self.multimodal.cancel_pending_speech()
             self._verified_speech_similarity = None
             self._verified_speech_player_id = None
+            self._emit_speech_feedback(
+                "speech_action_confirmation_expired",
+                observed_at_ns=observed_at_ns,
+                payload={
+                    "action": (
+                        expiring.observation.candidate_action.value
+                        if expiring is not None
+                        and expiring.observation.candidate_action is not None
+                        else "action"
+                    )
+                },
+            )
         if self._speech_recognizer is not None:
             if self.speaker_gallery is None:
                 raise RuntimeError("speaker gallery is unavailable")
+            if not self._audio_input_is_healthy(observed_at_ns):
+                return None
             if self._speech_input_suppressed(observed_at_ns):
                 return None
             while True:
@@ -820,6 +1798,12 @@ class LivePerceptionSession:
                         speaker_player_id=speaker.player_id,
                     )
                     if pending.status is SpeechConfirmationStatus.PENDING:
+                        self._emit_speech_feedback(
+                            "speech_action_pending",
+                            observed_at_ns=speech.observed_at_ns,
+                            payload={"action": intent.action.value},
+                            cooldown_ms=0,
+                        )
                         candidate = self.multimodal.add(speech_observation)
                         if candidate is not None:
                             fused = candidate
@@ -838,6 +1822,16 @@ class LivePerceptionSession:
                         speaker_confirmed = True
                     elif confirmation.status is SpeechConfirmationStatus.CANCELLED:
                         self.multimodal.cancel_pending_speech()
+                        self._emit_speech_feedback(
+                            "speech_action_cancelled",
+                            observed_at_ns=speech.observed_at_ns,
+                            cooldown_ms=0,
+                        )
+                elif intent.kind is SpeechIntentKind.UNKNOWN and speech.is_final:
+                    self._emit_speech_feedback(
+                        "speech_command_not_understood",
+                        observed_at_ns=speech.observed_at_ns,
+                    )
         if self._consume_runtime_intent(ControlIntent.CONFIRM):
             pending = self._speech_confirmation.pending
             if (
@@ -938,39 +1932,25 @@ class LivePerceptionSession:
         if frame is None or self.card_model is None:
             return None
         if context.hand_phase is HandPhase.DEALING_HOLE:
-            self.frame_source.set_status(
-                f"HOLE CARD: {slot.value}",
-                "F confirms visible face-down occupancy (development operator fallback)",
+            raise RuntimeError(
+                "hole-card slots are completed by a successful dispense ACK, "
+                "not by live card perception"
             )
-            if not self.config.operator_face_down_confirmation:
-                return self._unknown_card(
-                    slot, observed_at_ns, "face_down_orientation_adapter_unavailable"
-                )
-            if not self._consume_runtime_intent(ControlIntent.CONFIRM):
-                return None
-            return CardObservation(
-                observation_id=f"live-hole-operator:{slot.value}:{observed_at_ns}",
-                slot_id=slot,
-                observed_at_ns=observed_at_ns,
-                status=ObservationStatus.FACE_DOWN,
-                card=None,
-                confidence=None,
-                model_version="operator-confirmed-hole-orientation@development",
-                calibration_version=self.card_config.calibration_version,
-                stable_frames=1,
-                quality_flags=(
-                    "operator_confirmed_face_down",
-                    "not_gate_2b_model_evidence",
-                ),
-            )
+        full_frame = self.card_geometry.binding_mode == "state_directed_full_frame"
         self.frame_source.set_status(
             f"FACE-UP CARD: {slot.value}",
-            "place/reveal one card inside the active fixed ROI",
+            (
+                "show only the current target card; YOLO scans the full frame"
+                if full_frame
+                else "place/reveal one card inside the active fixed ROI"
+            ),
         )
-        cropped, _pixel_roi = crop_fixed_card_roi(
-            frame, self.card_geometry.roi_for(slot), slot
-        )
-        evidence = self.card_model.analyze(cropped)
+        inference_frame = frame
+        if not full_frame:
+            inference_frame, _pixel_roi = crop_fixed_card_roi(
+                frame, self.card_geometry.roi_for(slot), slot
+            )
+        evidence = self.card_model.analyze(inference_frame)
         return self.card_temporal.process(slot, evidence)
 
     def _reset_action_context(self) -> None:
@@ -1058,5 +2038,6 @@ __all__ = [
     "LiveKeyboardControlSource",
     "LivePerceptionConfig",
     "LivePerceptionSession",
+    "RegistrationUiState",
     "validate_live_perception_assets",
 ]

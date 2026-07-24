@@ -134,6 +134,7 @@ class RuntimeProfile:
     controls: tuple[ControlSource, ...]
     speech_enabled: bool
     speech_device: int | str | None
+    speech_capture_sample_rate_hz: int | None
     log_root: Path
 
     def __post_init__(self) -> None:
@@ -145,6 +146,11 @@ class RuntimeProfile:
             raise ValueError("runtime log root must be a non-empty relative path")
         if self.log_root.parts[0].lower() != "runs":
             raise ValueError("runtime log root must stay under ignored runs/")
+        if (
+            self.speech_capture_sample_rate_hz is not None
+            and self.speech_capture_sample_rate_hz <= 0
+        ):
+            raise ValueError("speech capture sample rate must be positive")
         if self.profile_id is RuntimeProfileId.LAPTOP:
             if self.camera.kind is not RuntimeCameraKind.LOCAL:
                 raise ValueError("laptop profile requires a local camera")
@@ -205,7 +211,11 @@ class RuntimeProfile:
             },
             "perception",
         )
-        cls._reject_unknown(speech, {"enabled", "device"}, "speech")
+        cls._reject_unknown(
+            speech,
+            {"enabled", "device", "capture_sample_rate_hz"},
+            "speech",
+        )
         cls._reject_unknown(logging, {"root"}, "logging")
         controls = value.get("controls")
         if not isinstance(controls, list) or not all(
@@ -264,6 +274,10 @@ class RuntimeProfile:
             controls=tuple(ControlSource(str(item)) for item in controls),
             speech_enabled=cls._bool(speech.get("enabled"), "speech.enabled"),
             speech_device=cls._speech_device(speech.get("device")),
+            speech_capture_sample_rate_hz=cls._optional_int(
+                speech.get("capture_sample_rate_hz"),
+                "speech.capture_sample_rate_hz",
+            ),
             log_root=Path(str(logging.get("root", ""))),
         )
 

@@ -200,7 +200,7 @@ Stage 0/1 后分成两条并行轨道：
 
 ## 数字筹码与实体筹码路线
 
-- Plan A（Core 近期）：数字账本继续作为唯一余额权威；Laptop 或机器人按钮提交 Fixed-Limit 动作，未来固定下注区视觉只产生 `observed_chip_units` 核对证据，不直接修改余额。视觉不一致时保持当前动作并请求重试或操作员确认。
+- Plan A（Core 近期）：数字账本继续作为唯一余额权威；状态机当前席位窗口内的英语语音与手势 evidence 提交 Fixed-Limit 动作候选，按钮只承担确认/取消与恢复控制。未来固定下注区视觉只产生 `observed_chip_units` 核对证据，不直接修改余额。视觉不一致时保持当前动作并请求重试。
 - Plan B（后续研究）：评估受约束筹码托盘、称重或 RFID，使实体筹码可能成为权威输入。该路线必须解决遮挡、叠放、拿回筹码、边池、找零和恢复，不能阻塞 Core。
 
 ## 注册、按钮与播报软件边界
@@ -230,3 +230,23 @@ Stage 0/1 后分成两条并行轨道：
 # S0-21 / Stage 2A 补充：本场玩家身份核验
 
 Core 允许把本场、显式同意的人脸注册作为可选核验证据：状态机先给出 `acting_seat`，机器人完成面向该席位，视觉再输出 `player_id` 或 `unknown`。身份模型永不决定轮到谁，也不改变动作、牌局或数字筹码。embedding 仅存在内存并在退出时销毁。此能力当前是 development Pilot，最终阈值、活体、目标相机/旋转证据和恢复 UX 均未冻结，不计作 Stage 2A Gate 已通过。
+
+## 2026-07-24 Core v1 感知与交互冻结修订
+
+本节显式替代本文早期“固定牌槽 ROI / 底牌人工确认 / 注册专用 UI”描述：
+
+- 底牌机构契约保证背面发出。一次 `dispense_one` 只有在 ACK 同时携带
+  `homed=true`、`at_target=true`、`deck_present=true`、`exit_pulses=1`、
+  interlock closed、E-stop inactive 时才成功；成功 ACK 原子地把当前逻辑底牌槽
+  记为 `present_face_down`，不等待 F 键、手机按钮或视觉二次确认。
+- 13 个槽是确定性状态机、查重、showdown 和日志使用的逻辑 ID，不等于 13 个
+  固定像素框。机器人路线采用 state-directed view cycle：状态机先指定当前
+  target，机器人转向，YOLO 在完整画面自动检测；无歧义稳定的正面牌结果绑定到
+  当前逻辑槽。Laptop 固定全桌 ROI 只保留为独立测试夹具。
+- 玩家动作仍来自当前状态席位窗口内的英语语音和手势证据；UI 按钮只用于注册、
+  语音候选 confirm/cancel、恢复、清台、重买、下一手与结束，不提供直接下注按钮。
+- 手机 UI 与 English announcer 覆盖注册、底牌、四轮下注、公共牌、showdown、
+  award、暂停恢复、清台、下一手和 session end；它们只镜像权威状态和已提交事件。
+- 可运行的 MediaPipe/Vosk/YuNet/SFace/pose 资产退出 blanket ignore 并按 Git LFS
+  打包，但在 held-out participant/session 指标齐全前仍为 `development`，不得把
+  现场可用误写为 `release`。card v2 继续为 `candidate` 并处于调试。

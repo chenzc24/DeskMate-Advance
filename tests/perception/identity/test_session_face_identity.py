@@ -11,6 +11,7 @@ from poker_dealer.domain import ColorSpace, FramePacket, Seat
 from poker_dealer.game import HandEngine, state_to_dict
 from poker_dealer.perception.identity import (
     DetectedFaceFeature,
+    DuplicateFaceEnrollmentError,
     FaceFrameEvidence,
     FaceIdentityConfig,
     FaceIdentityContext,
@@ -84,8 +85,13 @@ def test_enrollment_requires_consent_samples_unique_player_and_seat() -> None:
         gallery.enroll(
             "player_c", Seat.A, [feature((0, 0, 1))] * 5, consent_granted=True
         )
-    with pytest.raises(ValueError, match="appears already enrolled"):
+    with pytest.raises(
+        DuplicateFaceEnrollmentError, match="appears already enrolled"
+    ) as duplicate:
         gallery.enroll("player_b", Seat.B, samples, consent_granted=True)
+    assert duplicate.value.existing_player_id == "player_a"
+    assert duplicate.value.existing_seat is Seat.A
+    assert duplicate.value.similarity >= duplicate.value.threshold
 
 
 def test_matching_accepts_clear_match_and_rejects_unknown_and_ambiguous() -> None:
@@ -202,6 +208,10 @@ def test_official_models_load_and_blank_frame_has_no_face() -> None:
         0,
         image,
     )
-    evidence = OpenCvFaceIdentityAdapter(config).analyze(frame)
+    adapter = OpenCvFaceIdentityAdapter(config)
+    preview = adapter.preview(frame)
+    evidence = adapter.analyze(frame)
+    assert preview.detected_face_count == 0
+    assert preview.boxes_xywh == ()
     assert evidence.detected_face_count == 0
     assert evidence.features == ()

@@ -19,11 +19,10 @@ from poker_dealer.game import (
 from poker_dealer.runtime import HandRuntime, PartBPhase, SequentialPartBCoordinator
 
 
-def test_hole_delivery_requires_ack_and_face_down_evidence_for_all_eight() -> None:
+def test_hole_delivery_ack_defaults_all_eight_slots_to_face_down() -> None:
     engine = HandEngine.setup_session("hole-delivery", Seat.A)
     engine.begin_hand("begin")
     coordinator = SequentialPartBCoordinator(engine)
-    perception = SimulatedCardPerception()
     dealer = SimulatedDealer()
     dealer.homed = True
 
@@ -35,17 +34,12 @@ def test_hole_delivery_requires_ack_and_face_down_evidence_for_all_eight() -> No
         assert coordinator.accept_rotation_ack(rotation_ack)  # duplicate is idempotent
         dispense = coordinator.request_dispense(now + 2)
         dispense_ack = dealer.execute(dispense, now + 3)
+        delivered_slot = coordinator.current_step.vision_slots[0]  # type: ignore[union-attr]
         assert coordinator.accept_dispense_ack(dispense_ack)
-        step = coordinator.current_step
-        assert step is not None and len(step.vision_slots) == 1
-        result = coordinator.accept_card_observation(
-            perception.emit(
-                step.vision_slots[0],
-                ObservationStatus.FACE_DOWN,
-                observed_at_ns=now + 4,
-            )
+        assert (
+            engine.state.slot_states[delivered_slot]
+            is SlotLifecycle.PRESENT_FACE_DOWN
         )
-        assert result.accepted
 
     assert coordinator.phase is PartBPhase.COMPLETE
     assert engine.state.phase is HandPhase.AWAITING_ACTION
@@ -148,7 +142,7 @@ def test_same_slot_card_change_is_a_hard_conflict() -> None:
     assert engine.state.phase is HandPhase.PAUSED_RECOVERY
 
 
-def test_restart_after_dispense_ack_waits_for_visual_without_redealing() -> None:
+def test_restart_after_hole_dispense_ack_advances_without_visual_or_redeal() -> None:
     engine = HandEngine.setup_session("resume-visual", Seat.A)
     engine.begin_hand("begin")
     coordinator = SequentialPartBCoordinator(engine)
@@ -158,23 +152,19 @@ def test_restart_after_dispense_ack_waits_for_visual_without_redealing() -> None
     assert coordinator.accept_rotation_ack(dealer.execute(rotation, 2))
     dispense = coordinator.request_dispense(3)
     assert coordinator.accept_dispense_ack(dealer.execute(dispense, 4))
-    step = coordinator.current_step
-    assert step is not None
-    slot = step.vision_slots[0]
-    assert engine.state.slot_states[slot] is SlotLifecycle.DELIVERY_PENDING
+    delivered_slot = coordinator.steps[0].vision_slots[0]
+    assert (
+        engine.state.slot_states[delivered_slot]
+        is SlotLifecycle.PRESENT_FACE_DOWN
+    )
 
     recovered = HandEngine.from_log(
         FixedLimitRules(), EventLog.from_jsonl(engine.log.to_jsonl())
     )
     resumed = SequentialPartBCoordinator(recovered)
-    assert resumed.phase is PartBPhase.WAITING_VISUAL_CONFIRMATION
-    assert resumed.current_step is not None
-    assert resumed.current_step.vision_slots == (slot,)
-    observation = SimulatedCardPerception().emit(
-        slot, ObservationStatus.FACE_DOWN, observed_at_ns=5
-    )
-    assert resumed.accept_card_observation(observation).accepted
     assert resumed.phase is PartBPhase.WAITING_ROTATION_ACK
+    assert resumed.current_step is not None
+    assert resumed.current_step.vision_slots == coordinator.steps[1].vision_slots
     assert dealer.dispensed_cards == 1
 
 

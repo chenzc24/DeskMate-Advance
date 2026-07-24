@@ -195,8 +195,15 @@ class SequentialPartBCoordinator:
         step = self.current_step
         assert step is not None and len(step.vision_slots) == 1
         self.engine.mark_delivery_pending(
-            f"delivery:{ack.command_id}", step.vision_slots[0], ack.observed_at_ns
+            f"delivery:{ack.command_id}",
+            step.vision_slots[0],
+            ack.observed_at_ns,
+            face_down_by_default=self.mode is PartBMode.HOLE_DEAL,
         )
+        if self.mode is PartBMode.HOLE_DEAL:
+            self.last_reason = "dispense_confirmed_face_down_by_default"
+            self._advance_step(ack.observed_at_ns)
+            return True
         self.phase = PartBPhase.WAITING_VISUAL_CONFIRMATION
         self.visual_window_opened_at_ns = ack.observed_at_ns
         self.last_reason = "dispense_confirmed_wait_visual"

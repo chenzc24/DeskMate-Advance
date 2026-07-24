@@ -68,7 +68,7 @@ Core 第一版不以实体筹码识别修改余额。数字账本是唯一权威
 
 ## 发牌与 Board Reveal
 
-Core v1 采用 `robot_core_no_burn`：不在 Flop、Turn 或 River 前烧牌。Hole cards face-down。每张实际发出的物理牌使用 `rotate_to -> success ACK -> dispense_one -> success ACK`；只有 success ACK 才推进数量。
+Core v1 采用 `robot_core_no_burn`：不在 Flop、Turn 或 River 前烧牌。Hole cards face-down。每张实际发出的物理牌使用 `rotate_to -> success ACK -> dispense_one -> success ACK`；只有携带完整安全与单张传感器证据的 success ACK 才推进数量。底牌 ACK 原子地将当前逻辑槽记为 `present_face_down`，无需人工或视觉二次确认；公共牌仍须稳定识别正面身份。
 
 ```text
 Flop: board_flop_1, board_flop_2, board_flop_3

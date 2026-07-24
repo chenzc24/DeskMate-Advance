@@ -172,7 +172,7 @@ def test_camera_disconnect_pauses_before_card_source_can_advance(tmp_path: Path)
             frame_source=DisconnectedFrameSource(),
             event_writer=writer,
             clock_ns=StepClock(),
-        ).run(max_steps=10)
+        ).run(max_steps=30)
     dealer.close()
     assert result.completed is False
     assert result.hand_phase is HandPhase.PAUSED_RECOVERY

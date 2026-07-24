@@ -33,7 +33,8 @@
   "controls": ["laptop_keyboard"],
   "speech": {
     "enabled": true,
-    "device": "Virtual Mic (AudioRelay Wave)"
+    "device": "Virtual Mic (AudioRelay Wave)",
+    "capture_sample_rate_hz": 44100
   },
   "logging": {
     "root": "runs/runtime/laptop-audiorelay"

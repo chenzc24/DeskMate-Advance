@@ -1,6 +1,8 @@
 # Stage 2：玩家行为与目标桌面牌面感知
 
-当前状态（2026-07-21）：Stage 2A 已有 Laptop 手势、英文七词语音和保守冲突融合；真人失败证据已将 `Closed_Fist -> bet` 改为 `Victory -> bet`。四席 Laptop ROI Pilot 现可检测最多四只手、标注 A/B/C/D，并只让当前 focus seat 进入动作确认；象限布局不是目标桌面几何。真人多席矩阵、最终交互语法、participant/session 数据与目标相机 Gate 仍开放。详见 [Laptop 手势 Pilot](../evaluation/stage2a-laptop-gesture-pilot.md)、[多模态动作 Pilot](../evaluation/stage2a-multimodal-action-pilot.md)和[四席 Laptop Pilot](../evaluation/stage2a-multiseat-laptop-pilot.md)。Stage 2B 尚未启动。
+当前状态（2026-07-24）：Stage 2A 已有 Laptop/机器人 view-cycle 的手势、英文七词语音、会话身份核验和保守冲突融合；真人 held-out 录取矩阵仍开放。Stage 2B 已有 YOLO 牌框/身份候选和时序拒识，但牌模型仍在调试，未进入 release。
+
+产品修订：机器人正式视角是状态机驱动的逐目标旋转，不是同一画面内的固定 13 个像素 ROI。13 个槽继续作为逻辑状态/账本 ID；机器人当前目标的牌面输入改为全画面 YOLO 自动框选，并把无歧义稳定结果绑定到状态机已经指定的逻辑槽。固定 ROI 仅保留为 Laptop 固定全桌夹具，不得作为机器人 view-cycle 的前置条件。底牌成功单张发牌 ACK 默认背面在位，不需要人工确认；公共牌与 showdown 的可见身份仍必须由模型确认。
 
 ## 目标
 

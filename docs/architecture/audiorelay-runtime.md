@@ -8,13 +8,16 @@ evidence, and only the deterministic game engine can accept a legal action.
 
 ```text
 Poker Dealer committed event
-  -> Windows System.Speech
+  -> versioned en-US announcement catalog
+  -> Windows System.Speech with an English voice
   -> Windows default playback device / AudioRelay stream
   -> Android speaker
 
 Android microphone
   -> AudioRelay
   -> Virtual Mic (AudioRelay Wave)
+  -> native 44.1 kHz mono capture
+  -> continuous in-memory resampling to 16 kHz mono int16
   -> LivePerceptionSession
   -> Vosk + enrolled-speaker verification + confirmation
   -> deterministic game engine legality checks
@@ -49,7 +52,7 @@ With the AudioRelay connection active:
 
 ```powershell
 .\.venv\Scripts\python.exe scripts\runtime\run_hand.py `
-  --profile configs/runtime/laptop_audiorelay.json `
+  --profile laptop_audiorelay `
   --mode live-preflight
 ```
 
@@ -58,7 +61,7 @@ list devices with `python -m sounddevice` and temporarily override it:
 
 ```powershell
 .\.venv\Scripts\python.exe scripts\runtime\run_hand.py `
-  --profile configs/runtime/laptop_audiorelay.json `
+  --profile laptop_audiorelay `
   --mode live-preflight `
   --speech-device 38
 ```
@@ -70,11 +73,11 @@ name.
 
 ```powershell
 .\.venv\Scripts\python.exe scripts\runtime\run_hand.py `
-  --profile configs/runtime/laptop_audiorelay.json `
+  --profile laptop_audiorelay `
   --mode live `
   --button seat_a `
   --consent-confirmed `
-  --development-operator-face-down `
+  --web-console --announcer windows `
   --announcer windows `
   --diagnostics
 ```
@@ -82,6 +85,54 @@ name.
 `--announcer console` verifies event-to-text wiring without audible output.
 `--announcer none` is the default. `--announcement-tail-guard-ms 350` controls
 the post-playback microphone guard.
+
+The AudioRelay profile deliberately separates the capture rate from the model
+rate. `Virtual Mic (AudioRelay Wave)` is opened at its native 44.1 kHz rate;
+only the in-memory PCM passed to Vosk is converted to 16 kHz. This prevents the
+slow, low-pitched audio produced when native samples are interpreted directly
+as 16 kHz.
+
+The runtime also monitors callback liveness and PortAudio status events. A
+stale or inactive input stream emits an audited `audio_link_lost` event and
+attempts a bounded restart. Successful callbacks emit `audio_link_restored`;
+an unavailable device raises a runtime error so the hand fails closed into its
+existing recovery path.
+
+## English announcement catalog
+
+The formal runtime loads
+`configs/runtime/announcements_en.json`. Version `1.4.0` contains 48 concise
+English prompts covering system readiness, registration, dealing, blinds,
+turns, action confirmation, streets, showdown, audio/camera failures, recovery
+and safety conditions.
+
+Registration uses the fixed enrollment sequence `check`, `call`, `raise`.
+Pending speech actions now announce “Say confirm or cancel”; cancellation,
+confirmation timeout, unrecognized commands, illegal actions and selected
+pause reasons are connected to their catalog prompts.
+
+Catalog entries contain a stable event ID, text and priority. Template
+placeholders are validated before live operation. The runtime prefers
+`Microsoft Zira Desktop`, then `Microsoft David Desktop`, and finally any
+installed `en-US` Windows voice. Speech rate and volume are also catalog
+settings and are validated against the Windows synthesizer ranges. Override the
+first voice choice when necessary:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\runtime\run_hand.py `
+  --profile laptop_audiorelay `
+  --mode live `
+  --button seat_a `
+  --consent-confirmed `
+  --web-console --announcer windows `
+  --announcer windows `
+  --announcement-voice "Microsoft Zira Desktop"
+```
+
+A custom catalog can be selected with `--announcement-catalog PATH`. Expanding
+the announcement catalog does not expand the seven-word English action
+recognition grammar. New recognition commands require separate false-acceptance
+and confirmation validation.
 
 Face and speaker enrollment require explicit participant consent. Audio and
 speaker embeddings are not written by this bridge. The current live command is

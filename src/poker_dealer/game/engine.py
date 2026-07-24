@@ -728,9 +728,20 @@ class HandEngine:
         }
 
     def mark_delivery_pending(
-        self, event_id: str, slot: VisionSlot, observed_at_ns: int
+        self,
+        event_id: str,
+        slot: VisionSlot,
+        observed_at_ns: int,
+        *,
+        face_down_by_default: bool = False,
     ) -> HandState:
-        """Persist a successful single-card dispense before visual confirmation."""
+        """Persist one sensor-valid dispense.
+
+        Hole cards are dealt face down by the Core v1 mechanism contract, so a
+        successful dispense acknowledgement can complete that logical slot
+        without a second operator or vision confirmation. Face-up board cards
+        remain delivery-pending until card perception confirms their identity.
+        """
 
         if self.state.phase not in {HandPhase.DEALING_HOLE, HandPhase.DEALING_BOARD}:
             raise ValueError("card delivery is not active")
@@ -740,14 +751,24 @@ class HandEngine:
         if lifecycle is not SlotLifecycle.EXPECTED_EMPTY:
             raise ValueError("delivery target is not empty")
         before = self.state.state_version
-        self.state.slot_states[slot] = SlotLifecycle.DELIVERY_PENDING
+        if face_down_by_default:
+            if self.state.phase is not HandPhase.DEALING_HOLE:
+                raise ValueError("face-down dispense default is only valid for hole cards")
+            lifecycle = SlotLifecycle.PRESENT_FACE_DOWN
+        else:
+            lifecycle = SlotLifecycle.DELIVERY_PENDING
+        self.state.slot_states[slot] = lifecycle
         self.state.state_version += 1
         self.log.append(
             kind="card_delivery_acknowledged",
             event_id=event_id,
             before_version=before,
             accepted=True,
-            payload={"slot_id": slot.value},
+            payload={
+                "slot_id": slot.value,
+                "slot_lifecycle": lifecycle.value,
+                "face_down_by_default": face_down_by_default,
+            },
             state=self.state,
             observed_at_ns=observed_at_ns,
         )

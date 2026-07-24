@@ -17,12 +17,18 @@ from poker_dealer.runtime.profile import RuntimeProfile
 from poker_dealer.domain import Seat
 from poker_dealer.robotics.dealer import SimulatedDealerAdapter
 from poker_dealer.runtime import (
+    AnnouncementCatalog,
+    AnnouncementPolicy,
     AnnouncingRuntimeEventWriter,
     ConsoleAnnouncer,
+    CompositeControlSource,
+    CompositeRuntimeEventSink,
     DiagnosticRun,
     EventAnnouncer,
     HandRuntimeLoop,
     LiveSessionOperatorUI,
+    MobileWebConsole,
+    MobilePromptMirror,
     RecordedReplaySources,
     RuntimeEventLog,
     RuntimeEventWriter,
@@ -49,9 +55,12 @@ from poker_dealer.runtime.live_perception import (
 
 
 ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_ANNOUNCEMENT_CATALOG = ROOT / "configs" / "runtime" / "announcements_en.json"
 NAMED_PROFILES = {name: ROOT / "configs" / "runtime" / f"{name}.json" for name in (
     "laptop",
+    "laptop_audiorelay",
     "robot_camera",
+    "robot_camera_audiorelay",
     "robot_hardware",
 )}
 
@@ -68,11 +77,22 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--profile",
         required=True,
-        help="laptop, robot_camera, robot_hardware, or a runtime-profile JSON path",
+        help=(
+            "laptop, laptop_audiorelay, robot_camera, robot_camera_audiorelay, "
+            "robot_hardware, "
+            "or a runtime-profile JSON path"
+        ),
     )
     parser.add_argument(
         "--mode",
-        choices=("preflight", "live-preflight", "camera-smoke", "replay", "live"),
+        choices=(
+            "preflight",
+            "live-preflight",
+            "camera-smoke",
+            "registration-smoke",
+            "replay",
+            "live",
+        ),
         help="runtime mode; legacy preflight/smoke flags remain accepted",
     )
     mode = parser.add_mutually_exclusive_group()
@@ -118,12 +138,20 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--speech-device", type=_device)
     parser.add_argument("--headless", action="store_true")
     parser.add_argument(
-        "--development-operator-face-down",
+        "--web-console",
         action="store_true",
-        help=(
-            "allow F-key confirmation for hole-card back/occupancy; development "
-            "only and cannot pass the card-perception gate"
-        ),
+        help="serve the full registration, hand, recovery and session console",
+    )
+    parser.add_argument(
+        "--web-host",
+        default="127.0.0.1",
+        help="mobile web bind address; keep loopback when using Tailscale Serve",
+    )
+    parser.add_argument(
+        "--web-port",
+        type=int,
+        default=8765,
+        help="mobile web TCP port",
     )
     parser.add_argument(
         "--identity-config",
@@ -168,6 +196,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=int,
         default=350,
         help="continue suppressing speech input after Windows TTS completes",
+    )
+    parser.add_argument(
+        "--announcement-catalog",
+        type=Path,
+        help="announcement catalog JSON; defaults to configs/runtime/announcements_en.json",
+    )
+    parser.add_argument(
+        "--announcement-voice",
+        help="preferred installed Windows voice; falls back to the catalog preferences",
     )
     parser.add_argument(
         "--diagnostics",
@@ -254,6 +291,11 @@ def _create_diagnostics(
     )
     diagnostics.add_config("runtime_profile", _profile_path(args.profile))
     diagnostics.add_config("core_game", ROOT / "configs" / "game" / "core_v1.json")
+    catalog_path = args.announcement_catalog or DEFAULT_ANNOUNCEMENT_CATALOG
+    diagnostics.add_config(
+        "announcement_catalog",
+        catalog_path if catalog_path.is_absolute() else ROOT / catalog_path,
+    )
     return diagnostics
 
 
@@ -269,8 +311,16 @@ def _run_with_error_boundary(
             raise ValueError("--session-decision-timeout-seconds must be positive")
         if args.announcement_tail_guard_ms < 0:
             raise ValueError("--announcement-tail-guard-ms must be non-negative")
-        if args.announcer != "none" and mode != "live":
-            raise ValueError("--announcer is available only in live mode")
+        if args.announcer != "none" and mode not in {"live", "registration-smoke"}:
+            raise ValueError(
+                "--announcer is available only in live or registration-smoke mode"
+            )
+        if args.web_console and mode not in {"registration-smoke", "live"}:
+            raise ValueError(
+                "--web-console is available only in registration-smoke or live mode"
+            )
+        if not 1 <= args.web_port <= 65535:
+            raise ValueError("--web-port must be between 1 and 65535")
         if args.max_hands > 1 and args.log_jsonl is not None:
             raise ValueError("--log-jsonl is single-hand only; use the profile log root")
         if args.max_hands > 1 and args.replay_log is not None:
@@ -319,6 +369,8 @@ def _run_with_error_boundary(
             return _run_replay(args, profile, app, diagnostics)
         if mode == "live-preflight":
             return _run_live_preflight(args, profile, diagnostics)
+        if mode == "registration-smoke":
+            return _run_registration_smoke(args, profile, app, diagnostics)
         if mode == "live":
             return _run_live(args, profile, app, diagnostics)
         try:
@@ -649,13 +701,36 @@ def _create_live_announcer(
         raise ValueError("--announcement-tail-guard-ms must be non-negative")
     if args.announcer == "none":
         return None, None, None
+    catalog = AnnouncementCatalog.from_json(_announcement_catalog_path(args))
+    policy = AnnouncementPolicy(catalog)
     if args.announcer == "console":
-        return EventAnnouncer(ConsoleAnnouncer()), None, None
+        return EventAnnouncer(ConsoleAnnouncer(), policy), None, None
     playback_gate = SpeechPlaybackGate(
         tail_guard_ms=args.announcement_tail_guard_ms
     )
-    speech_port = WindowsSpeechAnnouncer(playback_gate)
-    return EventAnnouncer(speech_port), speech_port, playback_gate
+    voice_preferences = catalog.voice_preferences
+    if args.announcement_voice:
+        voice_preferences = (
+            args.announcement_voice,
+            *(
+                voice
+                for voice in voice_preferences
+                if voice != args.announcement_voice
+            ),
+        )
+    speech_port = WindowsSpeechAnnouncer(
+        playback_gate,
+        language=catalog.language,
+        voice_preferences=voice_preferences,
+        speech_rate=catalog.speech_rate,
+        speech_volume=catalog.speech_volume,
+    )
+    return EventAnnouncer(speech_port, policy), speech_port, playback_gate
+
+
+def _announcement_catalog_path(args: argparse.Namespace) -> Path:
+    path = args.announcement_catalog or DEFAULT_ANNOUNCEMENT_CATALOG
+    return path if path.is_absolute() else ROOT / path
 
 
 def _runtime_writer(
@@ -667,6 +742,171 @@ def _runtime_writer(
     return AnnouncingRuntimeEventWriter(path, event_announcer)
 
 
+def _run_registration_smoke(
+    args: argparse.Namespace,
+    profile: RuntimeProfile,
+    app: LiveHandApplication,
+    diagnostics: DiagnosticRun | None = None,
+) -> int:
+    """Exercise formal face and speaker enrollment without starting a hand."""
+    if profile.dealer.physical_motion:
+        raise RuntimeError("registration smoke never opens a physical dealer")
+    if args.headless and not args.web_console:
+        raise ValueError(
+            "headless registration requires --web-console as the operator UI"
+        )
+    if not args.consent_confirmed:
+        raise PermissionError("--consent-confirmed is required for face enrollment")
+    if args.button is None:
+        raise ValueError("--button is required for four-player registration smoke")
+    if args.max_hands != 1:
+        raise ValueError("--max-hands is not applicable to registration smoke")
+    generated = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
+    session_id = args.session_id or f"registration-{generated}"
+    log_path = _hand_log_path(
+        args,
+        app,
+        session_id=session_id,
+        hand_id=args.hand_id or "registration",
+        diagnostics=diagnostics,
+    )
+    if diagnostics is not None:
+        diagnostics.register_artifact("registration_log", log_path)
+        diagnostics.emit(
+            "registration_smoke_started",
+            {"session_id": session_id, "button": args.button},
+        )
+    live_config = _live_config(args, profile, consent_confirmed=True)
+    app.open(open_camera=True)
+    mobile_console: MobileWebConsole | None = None
+    if args.web_console:
+        mobile_console = MobileWebConsole(host=args.web_host, port=args.web_port)
+        mobile_console.start()
+        print(
+            json.dumps(
+                {
+                    "type": "mobile_web_console_started",
+                    "url": mobile_console.url,
+                    "audio_transport": "audiorelay",
+                    "frames_saved": False,
+                }
+            )
+        )
+    frame_source = InteractiveOpenCVFrameSource(
+        app.camera,
+        display=not args.headless,
+        registration_observer=mobile_console,
+    )
+    keyboard_controls = LiveKeyboardControlSource(frame_source)
+    controls = (
+        CompositeControlSource(keyboard_controls, mobile_console)
+        if mobile_console is not None
+        else keyboard_controls
+    )
+    event_announcer, speech_announcer, playback_gate = _create_live_announcer(args)
+    if mobile_console is not None and event_announcer is not None:
+        event_announcer.port = MobilePromptMirror(
+            event_announcer.port,
+            mobile_console,
+        )
+
+        def replay_mobile_prompt(snapshot: object) -> None:
+            if not isinstance(snapshot, dict):
+                return
+            prompt = snapshot.get("last_prompt")
+            if isinstance(prompt, str) and prompt.strip():
+                mobile_console.publish_prompt(prompt)
+
+        mobile_console.set_prompt_callback(replay_mobile_prompt)
+
+        def replay_mobile_prompt(snapshot: object) -> None:
+            if not isinstance(snapshot, dict):
+                return
+            state = snapshot.get("state")
+            if not isinstance(state, dict):
+                return
+            role = str(state.get("role", "button"))
+            if bool(state.get("voice_active", False)):
+                event_announcer.publish("voice_enrollment_started", role=role)
+            elif state.get("phase") == "ready_for_face":
+                event_announcer.publish("registration_focus_changed", role=role)
+            elif state.get("phase") == "ready_to_start":
+                event_announcer.publish("roster_ready")
+
+        mobile_console.set_prompt_callback(replay_mobile_prompt)
+    session = LivePerceptionSession(
+        live_config,
+        frame_source,
+        speech_playback_gate=playback_gate,
+    )
+    writer: RuntimeEventWriter | None = None
+    try:
+        session.open(session_id)
+        writer = _runtime_writer(log_path, event_announcer)
+        event_sink = (
+            CompositeRuntimeEventSink(writer, mobile_console)
+            if mobile_console is not None
+            else writer
+        )
+        session.set_runtime_event_sink(event_sink)
+        if event_announcer is not None:
+            event_announcer.publish("registration_focus_changed", role="button")
+        roster = session.acquire_roster(
+            frame_source=frame_source,
+            control_source=controls,
+            event_sink=event_sink,
+            session_id=session_id,
+            button=Seat(args.button),
+            deadline_ns=time.monotonic_ns()
+            + int(args.registration_timeout_seconds * 1_000_000_000),
+        )
+        if event_announcer is not None:
+            event_announcer.publish("roster_ready")
+        participants = [
+            {
+                "participant_id": participant.participant_id,
+                "seat": participant.seat.value,
+                "initial_role": participant.initial_role.value,
+                "face_sample_count": participant.face_sample_count,
+                "voice_enrolled": participant.voice_enrolled,
+            }
+            for participant in roster.participants
+        ]
+        output = {
+            "type": "registration_smoke",
+            "profile_id": profile.profile_id.value,
+            "session_id": session_id,
+            "completed": len(participants) == 4
+            and all(item["voice_enrolled"] for item in participants),
+            "button": roster.button.value,
+            "roster_version": roster.roster_version,
+            "participants": participants,
+            "log_path": str(log_path),
+            "audio_saved": False,
+            "face_media_saved": False,
+            "embeddings_memory_only": True,
+            "physical_motion": False,
+            "dealer_adapter": "simulated",
+            "dealer_commands_emitted": False,
+            "announcer": args.announcer,
+            **_diagnostics_output(diagnostics),
+        }
+        print(json.dumps(output, ensure_ascii=False))
+        if diagnostics is not None:
+            diagnostics.emit("runtime_result", output)
+        return 0
+    finally:
+        if writer is not None:
+            writer.close()
+        session.close()
+        if speech_announcer is not None:
+            speech_announcer.close()
+        frame_source.close()
+        if mobile_console is not None:
+            mobile_console.stop()
+        app.close()
+
+
 def _run_live(
     args: argparse.Namespace,
     profile: RuntimeProfile,
@@ -675,15 +915,10 @@ def _run_live(
 ) -> int:
     if profile.dealer.physical_motion:
         raise RuntimeError("live hardware mode remains Robotics-gated and unavailable")
-    if args.headless:
-        raise ValueError("interactive four-player registration requires the live UI")
+    if args.headless and not args.web_console:
+        raise ValueError("headless live mode requires --web-console as the operator UI")
     if not args.consent_confirmed:
         raise PermissionError("--consent-confirmed is required for face enrollment")
-    if not args.development_operator_face_down:
-        raise RuntimeError(
-            "the face-down occupancy/orientation model is not admitted; pass "
-            "--development-operator-face-down only for an explicitly non-Gate run"
-        )
     if args.button is None:
         raise ValueError("--button is required for four-player live mode")
     session_id = args.session_id or f"live-{profile.profile_id.value}"
@@ -706,9 +941,38 @@ def _run_live(
         )
     live_config = _live_config(args, profile, consent_confirmed=True)
     app.open(open_camera=True)
-    frame_source = InteractiveOpenCVFrameSource(app.camera, display=True)
-    controls = LiveKeyboardControlSource(frame_source)
+    mobile_console: MobileWebConsole | None = None
+    if args.web_console:
+        mobile_console = MobileWebConsole(host=args.web_host, port=args.web_port)
+        mobile_console.start()
+        print(
+            json.dumps(
+                {
+                    "type": "mobile_web_console_started",
+                    "url": mobile_console.url,
+                    "scope": "full_live_session",
+                    "audio_transport": "audiorelay",
+                    "frames_saved": False,
+                }
+            )
+        )
+    frame_source = InteractiveOpenCVFrameSource(
+        app.camera,
+        display=not args.headless,
+        registration_observer=mobile_console,
+    )
+    keyboard_controls = LiveKeyboardControlSource(frame_source)
+    controls = (
+        CompositeControlSource(keyboard_controls, mobile_console)
+        if mobile_console is not None
+        else keyboard_controls
+    )
     event_announcer, speech_announcer, playback_gate = _create_live_announcer(args)
+    if mobile_console is not None and event_announcer is not None:
+        event_announcer.port = MobilePromptMirror(
+            event_announcer.port,
+            mobile_console,
+        )
     session = LivePerceptionSession(
         live_config,
         frame_source,
@@ -719,13 +983,19 @@ def _run_live(
     try:
         session.open(session_id)
         writer = _runtime_writer(first_output_path, event_announcer)
+        event_sink = (
+            CompositeRuntimeEventSink(writer, mobile_console)
+            if mobile_console is not None
+            else writer
+        )
+        session.set_runtime_event_sink(event_sink)
         try:
             if event_announcer is not None:
                 event_announcer.publish("registration_focus_changed", role="button")
             roster = session.acquire_roster(
                 frame_source=frame_source,
                 control_source=controls,
-                event_sink=writer,
+                event_sink=event_sink,
                 session_id=session_id,
                 button=Seat(args.button),
                 deadline_ns=time.monotonic_ns()
@@ -739,7 +1009,12 @@ def _run_live(
                 operator_id=args.operator_id,
                 rebuy_to_units=args.rebuy_to_units,
             )
-            boundary_ui = LiveSessionOperatorUI(frame_source, controls)
+            boundary_ui = LiveSessionOperatorUI(
+                frame_source,
+                controls,
+                state_observer=mobile_console,
+                event_announcer=event_announcer,
+            )
             with SessionEventWriter(session_path) as session_writer:
                 session_writer.sync(game_session.log)
                 for index in range(1, args.max_hands + 1):
@@ -769,7 +1044,17 @@ def _run_live(
                         )
                     if index > 1:
                         writer = _runtime_writer(output_path, event_announcer)
+                        event_sink = (
+                            CompositeRuntimeEventSink(writer, mobile_console)
+                            if mobile_console is not None
+                            else writer
+                        )
+                        session.set_runtime_event_sink(event_sink)
                     runtime = game_session.start_hand(current_hand_id)
+                    if mobile_console is not None:
+                        mobile_console.publish_hand_state(runtime)
+                    if event_announcer is not None:
+                        event_announcer.publish("dealing_hole_cards")
                     session_writer.sync(game_session.log)
                     while True:
                         loop = HandRuntimeLoop(
@@ -783,6 +1068,7 @@ def _run_live(
                             frame_source=frame_source,
                             event_writer=writer,
                             diagnostic_sink=diagnostics,
+                            state_observer=mobile_console,
                         )
                         result = loop.run(max_steps=args.max_steps)
                         if runtime.phase.value != "paused_recovery":
@@ -831,6 +1117,8 @@ def _run_live(
                                 else "error"
                             ),
                         )
+                    if event_announcer is not None:
+                        event_announcer.publish("table_not_clear")
                     boundary = boundary_ui.wait_for_decision(
                         game_session,
                         controller,
@@ -839,6 +1127,8 @@ def _run_live(
                     )
                     session_writer.sync(game_session.log)
                     if boundary.signal is SessionOperatorSignal.SESSION_ENDED:
+                        if event_announcer is not None:
+                            event_announcer.publish("session_completed")
                         break
                     if boundary.signal is not SessionOperatorSignal.START_NEXT_HAND:
                         raise RuntimeError(
@@ -850,6 +1140,8 @@ def _run_live(
                         reason="configured_hand_limit_reached",
                     )
                     session_writer.sync(game_session.log)
+                    if event_announcer is not None:
+                        event_announcer.publish("session_completed")
         finally:
             writer.close()
     finally:
@@ -857,6 +1149,8 @@ def _run_live(
         if speech_announcer is not None:
             speech_announcer.close()
         frame_source.close()
+        if mobile_console is not None:
+            mobile_console.stop()
         app.close()
     assert game_session is not None
     session_checked = check_session_log(
@@ -886,7 +1180,7 @@ def _run_live(
         },
         "physical_motion": False,
         "dealer_adapter": "simulated",
-        "face_down_evidence": "development_operator_confirmation",
+        "face_down_evidence": "sensor_valid_dispense_ack_default_face_down",
         "card_gate_2b_passed": False,
         "announcer": args.announcer,
         **_diagnostics_output(diagnostics),
@@ -927,11 +1221,11 @@ def _live_config(
             if args.speech_device is not None
             else profile.speech_device
         ),
+        speech_capture_sample_rate_hz=profile.speech_capture_sample_rate_hz,
         runtime_calibration_id=profile.perception.calibration_id,
         target_geometry_validated=(
             profile.perception.target_geometry_validated
         ),
-        operator_face_down_confirmation=args.development_operator_face_down,
     )
 
 
@@ -940,6 +1234,9 @@ def _run_live_preflight(
     profile: RuntimeProfile,
     diagnostics: DiagnosticRun | None = None,
 ) -> int:
+    announcement_catalog = AnnouncementCatalog.from_json(
+        _announcement_catalog_path(args)
+    )
     report = validate_live_perception_assets(
         _live_config(args, profile, consent_confirmed=False)
     )
@@ -948,9 +1245,15 @@ def _run_live_preflight(
         "profile_id": profile.profile_id.value,
         "assets_valid": True,
         "target_geometry_validated": profile.perception.target_geometry_validated,
-        "full_live_hand_integrated": False,
-        "development_live_available": True,
-        **report,
+        "full_live_hand_integrated": True,
+                "development_live_available": True,
+                "announcement_catalog_id": announcement_catalog.catalog_id,
+                "announcement_catalog_version": (
+                    announcement_catalog.catalog_version
+                ),
+                "announcement_language": announcement_catalog.language,
+                "announcement_count": len(announcement_catalog.entries),
+                **report,
         **_diagnostics_output(diagnostics),
     }
     print(json.dumps(output, ensure_ascii=False))

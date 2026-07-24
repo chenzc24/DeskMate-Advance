@@ -203,7 +203,15 @@ def test_fixed_limit_core_defaults_are_internally_consistent() -> None:
     assert identity["face_identity_scope"] == "session_only_explicit_enrollment"
     assert identity["face_embedding_persistence"] == "memory_only_never_serialized"
     assert identity["face_identity_authority"] == "verification_only_never_selects_acting_seat"
-    assert rules["table_scene"]["phase_driven_roi_activation"] is True
+    assert rules["table_scene"]["phase_driven_target_activation"] is True
+    assert (
+        rules["table_scene"]["spatial_binding_mode"]
+        == "state_directed_view_cycle_full_frame_detector"
+    )
+    assert (
+        rules["deal"]["hole_slot_advance_policy"]
+        == "sensor_valid_dispense_ack_defaults_slot_to_present_face_down"
+    )
     assert rules["ledger"]["physical_chip_recognition"] is False
     assert rules["ledger"]["append_only_hand_log_required"] is True
 

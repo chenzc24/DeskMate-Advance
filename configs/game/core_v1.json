@@ -91,14 +91,15 @@
       "reveal_pending", "face_up_unconfirmed", "confirmed", "cleared",
       "unknown", "conflict"
     ],
-    "phase_driven_roi_activation": true,
-    "robot_ack_role": "proves_dispense_not_card_identity",
-    "vision_role": "proves_occupancy_orientation_and_visible_card_identity",
+    "phase_driven_target_activation": true,
+    "spatial_binding_mode": "state_directed_view_cycle_full_frame_detector",
+    "robot_ack_role": "proves_single_dispense_and_default_face_down_for_hole_cards_not_card_identity",
+    "vision_role": "proves_visible_card_identity_for_board_and_showdown_with_optional_hole_audit",
     "visible_identity_advance_policy": "matching_ack_and_stable_visual_evidence_when_required",
     "duplicate_or_conflict_policy": "pause_for_operator",
     "unknown_or_occluded_policy": "hold_expected_state_and_reobserve",
     "reset_policy": "operator_clears_all_slots_before_next_hand_ready",
-    "roi_geometry_status": "pending_target_camera_evidence"
+    "pixel_roi_policy": "not_required_for_state_directed_view_cycle"
   },
   "deal": {
     "dealing_profile": "robot_core_no_burn",
@@ -113,6 +114,7 @@
     "board_reveal_mode": "pending_s0_13_decision",
     "manual_card_return_after_hand": true,
     "deal_progress_requires_success_ack": true,
+    "hole_slot_advance_policy": "sensor_valid_dispense_ack_defaults_slot_to_present_face_down",
     "misdeal_before_player_action": "void_and_redeal_same_button",
     "physical_state_uncertain": "pause_for_operator"
   },

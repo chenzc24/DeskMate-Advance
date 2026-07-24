@@ -36,6 +36,24 @@ class FaceMatchResult:
     quality_flags: tuple[str, ...] = ()
 
 
+class DuplicateFaceEnrollmentError(ValueError):
+    """A retryable attempt to enroll a face already owned by another seat."""
+
+    def __init__(
+        self,
+        *,
+        existing_player_id: str,
+        existing_seat: Seat,
+        similarity: float,
+        threshold: float,
+    ) -> None:
+        super().__init__("face appears already enrolled under another player")
+        self.existing_player_id = existing_player_id
+        self.existing_seat = existing_seat
+        self.similarity = similarity
+        self.threshold = threshold
+
+
 class SessionFaceGallery:
     """A non-serializable gallery whose templates are zeroed on clear."""
 
@@ -79,9 +97,15 @@ class SessionFaceGallery:
             raise ValueError("invalid enrollment template")
         template = np.asarray(template / norm, dtype=np.float32)
         for record in self._records.values():
-            if float(np.dot(template, record.template)) >= self.config.minimum_similarity:
+            similarity = float(np.dot(template, record.template))
+            if similarity >= self.config.minimum_similarity:
                 template.fill(0.0)
-                raise ValueError("face appears already enrolled under another player")
+                raise DuplicateFaceEnrollmentError(
+                    existing_player_id=record.player_id,
+                    existing_seat=record.seat,
+                    similarity=similarity,
+                    threshold=self.config.minimum_similarity,
+                )
         self._records[player_id] = _EnrollmentRecord(
             player_id, seat, len(samples), template
         )

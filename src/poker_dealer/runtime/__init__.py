@@ -7,14 +7,21 @@ from .sequential_part_a import (
 )
 from .announcer import (
     Announcement,
+    AnnouncementCatalog,
     AnnouncementPolicy,
     AnnouncementPriority,
+    AnnouncementTemplate,
     AnnouncingRuntimeEventWriter,
     AnnouncerPort,
     ConsoleAnnouncer,
     EventAnnouncer,
     SpeechPlaybackGate,
     WindowsSpeechAnnouncer,
+)
+from .audio_input import (
+    AudioInputHealth,
+    AudioInputHealthSnapshot,
+    StreamingPcm16Resampler,
 )
 from .diagnostics import (
     DiagnosticArtifact,
@@ -46,6 +53,12 @@ from .event_log import (
     check_runtime_hand_log,
 )
 from .live_hand_app import CameraSmokeResult, LiveHandApplication, RuntimePreflight
+from .mobile_web_console import (
+    CompositeControlSource,
+    CompositeRuntimeEventSink,
+    MobilePromptMirror,
+    MobileWebConsole,
+)
 from .profile import (
     DealerAdapterKind,
     RuntimeCameraKind,
@@ -90,12 +103,18 @@ from .visual_settle import (
 
 __all__ = [
     "Announcement",
+    "AnnouncementCatalog",
     "AnnouncementPolicy",
     "AnnouncementPriority",
+    "AnnouncementTemplate",
+    "AudioInputHealth",
+    "AudioInputHealthSnapshot",
     "AnnouncingRuntimeEventWriter",
     "AnnouncerPort",
     "CameraSmokeResult",
     "ConsoleAnnouncer",
+    "CompositeControlSource",
+    "CompositeRuntimeEventSink",
     "CoordinatorActionOutcome",
     "DiagnosticArtifact",
     "DiagnosticBundleCheck",
@@ -123,6 +142,8 @@ __all__ = [
     "HandRuntimeLoop",
     "DealerAdapterKind",
     "LiveHandApplication",
+    "MobileWebConsole",
+    "MobilePromptMirror",
     "PartAPhase",
     "PartBMode",
     "PartBPhase",
@@ -149,6 +170,7 @@ __all__ = [
     "RecordedReplaySources",
     "ScriptedReplaySources",
     "StepClock",
+    "StreamingPcm16Resampler",
     "SequentialPartACoordinator",
     "SequentialPartBCoordinator",
     "VisualSettleGate",

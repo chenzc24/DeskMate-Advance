@@ -1,0 +1,7 @@
+{
+  "schema_version": "1.0",
+  "calibration_id": "robot-state-directed-full-frame-development-v1",
+  "target_geometry_validated": false,
+  "binding_mode": "state_directed_full_frame",
+  "slots": {}
+}

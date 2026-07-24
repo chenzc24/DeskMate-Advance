@@ -7,7 +7,7 @@
 
 | `HandPhase` | 唯一活动轨道 | 允许输入 |
 | --- | --- | --- |
-| `DEALING_HOLE` | Part B | 转向 ACK、发牌 ACK、当前底牌槽背面观察 |
+| `DEALING_HOLE` | Part B | 转向 ACK、带完整安全/单张证据的发牌 ACK；ACK 默认该底牌槽背面在位 |
 | `AWAITING_ACTION` | Part A | 画面稳定、身份/归属、当前玩家动作证据 |
 | `DEALING_BOARD` | Part B | 转向 ACK、发牌 ACK、当前公共牌槽观察 |
 | `SHOWDOWN` | Part B | 转向 ACK、未弃牌玩家两张底牌的确认观察 |
@@ -26,18 +26,21 @@ Part B 只维护当前目标和命令相关性：
 ```text
 WAITING_ROTATION_ACK
   -> WAITING_DISPENSE_ACK
-  -> WAITING_VISUAL_CONFIRMATION
-  -> 下一目标或 COMPLETE
+  -> 底牌：ACK 后直接进入下一目标或 COMPLETE
+  -> 公共牌：WAITING_VISUAL_CONFIRMATION -> 下一目标或 COMPLETE
 ```
 
 Showdown 不发牌，因此成功转向后直接等待该玩家两个固定底牌槽。所有命令
 必须使用唯一 `command_id`；重复的已接纳 ACK 幂等，未知/错目标/失败 ACK、
 命令超时、视觉超时和牌面冲突都会让权威引擎进入 `PAUSED_RECOVERY`。
 
-成功发牌 ACK 会先把目标槽持久化为 `delivery_pending`，之后才等待视觉。
-进程重启时，`delivery_pending/face_up_unconfirmed` 从视觉步骤恢复，不会再次
-发牌；若恢复快照仍有未决 command，则进入 `PAUSED_RECOVERY`，不猜测 MCU
-是否已经执行。
+成功底牌发牌 ACK 必须同时证明 `homed=true`、`at_target=true`、
+`deck_present=true`、`exit_pulses=1`、互锁闭合和急停未触发；它将目标槽原子
+持久化为 `present_face_down`，不再要求 F 键或第二次视觉确认。成功公共牌发牌
+ACK 仍先把目标槽持久化为 `delivery_pending`，之后必须等待稳定牌面识别。
+进程重启时，已完成的底牌 ACK 不会重复发牌；公共牌
+`delivery_pending/face_up_unconfirmed` 从视觉步骤恢复。若恢复快照仍有未决
+command，则进入 `PAUSED_RECOVERY`，不猜测 MCU 是否已经执行。
 
 Core v1 无烧牌。完整走到 River 时，Part B 只执行八次底牌和五次公共牌
 发放，共十三次 `dispense_one`。
