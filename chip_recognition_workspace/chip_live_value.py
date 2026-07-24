@@ -157,15 +157,26 @@ def _fuse_raw_color_and_digit(
 ) -> tuple[int | None, bool, float, float, str | None, str | None]:
     """Fuse independent raw-ring and rectified-number evidence."""
 
+    active_denominations = tuple(
+        denomination
+        for denomination in color.scores
+        if denomination in digit.scores
+    )
+    if not active_denominations:
+        return None, False, 0.0, 0.0, None, "no_shared_denomination_scope"
     fused_scores = {
         denomination: 0.72 * color.scores[denomination]
         + 0.28 * digit.scores[denomination]
-        for denomination in (1, 5, 10, 20)
+        for denomination in active_denominations
     }
     ranking = sorted(fused_scores, key=fused_scores.get, reverse=True)
     best = ranking[0]
     best_score = fused_scores[best]
-    margin = best_score - fused_scores[ranking[1]]
+    margin = (
+        best_score - fused_scores[ranking[1]]
+        if len(ranking) > 1
+        else best_score
+    )
 
     if not color.accepted and not digit.accepted:
         return None, False, best_score, margin, None, "colour_and_digit_rejected"
@@ -191,16 +202,17 @@ def _fuse_raw_color_and_digit(
                 for denomination, score in fused_scores.items()
                 if denomination != best
             ]
-            margin = best_score - max(alternatives)
+            margin = best_score - max(alternatives) if alternatives else best_score
             reason = "raw_ring_one_five_override"
         elif digit.best_score >= 0.80 and digit.margin >= 0.50:
             best = int(digit_value)
             best_score = fused_scores[best]
-            margin = best_score - max(
+            alternatives = [
                 score
                 for denomination, score in fused_scores.items()
                 if denomination != best
-            )
+            ]
+            margin = best_score - max(alternatives) if alternatives else best_score
             reason = "strong_digit_conflict_override"
         elif best_score < 0.58 or margin < 0.14:
             return None, False, best_score, margin, None, "colour_digit_conflict"
@@ -211,22 +223,24 @@ def _fuse_raw_color_and_digit(
             return None, False, best_score, margin, None, "digit_rejected"
         best = int(color.denomination)
         best_score = fused_scores[best]
-        margin = best_score - max(
+        alternatives = [
             score
             for denomination, score in fused_scores.items()
             if denomination != best
-        )
+        ]
+        margin = best_score - max(alternatives) if alternatives else best_score
         reason = "strong_raw_ring_only"
     else:
         if digit.best_score < 0.72 or digit.margin < 0.30:
             return None, False, best_score, margin, None, "raw_colour_rejected"
         best = int(digit.denomination)
         best_score = fused_scores[best]
-        margin = best_score - max(
+        alternatives = [
             score
             for denomination, score in fused_scores.items()
             if denomination != best
-        )
+        ]
+        margin = best_score - max(alternatives) if alternatives else best_score
         reason = "strong_digit_only"
 
     accepted = best_score >= 0.44 and margin >= 0.05

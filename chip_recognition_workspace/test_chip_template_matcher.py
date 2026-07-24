@@ -105,3 +105,24 @@ def test_matcher_rejects_blank_chip(tmp_path):
     )
     assert not result.accepted
     assert result.denomination is None
+
+
+@pytest.mark.parametrize("denomination", (10, 20))
+def test_matcher_can_limit_active_denominations(tmp_path, denomination):
+    matcher = ChipTemplateMatcher(
+        _library(tmp_path),
+        minimum_score=0.50,
+        minimum_margin=0.01,
+        allowed_denominations=(10, 20),
+    )
+    result = matcher.match_normalized_chip(_chip_with_text(str(denomination)))
+    assert result.accepted
+    assert result.denomination == denomination
+    assert set(result.scores) == {10, 20}
+
+
+def test_matcher_rejects_invalid_active_denomination_scope(tmp_path):
+    with pytest.raises(ValueError):
+        ChipTemplateMatcher(_library(tmp_path), allowed_denominations=(10, 10))
+    with pytest.raises(ValueError):
+        ChipTemplateMatcher(_library(tmp_path), allowed_denominations=(10,))

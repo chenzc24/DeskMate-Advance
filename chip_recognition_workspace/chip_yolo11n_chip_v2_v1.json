@@ -1,0 +1,67 @@
+{
+  "schema_version": "1.0",
+  "training_id": "chip-yolo11n-localization-chip-v2-v1",
+  "status": "development_target_capture_holdout",
+  "base_model": {
+    "path": "models/assets/chip_recognition/yolo11n-localization-hard-negative-v3/best.pt",
+    "sha256": "7ab3a870bf6865127e3c65fc6c8e771a3c990aed94e97f6977bfdba1ac09e3c3",
+    "source_url": "local immutable hard-negative-v3 development checkpoint",
+    "license_identifier": "project-development-and-upstream-dataset-licenses"
+  },
+  "dataset": {
+    "yaml_path": "data/work/chips/2026-07-24-chip-v2-optimization/dataset/data.yaml",
+    "manifest_path": "data/work/chips/2026-07-24-chip-v2-optimization/dataset/dataset_manifest.json",
+    "manifest_sha256": "bf088a7f856c727d4b827b00d8676e824d48442382ab307a7ff41ebed1ece32b",
+    "required_splits": [
+      "train",
+      "val",
+      "test"
+    ],
+    "split_policy": "base splits preserved; complete oblique 10 and mix sequences train-only; complete oblique 20 sequence target validation; straight sequences template-only",
+    "class_names": {
+      "0": "poker_chip"
+    },
+    "independent_validation": true,
+    "metrics_policy": "report base replay validation/test and the complete held-out target-camera 20 sequence separately; adjacent frames and augmentations never cross splits"
+  },
+  "framework": {
+    "ultralytics": "8.4.93",
+    "torch": "2.5.1+cu121",
+    "device": 0,
+    "polars_skip_cpu_check": true
+  },
+  "train": {
+    "epochs": 12,
+    "batch": 8,
+    "imgsz": 960,
+    "workers": 4,
+    "seed": 20260724,
+    "deterministic": true,
+    "optimizer": "AdamW",
+    "lr0": 0.00008,
+    "lrf": 0.05,
+    "weight_decay": 0.0005,
+    "warmup_epochs": 1.0,
+    "amp": false,
+    "cache": false,
+    "patience": 5,
+    "save": true,
+    "save_period": 5,
+    "mosaic": 0.25,
+    "close_mosaic": 5,
+    "mixup": 0.0,
+    "copy_paste": 0.0,
+    "degrees": 14.0,
+    "translate": 0.07,
+    "scale": 0.25,
+    "shear": 1.5,
+    "perspective": 0.0004,
+    "flipud": 0.0,
+    "fliplr": 0.0,
+    "hsv_h": 0.012,
+    "hsv_s": 0.22,
+    "hsv_v": 0.24,
+    "project": "runs/chip_finetune",
+    "name": "yolo11n-localization-chip-v2-v1"
+  }
+}
