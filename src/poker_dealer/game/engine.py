@@ -444,6 +444,7 @@ class HandEngine:
         button: Seat,
         stacks: Mapping[Seat, int] | None = None,
         rules: FixedLimitRules | None = None,
+        promotion_policy: PromotionPolicy | None = None,
     ) -> HandEngine:
         """Create an auditable pre-hand state without posting blinds."""
 
@@ -472,7 +473,11 @@ class HandEngine:
             },
             rules_version=resolved_rules.rules_version,
         )
-        engine = cls(resolved_rules, state)
+        engine = cls(
+            resolved_rules,
+            state,
+            promoter=ActionPromoter(promotion_policy),
+        )
         engine.log.append(
             kind="session_setup",
             event_id=f"{hand_id}:setup",

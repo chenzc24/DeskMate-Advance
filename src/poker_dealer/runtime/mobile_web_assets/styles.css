@@ -106,11 +106,26 @@ h1 { margin-bottom: 0; font-size: clamp(1.45rem, 3vw, 2.35rem); line-height: 1; 
   border-radius: 10px;
   box-shadow: 0 0 0 1px rgba(0, 0, 0, .55), 0 0 28px rgba(184, 213, 55, .2);
 }
+.face-box.verified {
+  border-color: var(--good);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .55), 0 0 24px rgba(137, 214, 92, .22);
+}
+.face-box.lost { border-color: var(--danger); }
 .face-box::before, .face-box::after {
   content: ""; position: absolute; width: 20px; height: 20px; border-color: #f1ff9b;
 }
 .face-box::before { left: -4px; top: -4px; border-left: 4px solid; border-top: 4px solid; }
 .face-box::after { right: -4px; bottom: -4px; border-right: 4px solid; border-bottom: 4px solid; }
+.action-marker {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(8, 12, 8, .9);
+  border-radius: 50%;
+  background: var(--good);
+  box-shadow: 0 0 0 2px rgba(137, 214, 92, .25), 0 0 18px rgba(137, 214, 92, .8);
+  transform: translate(-50%, -50%);
+}
 .live-pill, .face-message {
   position: absolute; z-index: 3; padding: 8px 11px; border-radius: 9px;
   background: rgba(16, 19, 14, .82); backdrop-filter: blur(8px);
@@ -141,6 +156,7 @@ h1 { margin-bottom: 0; font-size: clamp(1.45rem, 3vw, 2.35rem); line-height: 1; 
 .roster { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
 .roster span { padding: 9px; border-radius: 8px; background: var(--panel-2); color: var(--muted); font-size: .68rem; text-transform: uppercase; }
 .roster span.done { color: var(--good); border: 1px solid rgba(137, 214, 92, .25); }
+.roster span.simulated { color: var(--warn); border-color: rgba(235, 184, 87, .38); }
 .game-panel { display: flex; flex-direction: column; gap: 15px; min-height: 0; }
 .game-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .game-summary > div {
@@ -175,6 +191,7 @@ h1 { margin-bottom: 0; font-size: clamp(1.45rem, 3vw, 2.35rem); line-height: 1; 
   cursor: pointer; touch-action: manipulation;
 }
 .controls button { display: flex; align-items: center; justify-content: center; gap: 9px; }
+.controls button[hidden] { display: none; }
 .controls button.primary { color: #15180f; border-color: var(--accent); background: var(--accent); }
 .controls button:disabled { opacity: .34; cursor: not-allowed; }
 kbd {

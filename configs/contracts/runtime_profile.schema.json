@@ -17,6 +17,7 @@
         "source_id": {"type": "string", "minLength": 1},
         "device_index": {"type": "integer", "minimum": 0},
         "stream_url": {"type": "string", "format": "uri", "pattern": "^https?://"},
+        "stream_endpoint": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$"},
         "backend": {"enum": ["auto", "dshow", "msmf"]},
         "width": {"type": ["integer", "null"], "minimum": 1},
         "height": {"type": ["integer", "null"], "minimum": 1},
@@ -27,11 +28,24 @@
       "allOf": [
         {
           "if": {"properties": {"kind": {"const": "local"}}},
-          "then": {"required": ["device_index"], "not": {"required": ["stream_url"]}}
+          "then": {
+            "required": ["device_index"],
+            "not": {
+              "anyOf": [
+                {"required": ["stream_url"]},
+                {"required": ["stream_endpoint"]}
+              ]
+            }
+          }
         },
         {
           "if": {"properties": {"kind": {"const": "mjpeg"}}},
-          "then": {"required": ["stream_url"]}
+          "then": {
+            "oneOf": [
+              {"required": ["stream_url"]},
+              {"required": ["stream_endpoint"]}
+            ]
+          }
         }
       ]
     },
@@ -76,7 +90,11 @@
       "required": ["enabled", "device"],
       "properties": {
         "enabled": {"type": "boolean"},
-        "device": {"type": ["integer", "string", "null"]}
+        "device": {"type": ["integer", "string", "null"]},
+        "capture_sample_rate_hz": {
+          "type": ["integer", "null"],
+          "minimum": 1
+        }
       }
     },
     "logging": {

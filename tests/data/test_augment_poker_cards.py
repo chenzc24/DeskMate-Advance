@@ -83,3 +83,55 @@ def test_generate_and_validate_unicode_small_target_view(tmp_path: Path) -> None
         "class_count": 1,
         "expected_annotations_per_class": 8,
     }
+
+
+def test_partial_class_split_validates_without_assuming_all_classes(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "partial"
+    labels = source / "labels"
+    labels.mkdir(parents=True)
+    for class_id in (0, 1):
+        image = np.full((240, 320, 3), (70, 105, 70), dtype=np.uint8)
+        cv2.rectangle(image, (100, 35), (220, 215), (245, 245, 245), -1)
+        cv2.putText(
+            image,
+            str(class_id),
+            (108, 65),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.7,
+            (0, 0, 0),
+            2,
+        )
+        _write_png(source / f"card_{class_id}.png", image)
+        boxes = (
+            YoloBox(class_id, 0.37, 0.22, 0.10, 0.12),
+            YoloBox(class_id, 0.63, 0.78, 0.10, 0.12),
+        )
+        (labels / f"card_{class_id}.txt").write_text(
+            "\n".join(box.to_line() for box in boxes) + "\n",
+            encoding="utf-8",
+        )
+
+    output = tmp_path / "partial_derived"
+    generate_dataset(
+        source,
+        labels,
+        output,
+        ["5D", "6D", "7D"],
+        AugmentConfig(
+            width=320,
+            height=240,
+            total_variants=5,
+            profile="validation",
+            seed=23,
+            output_jpeg_quality=90,
+            require_all_classes=False,
+        ),
+    )
+
+    result = validate_dataset(output)
+
+    assert result["valid"] is True
+    assert result["class_count"] == 3
+    assert result["expected_annotations_per_class"] == {"5D": 6, "6D": 4}

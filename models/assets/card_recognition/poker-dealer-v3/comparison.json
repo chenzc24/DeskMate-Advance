@@ -1,0 +1,48 @@
+{
+  "schema_version": "poker_dealer.card_detector_comparison.v1",
+  "created_on": "2026-07-24",
+  "dataset": {
+    "path": "data/work/poker_big_data_v3/dataset/dataset.yaml",
+    "sha256": "c8c87843ed2db8e5f6201058022e13e5488d6496d98ee25e25004a076c2771d6",
+    "split": "val",
+    "images": 375,
+    "instances": 1020,
+    "input_size": 960
+  },
+  "models": {
+    "original_lgd_cards_gen3": {
+      "sha256": "3513b77ab418ac2e86d3bf53be6566522666e656cbccb12678ba93feb6201004",
+      "precision": 0.6022108453498277,
+      "recall": 0.899555218841447,
+      "map50": 0.6694353759354238,
+      "map50_95": 0.5702444567183294
+    },
+    "poker_dealer_v2": {
+      "sha256": "620718e8ac16c8a3f666a7e0ac5e1f533eff3385b0f689ad6ba09cab0724b29b",
+      "precision": 0.9575182808481534,
+      "recall": 0.9130189612552199,
+      "map50": 0.9608956254344848,
+      "map50_95": 0.87646014477493
+    },
+    "poker_dealer_v3": {
+      "sha256": "c7b67016cf4db2d8cfa0e45e79454c41c37ac5245f145a9e0fe4e2abe76e9cb5",
+      "precision": 0.9311237585695101,
+      "recall": 0.9121092291268881,
+      "map50": 0.9740271658247686,
+      "map50_95": 0.9003672742422026
+    }
+  },
+  "v3_minus_v2_percentage_points": {
+    "precision": -2.639452227864329,
+    "recall": -0.09097321283318175,
+    "map50": 1.313154039028378,
+    "map50_95": 2.39071294672726
+  },
+  "selection": {
+    "best_epoch": 7,
+    "stopped_epoch": 13,
+    "criterion": "maximum validation mAP50-95",
+    "state": "candidate",
+    "runtime_selected": false
+  }
+}

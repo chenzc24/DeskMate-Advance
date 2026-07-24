@@ -615,13 +615,19 @@ class AnnouncingRuntimeEventWriter(RuntimeEventWriter):
         payload: Mapping[str, object],
     ) -> None:
         super().emit(kind, observed_at_ns=observed_at_ns, payload=payload)
-        if kind == "registration_enrolled":
+        if kind == "registration_simulated_participant_added":
+            role = str(payload.get("role", ""))
+            seat = str(payload.get("seat", ""))
+            if role and seat:
+                self._roles_by_seat[seat] = role
+        elif kind == "registration_enrolled":
             role = str(payload.get("role", ""))
             seat = str(payload.get("seat", ""))
             if role and seat:
                 self._roles_by_seat[seat] = role
             self.announcer.publish("enrollment_completed", role=role)
-            self.announcer.publish("voice_enrollment_started", role=role)
+            if bool(payload.get("speaker_enrollment_required", True)):
+                self.announcer.publish("voice_enrollment_started", role=role)
         elif kind == "registration_control":
             if (
                 bool(payload.get("accepted", False))
@@ -653,24 +659,27 @@ class AnnouncingRuntimeEventWriter(RuntimeEventWriter):
         elif kind == "speaker_enrollment_completed":
             role = self._roles_by_seat.get(str(payload.get("seat", "")), "")
             self.announcer.publish("voice_enrollment_completed", role=role)
-            registered_roles = set(self._roles_by_seat.values())
-            next_role = next(
-                (
-                    candidate
-                    for candidate in self._REGISTRATION_ROLE_ORDER
-                    if candidate not in registered_roles
-                ),
-                None,
-            )
-            if next_role is not None:
-                self.announcer.publish(
-                    "registration_focus_changed", role=next_role
-                )
+            self._announce_next_registration_role()
+        elif kind == "speaker_enrollment_skipped":
+            self._announce_next_registration_role()
         elif kind in self._RUNTIME_FEEDBACK_EVENTS:
             self.announcer.publish(
                 self._RUNTIME_FEEDBACK_EVENTS[kind],
                 **dict(payload),
             )
+
+    def _announce_next_registration_role(self) -> None:
+        registered_roles = set(self._roles_by_seat.values())
+        next_role = next(
+            (
+                candidate
+                for candidate in self._REGISTRATION_ROLE_ORDER
+                if candidate not in registered_roles
+            ),
+            None,
+        )
+        if next_role is not None:
+            self.announcer.publish("registration_focus_changed", role=next_role)
 
     def sync_engine(self, engine_log: EventLog) -> None:
         first_unwritten = self._engine_events_written

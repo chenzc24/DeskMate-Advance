@@ -59,6 +59,7 @@ from .mobile_web_console import (
     MobilePromptMirror,
     MobileWebConsole,
 )
+from .network import MobileWebEndpoint, NetworkEndpoints
 from .profile import (
     DealerAdapterKind,
     RuntimeCameraKind,
@@ -88,6 +89,7 @@ from .registration import (
     RegistrationPhase,
     RegistrationRuntime,
 )
+from .two_human_test import TwoHumanAutoFoldSource
 from .sequential_part_b import (
     PartBMode,
     PartBPhase,
@@ -144,6 +146,8 @@ __all__ = [
     "LiveHandApplication",
     "MobileWebConsole",
     "MobilePromptMirror",
+    "MobileWebEndpoint",
+    "NetworkEndpoints",
     "PartAPhase",
     "PartBMode",
     "PartBPhase",
@@ -170,6 +174,7 @@ __all__ = [
     "RecordedReplaySources",
     "ScriptedReplaySources",
     "StepClock",
+    "TwoHumanAutoFoldSource",
     "StreamingPcm16Resampler",
     "SequentialPartACoordinator",
     "SequentialPartBCoordinator",

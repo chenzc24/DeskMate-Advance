@@ -4,7 +4,7 @@
   "camera": {
     "kind": "mjpeg",
     "source_id": "robot_mjpeg_camera",
-    "stream_url": "http://100.80.46.54:5000/video_feed",
+    "stream_endpoint": "robot_camera",
     "backend": "auto",
     "width": null,
     "height": null,

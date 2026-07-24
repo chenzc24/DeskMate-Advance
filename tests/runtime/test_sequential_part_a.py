@@ -189,6 +189,25 @@ def test_open_action_window_timeout_pauses_authoritative_hand() -> None:
     assert coordinator.engine.state.paused_reason == "player_action_timeout"
 
 
+def test_action_timeout_starts_after_automatic_identity_verification() -> None:
+    coordinator, _dealer = ready_coordinator()
+    delayed_identity = replace(
+        identity(
+            coordinator,
+            FaceIdentityState.MATCHED,
+            player_id="player_d",
+            registered_seat=Seat.D,
+        ),
+        observed_at_ns=20_000_000_000,
+    )
+    assert coordinator.accept_identity(delayed_identity)
+
+    assert not coordinator.check_timeout(31_000_000_000)
+    assert coordinator.phase is PartAPhase.WAITING_PLAYER_ACTION
+    assert coordinator.check_timeout(50_000_000_000)
+    assert coordinator.engine.state.paused_reason == "player_action_timeout"
+
+
 def test_identity_verification_is_covered_by_attention_timeout() -> None:
     coordinator, _dealer = ready_coordinator()
     assert coordinator.phase is PartAPhase.VERIFYING_IDENTITY
@@ -253,6 +272,8 @@ def test_identity_revocation_closes_action_window_without_state_change() -> None
     assert coordinator.verified_player_id is None
     assert coordinator.engine.state.state_version == version
     assert coordinator.focus_seat is Seat.D
+    assert coordinator.check_timeout(31_000_000_000)
+    assert coordinator.engine.state.paused_reason == "player_action_timeout"
 
 
 def test_four_player_preflop_coordinator_closes_d_a_b_c_in_order() -> None:

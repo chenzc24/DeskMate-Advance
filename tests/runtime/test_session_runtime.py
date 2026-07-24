@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from poker_dealer.domain import HandPhase, PlayerActionType, Seat
-from poker_dealer.game import CoreGameConfig
+from poker_dealer.game import CoreGameConfig, PromotionPolicy
 from poker_dealer.robotics.dealer import SimulatedDealerAdapter
 from poker_dealer.runtime import (
     HandRuntimeLoop,
@@ -53,6 +53,21 @@ def test_two_hand_session_preserves_stacks_and_rotates_button(tmp_path: Path) ->
         seat: player.stack_units + player.hand_commit_units
         for seat, player in second.engine.state.players.items()
     } == expected_stacks
+
+
+def test_live_session_passes_configured_action_threshold_to_each_hand() -> None:
+    config = CoreGameConfig.from_json("configs/game/core_v1.json")
+    session = SessionRuntime(
+        default_replay_roster(),
+        config,
+        action_promotion_policy=PromotionPolicy(minimum_confidence=0.60),
+    )
+
+    runtime = session.start_hand("configured-threshold")
+
+    assert runtime.engine.promoter.policy.minimum_confidence == 0.60
+    assert runtime.engine.promoter.policy.minimum_stable_frames == 3
+    assert runtime.engine.promoter.policy.minimum_stable_duration_ms == 200
 
 
 def test_session_requires_table_clearance_and_audits_rebuy(tmp_path: Path) -> None:

@@ -246,6 +246,58 @@ def test_runtime_writer_advances_audible_registration_roles() -> None:
     ]
 
 
+def test_runtime_writer_skips_voice_prompt_for_face_only_registration() -> None:
+    port = RecordingPort()
+    writer = AnnouncingRuntimeEventWriter(None, EventAnnouncer(port))
+    writer.emit(
+        "registration_enrolled",
+        observed_at_ns=1,
+        payload={
+            "seat": "seat_a",
+            "role": "button",
+            "speaker_enrollment_required": False,
+        },
+    )
+    writer.emit(
+        "speaker_enrollment_skipped",
+        observed_at_ns=2,
+        payload={"seat": "seat_a", "reason": "temporarily_disabled"},
+    )
+
+    assert [item.text for item in port.items] == [
+        "Button registration complete.",
+        "Small Blind, please look at the camera and press the E key.",
+    ]
+
+
+def test_runtime_writer_skips_simulated_registration_roles() -> None:
+    port = RecordingPort()
+    writer = AnnouncingRuntimeEventWriter(None, EventAnnouncer(port))
+    for observed_at_ns, seat, role in (
+        (1, "seat_b", "small_blind"),
+        (2, "seat_c", "big_blind"),
+    ):
+        writer.emit(
+            "registration_simulated_participant_added",
+            observed_at_ns=observed_at_ns,
+            payload={"seat": seat, "role": role, "simulated": True},
+        )
+    writer.emit(
+        "registration_enrolled",
+        observed_at_ns=3,
+        payload={"seat": "seat_a", "role": "button"},
+    )
+    writer.emit(
+        "speaker_enrollment_completed",
+        observed_at_ns=4,
+        payload={"seat": "seat_a"},
+    )
+
+    assert [item.text for item in port.items][-1] == (
+        "Under the Gun, please look at the camera and press the E key."
+    )
+
+
 def test_catalog_registration_progress_uses_fixed_english_phrases() -> None:
     catalog = AnnouncementCatalog.from_json(CATALOG_PATH)
     port = RecordingPort()

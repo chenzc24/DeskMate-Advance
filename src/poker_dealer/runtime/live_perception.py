@@ -35,8 +35,6 @@ from poker_dealer.perception.actions import (
     SpeechObservationAdapter,
     SpeechPilotConfig,
     SpeakerVerificationConfig,
-    SpeechConfirmationController,
-    SpeechConfirmationStatus,
     SpeechIntentKind,
     VoskSpeechRecognizer,
     classify_speech_intent,
@@ -142,6 +140,7 @@ class RegistrationUiState:
     microphone_live: bool = False
     microphone_level: float = 0.0
     microphone_callback_blocks: int = 0
+    simulated_roles: tuple[str, ...] = ()
 
 
 def validate_live_perception_assets(
@@ -220,6 +219,7 @@ class InteractiveOpenCVFrameSource:
         self._registration_ui: RegistrationUiState | None = None
         self._face_boxes: tuple[tuple[int, int, int, int], ...] = ()
         self._face_status: str | None = None
+        self._action_marker: tuple[float, float, str, float] | None = None
         self._window_initialized = False
 
     def open(self) -> None:
@@ -248,6 +248,7 @@ class InteractiveOpenCVFrameSource:
         microphone_live: bool = False,
         microphone_level: float = 0.0,
         microphone_callback_blocks: int = 0,
+        simulated_roles: tuple[str, ...] = (),
     ) -> None:
         self._registration_ui = RegistrationUiState(
             phase=phase,
@@ -266,6 +267,7 @@ class InteractiveOpenCVFrameSource:
             microphone_live=microphone_live,
             microphone_level=microphone_level,
             microphone_callback_blocks=microphone_callback_blocks,
+            simulated_roles=simulated_roles,
         )
         observer = self.registration_observer
         if observer is not None:
@@ -282,6 +284,15 @@ class InteractiveOpenCVFrameSource:
         observer = self.registration_observer
         if observer is not None:
             observer.publish_face_detections(boxes, status=status)
+
+    def set_action_marker(
+        self,
+        marker: tuple[float, float, str, float] | None,
+    ) -> None:
+        self._action_marker = marker
+        observer = self.registration_observer
+        if observer is not None:
+            observer.publish_action_marker(marker)
 
     def read(self) -> FrameRead:
         observer = self.registration_observer
@@ -336,6 +347,15 @@ class InteractiveOpenCVFrameSource:
                 image, self._registration_ui
             )
         display = image.copy()
+        if self._action_marker is not None:
+            marker_x, marker_y, _action, _confidence = self._action_marker
+            height, width = display.shape[:2]
+            center = (
+                int(round(marker_x * width)),
+                int(round(marker_y * height)),
+            )
+            cv2.circle(display, center, 9, (92, 214, 137), -1, cv2.LINE_AA)
+            cv2.circle(display, center, 12, (8, 12, 8), 2, cv2.LINE_AA)
         for index, line in enumerate(self._status_lines):
             cv2.putText(
                 display,
@@ -370,9 +390,12 @@ class InteractiveOpenCVFrameSource:
 
         self._text(canvas, "POKER DEALER", (28, 37), 0.52, accent, 1)
         self._text(canvas, "PLAYER REGISTRATION", (28, 70), 0.94, text, 2)
-        self._text(
-            canvas, "Face + voice enrollment", (358, 67), 0.5, muted, 1
+        enrollment_label = (
+            "Face + voice enrollment"
+            if state.voice_target > 0
+            else "Face-only enrollment · voice commands available in game"
         )
+        self._text(canvas, enrollment_label, (358, 67), 0.5, muted, 1)
         cv2.circle(canvas, (1012, 46), 6, success, -1, cv2.LINE_AA)
         self._text(canvas, "CAMERA LIVE", (1027, 52), 0.42, text, 1)
         mic_color = success if state.speech_enabled else muted
@@ -547,6 +570,7 @@ class InteractiveOpenCVFrameSource:
         for index, (role, short_label) in enumerate(roles):
             row_y = side_y + 354 + index * 45
             completed = role in state.completed_roles
+            simulated = role in state.simulated_roles
             current = role == state.role
             row_color = panel_light if not current else accent_soft
             cv2.rectangle(
@@ -566,7 +590,15 @@ class InteractiveOpenCVFrameSource:
                 text,
                 1,
             )
-            status = "COMPLETE" if completed else "ACTIVE" if current else "PENDING"
+            status = (
+                "SIMULATED"
+                if simulated
+                else "COMPLETE"
+                if completed
+                else "ACTIVE"
+                if current
+                else "PENDING"
+            )
             self._text(
                 canvas,
                 status,
@@ -856,7 +888,7 @@ class LivePerceptionSession:
         self.multimodal = MultimodalActionWindow(
             decision_wait_ms=500,
             max_skew_ms=3000,
-            allow_speech_single_source=False,
+            allow_speech_single_source=True,
         )
         self.visual_settle = VisualSettleGate()
         self._visual_started = False
@@ -886,12 +918,8 @@ class LivePerceptionSession:
         self._last_speech_feedback_ns: int | None = None
         self._speech_recognizer: VoskSpeechRecognizer | None = None
         self._speech_adapter = SpeechObservationAdapter(self.speech_config)
-        self._speech_confirmation = SpeechConfirmationController(
-            confirmation_timeout_ms=self.speaker_config.confirmation_timeout_ms,
-            require_speaker_match=True,
-        )
-        self._verified_speech_similarity: float | None = None
-        self._verified_speech_player_id: str | None = None
+        self._accepted_speech_confidence: float | None = None
+        self._accepted_speech_player_id: str | None = None
 
     def open(self, session_id: str) -> None:
         if not self.config.consent_confirmed:
@@ -994,7 +1022,6 @@ class LivePerceptionSession:
         self.actor_lease.clear()
         self.person_tracker.clear()
         self.multimodal.clear()
-        self._speech_confirmation.clear()
 
     def set_runtime_event_sink(self, event_sink: RuntimeEventSink) -> None:
         self._audio_event_sink = event_sink
@@ -1144,6 +1171,7 @@ class LivePerceptionSession:
         session_id: str,
         button: Seat,
         deadline_ns: int,
+        simulated_seats: Mapping[Seat, str] | None = None,
     ) -> FrozenSessionRoster:
         if (
             self.gallery is None
@@ -1152,12 +1180,31 @@ class LivePerceptionSession:
         ):
             raise RuntimeError("live perception session is not open")
         registration = RegistrationRuntime(session_id, button)
+        simulated_participants = dict(simulated_seats or {})
+
+        def restore_simulated_participants(observed_at_ns: int) -> None:
+            for seat, participant_id in simulated_participants.items():
+                participant = registration.add_simulated_participant(
+                    seat=seat,
+                    participant_id=participant_id,
+                )
+                event_sink.emit(
+                    "registration_simulated_participant_added",
+                    observed_at_ns=observed_at_ns,
+                    payload={
+                        "player_id": participant.participant_id,
+                        "seat": participant.seat.value,
+                        "role": participant.initial_role.value,
+                        "simulated": True,
+                        "face_enrolled": False,
+                        "voice_enrolled": False,
+                    },
+                )
+
+        restore_simulated_participants(time.monotonic_ns())
         samples = []
         last_sample_ns: int | None = None
         last_face_preview_ns: int | None = None
-        voice_player_id: str | None = None
-        voice_seat: Seat | None = None
-        voice_samples = []
         alert_title: str | None = None
         alert_detail: str | None = None
         camera_outage_started_ns: int | None = None
@@ -1174,16 +1221,15 @@ class LivePerceptionSession:
                 registration.select_role(remaining[0])
 
         def update_registration_ui() -> None:
-            voice_active = voice_player_id is not None
-            prompt_playing = bool(
-                voice_active
-                and self._speech_playback_gate is not None
-                and self._speech_playback_gate.is_suppressed()
-            )
             completed_roles = tuple(
                 participant.initial_role.value
                 for participant in registration.participants
-                if participant.voice_enrolled or not self.config.speech_enabled
+                if participant.simulated or participant.face_sample_count > 0
+            )
+            simulated_roles = tuple(
+                participant.initial_role.value
+                for participant in registration.participants
+                if participant.simulated
             )
             if self.config.speech_enabled:
                 audio_snapshot = self._audio_health.snapshot()
@@ -1207,18 +1253,19 @@ class LivePerceptionSession:
                 completed_roles=completed_roles,
                 face_samples=len(samples),
                 face_target=self.identity_config.minimum_samples,
-                voice_samples=len(voice_samples),
-                voice_target=self.speaker_config.minimum_samples,
-                voice_active=voice_active,
-                prompt_playing=prompt_playing,
+                voice_samples=0,
+                voice_target=0,
+                voice_active=False,
+                prompt_playing=False,
                 speech_enabled=self.config.speech_enabled,
                 alert_title=alert_title,
                 alert_detail=alert_detail,
                 microphone_live=microphone_live,
                 microphone_level=microphone_level,
                 microphone_callback_blocks=microphone_callback_blocks,
+                simulated_roles=simulated_roles,
             )
-            if voice_active or registration.phase in {
+            if registration.phase in {
                 RegistrationPhase.READY_TO_START,
                 RegistrationPhase.STARTED,
             }:
@@ -1293,26 +1340,8 @@ class LivePerceptionSession:
                     },
                 )
             last_camera_frame_ns = read.observed_at_ns
-            if (
-                self.config.speech_enabled
-                and not self._audio_input_is_healthy(read.observed_at_ns)
-            ):
-                continue
             frame = read.frame
             for control in control_source.poll_controls(read.observed_at_ns):
-                if voice_player_id is not None and control.intent is ControlIntent.START:
-                    event_sink.emit(
-                        "registration_control",
-                        observed_at_ns=control.observed_at_ns,
-                        payload={
-                            "observation_id": control.observation_id,
-                            "intent": control.intent.value,
-                            "accepted": False,
-                            "reason": "voice_enrollment_pending",
-                            "focus_role": registration.focus_role.value,
-                        },
-                    )
-                    continue
                 outcome = registration.accept_control(control)
                 event_sink.emit(
                     "registration_control",
@@ -1328,12 +1357,8 @@ class LivePerceptionSession:
                 if control.intent is ControlIntent.CLEAR and outcome.accepted:
                     self.gallery.clear()
                     self.speaker_gallery.clear()
+                    restore_simulated_participants(control.observed_at_ns)
                     samples = []
-                    voice_player_id = None
-                    voice_seat = None
-                    for sample in voice_samples:
-                        sample.fill(0.0)
-                    voice_samples = []
                     last_sample_ns = None
                     alert_title = None
                     alert_detail = None
@@ -1357,7 +1382,6 @@ class LivePerceptionSession:
                     return outcome.roster
             if (
                 registration.phase is RegistrationPhase.READY_FOR_FACE
-                and voice_player_id is None
                 and (
                     last_face_preview_ns is None
                     or frame.captured_at_ns - last_face_preview_ns
@@ -1380,7 +1404,6 @@ class LivePerceptionSession:
                 )
             if (
                 registration.phase is RegistrationPhase.CAPTURING_FACE
-                and voice_player_id is None
             ):
                 evidence = self.face_model.analyze(frame)
                 can_sample = (
@@ -1473,88 +1496,23 @@ class LivePerceptionSession:
                             "seat": participant.seat.value,
                             "role": participant.initial_role.value,
                             "sample_count": participant.face_sample_count,
+                            "speaker_enrollment_required": False,
                         },
                     )
                     samples = []
                     last_sample_ns = None
-                    if self.config.speech_enabled:
-                        if self._speech_recognizer is None:
-                            raise RuntimeError("speech recognizer is unavailable")
-                        voice_player_id = participant.participant_id
-                        voice_seat = participant.seat
-                        voice_samples = []
-                        self._speech_recognizer.reset_window()
-                        while not self._audio_queue.empty():
-                            try:
-                                self._audio_queue.get_nowait()
-                            except queue.Empty:
-                                break
-                    else:
-                        advance_registration_role()
-            if voice_player_id is not None:
-                assert voice_seat is not None and self._speech_recognizer is not None
-                if self._speech_input_suppressed(time.monotonic_ns()):
-                    continue
-                while len(voice_samples) < self.speaker_config.minimum_samples:
-                    try:
-                        pcm = self._audio_queue.get_nowait()
-                    except queue.Empty:
-                        break
-                    voice = self._speech_recognizer.accept_audio(
-                        pcm, time.monotonic_ns()
-                    )
-                    if voice is None:
-                        continue
-                    if (
-                        voice.speaker_embedding is None
-                        or voice.speaker_frames
-                        < self.speaker_config.minimum_speaker_frames
-                    ):
-                        self._emit_audio_event(
-                            "voice_enrollment_sample_rejected",
-                            observed_at_ns=voice.observed_at_ns,
-                            payload={
-                                "seat": voice_seat.value,
-                                "sample_number": len(voice_samples) + 1,
-                                "speaker_frames": voice.speaker_frames,
-                                "minimum_speaker_frames": (
-                                    self.speaker_config.minimum_speaker_frames
-                                ),
-                                "reason": "sample_too_short",
-                                "audio_saved": False,
-                            },
-                        )
-                        continue
-                    voice_samples.append(voice.speaker_embedding.copy())
-                    self._emit_audio_event(
-                        "voice_enrollment_sample_accepted",
-                        observed_at_ns=voice.observed_at_ns,
-                        payload={
-                            "seat": voice_seat.value,
-                            "sample_number": len(voice_samples),
-                            "total_samples": self.speaker_config.minimum_samples,
-                        },
-                    )
-                if len(voice_samples) >= self.speaker_config.minimum_samples:
-                    self.speaker_gallery.enroll(voice_player_id, voice_samples)
-                    registration.mark_voice_enrolled(voice_seat)
                     event_sink.emit(
-                        "speaker_enrollment_completed",
-                        observed_at_ns=time.monotonic_ns(),
+                        "speaker_enrollment_skipped",
+                        observed_at_ns=evidence.observed_at_ns,
                         payload={
-                            "player_id": voice_player_id,
-                            "seat": voice_seat.value,
-                            "sample_count": len(voice_samples),
+                            "player_id": participant.participant_id,
+                            "seat": participant.seat.value,
+                            "reason": "temporarily_disabled",
+                            "voice_enrolled": False,
                             "embeddings_logged": False,
                             "audio_saved": False,
                         },
                     )
-                    for sample in voice_samples:
-                        sample.fill(0.0)
-                    voice_samples = []
-                    voice_player_id = None
-                    voice_seat = None
-                    self._speech_recognizer.reset_window()
                     advance_registration_role()
         raise TimeoutError("registration deadline expired")
 
@@ -1601,6 +1559,46 @@ class LivePerceptionSession:
             return False
         return observation.state is VisualSettleState.SETTLED
 
+    @staticmethod
+    def _runtime_seat_label(seat: Seat) -> str:
+        return seat.value.removeprefix("seat_").upper()
+
+    def _publish_runtime_face(
+        self,
+        face: object,
+        *,
+        status: str,
+    ) -> None:
+        setter = getattr(self.frame_source, "set_face_detections", None)
+        if setter is None:
+            return
+        features = getattr(face, "features", ())
+        setter(
+            tuple(feature.bbox_xywh for feature in features),
+            status=status,
+        )
+
+    def _identity_ui_status(
+        self,
+        state: FaceIdentityState,
+        seat: Seat,
+    ) -> str:
+        label = self._runtime_seat_label(seat)
+        if state is FaceIdentityState.NO_FACE:
+            return f"LOOK AT CAMERA · VERIFYING {label}"
+        if state is FaceIdentityState.MULTIPLE_FACES:
+            return "ONE PLAYER ONLY"
+        if state is FaceIdentityState.SEAT_MISMATCH:
+            return f"WRONG PLAYER · EXPECTING {label}"
+        if state in {
+            FaceIdentityState.UNKNOWN,
+            FaceIdentityState.AMBIGUOUS,
+        }:
+            return f"PLAYER NOT RECOGNIZED · EXPECTING {label}"
+        if state is FaceIdentityState.LOW_QUALITY:
+            return "MOVE CLOSER · HOLD STILL"
+        return f"VERIFYING {label}"
+
     def observe_identity(
         self,
         frame: FramePacket | None,
@@ -1628,8 +1626,17 @@ class LivePerceptionSession:
                 context.focus_seat,
             ),
         )
+        self.frame_source.set_action_marker(None)
+        self._publish_runtime_face(
+            face,
+            status=self._identity_ui_status(
+                observation.identity_state,
+                context.focus_seat,
+            ),
+        )
         if observation.identity_state is FaceIdentityState.MATCHED:
             if len(face.features) != 1:
+                self._publish_runtime_face(face, status="ONE PLAYER ONLY")
                 return replace(
                     observation,
                     identity_state=FaceIdentityState.LOW_QUALITY,
@@ -1645,6 +1652,10 @@ class LivePerceptionSession:
                 observed_at_ns=face.observed_at_ns,
             )
             if track is None:
+                self._publish_runtime_face(
+                    face,
+                    status="FACE FOUND · HOLD STILL",
+                )
                 return replace(
                     observation,
                     identity_state=FaceIdentityState.LOW_QUALITY,
@@ -1657,6 +1668,13 @@ class LivePerceptionSession:
                 hand_id=context.hand_id,
                 person_track_id=track.track_id,
                 camera_epoch=context.camera_epoch,
+            )
+            self._publish_runtime_face(
+                face,
+                status=(
+                    f"{self._runtime_seat_label(context.focus_seat)} "
+                    "VERIFIED · LISTENING"
+                ),
             )
         self.frame_source.set_status(
             f"IDENTITY: expected {context.focus_seat.value}",
@@ -1710,6 +1728,14 @@ class LivePerceptionSession:
                 face.observed_at_ns, camera_epoch=context.camera_epoch
             )
         ):
+            self.frame_source.set_action_marker(None)
+            self._publish_runtime_face(
+                face,
+                status=(
+                    "IDENTITY LOST · VERIFYING "
+                    f"{self._runtime_seat_label(context.focus_seat)}"
+                ),
+            )
             observation = self._unknown_action(
                 context, observed_at_ns, self.actor_lease.last_reason
             )
@@ -1717,6 +1743,13 @@ class LivePerceptionSession:
                 observation,
                 identity_revocation_reason=self.actor_lease.last_reason,
             )
+        self._publish_runtime_face(
+            face,
+            status=(
+                f"{self._runtime_seat_label(context.focus_seat)} "
+                "VERIFIED · LISTENING"
+            ),
+        )
         raw_hands = self.gesture_model.recognize_all(frame)
         attributed = attribute_hands_to_target(
             raw_hands,
@@ -1724,6 +1757,28 @@ class LivePerceptionSession:
             target_pose_detector_index=track.pose.detector_index,
             config=self.attribution_config,
         )
+        selected_hand = attributed.selected_hand
+        if (
+            selected_hand is not None
+            and selected_hand.gesture_label in self.gesture_config.gesture_to_action
+            and selected_hand.gesture_score is not None
+            and selected_hand.gesture_score
+            >= self.gesture_config.confirmation.minimum_score
+            and selected_hand.wrist_x is not None
+            and selected_hand.wrist_y is not None
+        ):
+            self.frame_source.set_action_marker(
+                (
+                    round(min(1.0, max(0.0, selected_hand.wrist_x)), 3),
+                    round(min(1.0, max(0.0, selected_hand.wrist_y)), 3),
+                    self.gesture_config.gesture_to_action[
+                        selected_hand.gesture_label
+                    ].value,
+                    round(selected_hand.gesture_score, 3),
+                )
+            )
+        else:
+            self.frame_source.set_action_marker(None)
         gesture_observation = self.gesture_temporal.process(
             attributed.temporal_evidence(frame.captured_at_ns),
             ActionObservationContext(
@@ -1733,24 +1788,7 @@ class LivePerceptionSession:
             ),
         )
         fused = self.multimodal.add(gesture_observation)
-        speaker_confirmed = False
-        expiring = self._speech_confirmation.pending
-        if self._speech_confirmation.expire(observed_at_ns):
-            self.multimodal.cancel_pending_speech()
-            self._verified_speech_similarity = None
-            self._verified_speech_player_id = None
-            self._emit_speech_feedback(
-                "speech_action_confirmation_expired",
-                observed_at_ns=observed_at_ns,
-                payload={
-                    "action": (
-                        expiring.observation.candidate_action.value
-                        if expiring is not None
-                        and expiring.observation.candidate_action is not None
-                        else "action"
-                    )
-                },
-            )
+        recognized_speech_action: PlayerActionType | None = None
         if self._speech_recognizer is not None:
             if self.speaker_gallery is None:
                 raise RuntimeError("speaker gallery is unavailable")
@@ -1766,6 +1804,7 @@ class LivePerceptionSession:
                 speech = self._speech_recognizer.accept_audio(pcm, observed_at_ns)
                 if speech is None:
                     continue
+                intent = classify_speech_intent(speech, self.speech_config)
                 speaker = (
                     self.speaker_gallery.match(
                         speech.speaker_embedding,
@@ -1774,99 +1813,125 @@ class LivePerceptionSession:
                     if speech.speaker_embedding is not None
                     else None
                 )
-                if (
-                    speaker is None
-                    or speaker.state is not SpeakerVerificationState.MATCHED
-                    or speaker.player_id != binding.player_id
-                ):
-                    continue
-                self._verified_speech_similarity = speaker.similarity
-                self._verified_speech_player_id = speaker.player_id
-                speech_observation = self._speech_adapter.process(
-                    speech,
-                    ActionObservationContext(
-                        context.hand_id,
-                        context.state_version,
-                        context.focus_seat,
-                    ),
+                speaker_matches_expected = bool(
+                    speaker is not None
+                    and speaker.state is SpeakerVerificationState.MATCHED
+                    and speaker.player_id == binding.player_id
                 )
-                intent = classify_speech_intent(speech, self.speech_config)
+                if speaker is None:
+                    speaker_state = "embedding_missing"
+                else:
+                    speaker_state = speaker.state.value
+                if intent.kind is SpeechIntentKind.UNKNOWN:
+                    if speech.confidence is None:
+                        rejection_reason = "speech_confidence_missing"
+                    elif speech.confidence < self.speech_config.minimum_confidence:
+                        rejection_reason = "speech_confidence_below_threshold"
+                    else:
+                        rejection_reason = "speech_command_not_understood"
+                else:
+                    rejection_reason = None
+                self._emit_audio_event(
+                    "speech_recognition_result",
+                    observed_at_ns=speech.observed_at_ns,
+                    payload={
+                        "seat": context.focus_seat.value,
+                        "expected_state_version": context.state_version,
+                        "command": speech.canonical_transcript[:32],
+                        "confidence": (
+                            round(speech.confidence, 6)
+                            if speech.confidence is not None
+                            else None
+                        ),
+                        "intent": intent.kind.value,
+                        "candidate_action": (
+                            intent.action.value if intent.action is not None else None
+                        ),
+                        "speaker_state": speaker_state,
+                        "speaker_matches_expected_player": speaker_matches_expected,
+                        "speaker_similarity": (
+                            round(speaker.similarity, 6)
+                            if speaker is not None
+                            and speaker.similarity is not None
+                            else None
+                        ),
+                        "second_best_speaker_similarity": (
+                            round(speaker.second_best_similarity, 6)
+                            if speaker is not None
+                            and speaker.second_best_similarity is not None
+                            else None
+                        ),
+                        "speaker_frames": speech.speaker_frames,
+                        "accepted_for_action": intent.kind is SpeechIntentKind.ACTION,
+                        "confirmation_required": False,
+                        "rejection_reason": rejection_reason,
+                        "speaker_verification_enforced": False,
+                        "speaker_verification_advisory_only": True,
+                        "audio_saved": False,
+                        "embedding_logged": False,
+                    },
+                )
+                if intent.kind is SpeechIntentKind.UNKNOWN:
+                    if speech.is_final:
+                        self._emit_speech_feedback(
+                            "speech_command_not_understood",
+                            observed_at_ns=speech.observed_at_ns,
+                        )
+                    continue
                 if intent.kind is SpeechIntentKind.ACTION:
-                    pending = self._speech_confirmation.offer_action(
-                        speech_observation,
-                        binding,
-                        speaker_player_id=speaker.player_id,
-                    )
-                    if pending.status is SpeechConfirmationStatus.PENDING:
-                        self._emit_speech_feedback(
-                            "speech_action_pending",
-                            observed_at_ns=speech.observed_at_ns,
-                            payload={"action": intent.action.value},
-                            cooldown_ms=0,
-                        )
-                        candidate = self.multimodal.add(speech_observation)
-                        if candidate is not None:
-                            fused = candidate
-                elif intent.kind in {
-                    SpeechIntentKind.CONFIRM,
-                    SpeechIntentKind.CANCEL,
-                }:
-                    confirmation = self._speech_confirmation.handle_control(
-                        intent,
-                        binding,
-                        speaker_player_id=speaker.player_id,
-                    )
-                    if confirmation.status is SpeechConfirmationStatus.CONFIRMED:
-                        fused = confirmation.observation
-                        self.multimodal.cancel_pending_speech()
-                        speaker_confirmed = True
-                    elif confirmation.status is SpeechConfirmationStatus.CANCELLED:
-                        self.multimodal.cancel_pending_speech()
-                        self._emit_speech_feedback(
-                            "speech_action_cancelled",
-                            observed_at_ns=speech.observed_at_ns,
-                            cooldown_ms=0,
-                        )
-                elif intent.kind is SpeechIntentKind.UNKNOWN and speech.is_final:
-                    self._emit_speech_feedback(
-                        "speech_command_not_understood",
-                        observed_at_ns=speech.observed_at_ns,
-                    )
-        if self._consume_runtime_intent(ControlIntent.CONFIRM):
-            pending = self._speech_confirmation.pending
-            if (
-                pending is not None
-                and pending.player_id == binding.player_id
-                and self._verified_speech_player_id == binding.player_id
-            ):
-                confirmed = self.multimodal.confirm_pending_speech(observed_at_ns)
-                if confirmed is not None:
-                    fused = replace(
-                        confirmed,
-                        quality_flags=tuple(
-                            dict.fromkeys(
-                                confirmed.quality_flags
-                                + (
-                                    "speaker_verified_same_actor",
-                                    "speech_ui_confirmed_after_speaker_verification",
-                                )
-                            )
+                    self._accepted_speech_confidence = speech.confidence
+                    self._accepted_speech_player_id = binding.player_id
+                    speech_observation = self._speech_adapter.process(
+                        speech,
+                        ActionObservationContext(
+                            context.hand_id,
+                            context.state_version,
+                            context.focus_seat,
                         ),
                     )
-                    self._speech_confirmation.clear()
-                    speaker_confirmed = True
+                    recognized_speech_action = intent.action
+                    self._emit_speech_feedback(
+                        "speech_action_recognized",
+                        observed_at_ns=speech.observed_at_ns,
+                        payload={"action": intent.action.value},
+                        cooldown_ms=0,
+                    )
+                    candidate = self.multimodal.add(speech_observation)
+                    if candidate is not None:
+                        fused = candidate
+                elif intent.kind is SpeechIntentKind.CANCEL:
+                    self.multimodal.cancel_pending_speech()
+                    self._accepted_speech_confidence = None
+                    self._accepted_speech_player_id = None
+                    self._emit_speech_feedback(
+                        "speech_action_cancelled",
+                        observed_at_ns=speech.observed_at_ns,
+                        cooldown_ms=0,
+                    )
         if self._consume_runtime_intent(
             ControlIntent.CANCEL, ControlIntent.CLEAR
         ):
             self.multimodal.cancel_pending_speech()
-            self._speech_confirmation.clear()
-            self._verified_speech_similarity = None
-            self._verified_speech_player_id = None
+            self._accepted_speech_confidence = None
+            self._accepted_speech_player_id = None
         if fused is None:
             fused = self.multimodal.poll(observed_at_ns)
+        self._publish_runtime_face(
+            face,
+            status=(
+                (
+                    f"{recognized_speech_action.value.upper()} HEARD · SUBMITTING"
+                )
+                if recognized_speech_action is not None
+                else (
+                    f"{self._runtime_seat_label(context.focus_seat)} "
+                    "VERIFIED · LISTENING"
+                )
+            ),
+        )
         self.frame_source.set_status(
             f"ACTION: {context.focus_seat.value}",
-            "gesture or English voice | C confirms speech | Backspace cancels",
+            "gesture or clear English voice",
             f"legal: {','.join(action.value for action in context.legal_actions)}",
         )
         if fused is None or fused.evidence_state is not ActionEvidenceState.CANDIDATE:
@@ -1881,12 +1946,12 @@ class LivePerceptionSession:
         )
         has_speech = "speech" in fusion_flag
         has_gesture = "gesture" in fusion_flag
-        if has_speech and self._verified_speech_player_id != binding.player_id:
+        if has_speech and self._accepted_speech_player_id != binding.player_id:
             return None
         if has_speech and has_gesture:
             values = (
                 attributed.attribution_confidence,
-                self._verified_speech_similarity,
+                self._accepted_speech_confidence,
             )
             attribution_confidence = (
                 min(value for value in values if value is not None)
@@ -1894,31 +1959,25 @@ class LivePerceptionSession:
                 else None
             )
         elif has_speech:
-            attribution_confidence = self._verified_speech_similarity
+            attribution_confidence = self._accepted_speech_confidence
         else:
             attribution_confidence = attributed.attribution_confidence
         if attribution_confidence is None:
             return None
-        if has_speech:
-            self._speech_confirmation.clear()
         return ActionEvidence(
             fused,
             binding,
             (
-                "session_speaker_verification_ui_confirm"
-                if speaker_confirmed
-                else (
-                    "session_speaker_verification"
-                    if has_speech and not has_gesture
-                    else "face_pose_wrist_multimodal"
-                    if has_speech
-                    else "face_pose_wrist"
-                )
+                "face_bound_speech_recognition"
+                if has_speech and not has_gesture
+                else "face_pose_wrist_multimodal"
+                if has_speech
+                else "face_pose_wrist"
             ),
             attribution_confidence,
             (
                 fusion_flag,
-                *(("speaker_verified_same_actor",) if has_speech else ()),
+                *(("speaker_verification_advisory_only",) if has_speech else ()),
             ),
         )
 
@@ -1960,9 +2019,9 @@ class LivePerceptionSession:
         self.actor_lease.clear()
         self.person_tracker.clear()
         self.multimodal.clear()
-        self._speech_confirmation.clear()
-        self._verified_speech_similarity = None
-        self._verified_speech_player_id = None
+        self._accepted_speech_confidence = None
+        self._accepted_speech_player_id = None
+        self.frame_source.set_action_marker(None)
         if self._speech_recognizer is not None:
             self._speech_recognizer.reset_window()
         self._discard_audio_queue()

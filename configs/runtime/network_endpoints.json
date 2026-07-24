@@ -1,0 +1,13 @@
+{
+  "schema_version": "1.0",
+  "mobile_web_console": {
+    "bind_host": "0.0.0.0",
+    "advertised_host": "10.241.149.250",
+    "port": 8765
+  },
+  "camera_streams": {
+    "robot_camera": {
+      "url": "http://100.80.46.54:5000/video_feed"
+    }
+  }
+}

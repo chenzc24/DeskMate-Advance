@@ -14,6 +14,7 @@ from poker_dealer.domain import (
     VisionSlot,
 )
 from poker_dealer.game import (
+    PromotionPolicy,
     CardObservationResult,
     FixedLimitRules,
     HandEngine,
@@ -92,8 +93,15 @@ class HandRuntime:
         visual_timeout_ms: int = 5000,
         expected_player_by_seat: Mapping[Seat, str] | None = None,
         minimum_attribution_confidence: float = 0.35,
+        action_promotion_policy: PromotionPolicy | None = None,
     ) -> HandRuntime:
-        engine = HandEngine.setup_session(hand_id, button, stacks, rules)
+        engine = HandEngine.setup_session(
+            hand_id,
+            button,
+            stacks,
+            rules,
+            promotion_policy=action_promotion_policy,
+        )
         engine.begin_hand(f"{hand_id}:begin")
         return cls(
             engine,
@@ -121,6 +129,7 @@ class HandRuntime:
         command_timeout_ms: int = 5000,
         visual_timeout_ms: int = 5000,
         minimum_attribution_confidence: float = 0.35,
+        action_promotion_policy: PromotionPolicy | None = None,
     ) -> HandRuntime:
         """Start the product path only from a frozen four-player roster."""
 
@@ -145,6 +154,7 @@ class HandRuntime:
             visual_timeout_ms=visual_timeout_ms,
             expected_player_by_seat=players,
             minimum_attribution_confidence=minimum_attribution_confidence,
+            action_promotion_policy=action_promotion_policy,
         )
 
     @property

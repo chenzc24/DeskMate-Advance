@@ -100,7 +100,7 @@ def test_viewer_stale_and_unavailable_commands_fail_closed() -> None:
     assert console.poll_controls(0) == ()
 
 
-def test_state_contains_normalized_face_boxes_and_memory_only_video() -> None:
+def test_state_contains_face_boxes_action_marker_and_memory_only_video() -> None:
     console = MobileWebConsole(frame_rate=1000)
     console.publish_registration_status(_state())
     console.publish_frame(
@@ -108,6 +108,7 @@ def test_state_contains_normalized_face_boxes_and_memory_only_video() -> None:
         observed_at_ns=1_000_000,
     )
     console.publish_face_detections(((20, 10, 40, 30),), status="FACE READY")
+    console.publish_action_marker((0.35, 0.7, "call", 0.82))
 
     snapshot = console.snapshot()
 
@@ -116,7 +117,29 @@ def test_state_contains_normalized_face_boxes_and_memory_only_video() -> None:
     assert snapshot["face_boxes"] == [
         {"x": 0.1, "y": 0.1, "width": 0.2, "height": 0.3}
     ]
+    assert snapshot["action_marker"] == {
+        "x": 0.35,
+        "y": 0.7,
+        "action": "call",
+        "confidence": 0.82,
+    }
     assert not hasattr(console, "recording_path")
+
+
+def test_hand_action_stage_does_not_offer_e_confirmation() -> None:
+    console = MobileWebConsole()
+    console._controller_id = "phone"
+    console._replace_state({"view": "hand", "phase": "awaiting_action"})
+    snapshot = console.snapshot()
+
+    assert snapshot["allowed_intents"] == ["cancel"]
+    rejected = console.submit_command(
+        client_id="phone",
+        command_id="no-game-confirm",
+        intent="confirm",
+        expected_view_version=int(snapshot["view_version"]),
+    )
+    assert rejected["reason"] == "intent_not_available"
 
 
 def test_audio_meter_updates_do_not_invalidate_operator_controls() -> None:
@@ -208,11 +231,17 @@ def test_http_and_websocket_console_round_trip() -> None:
                 script = await response.text()
                 assert "createCommandId()" in script
                 assert "globalThis.crypto?.randomUUID" in script
+                assert "runtimeFaceVisible" in script
+                assert "VERIFIED · LISTENING" in script
+                assert "Say one legal English action clearly" in script
+                assert "message.action_marker" in script
             async with client.get(console.url + "assets/styles.css") as response:
                 stylesheet = await response.text()
                 assert response.status == 200
                 assert "@media (orientation: landscape)" in stylesheet
                 assert "grid-template-columns: minmax(0, 56fr)" in stylesheet
+                assert ".face-box.verified" in stylesheet
+                assert ".action-marker" in stylesheet
             websocket = await client.ws_connect(console.url + "ws")
             hello = await websocket.receive_json()
             state = await websocket.receive_json()

@@ -105,6 +105,64 @@ def test_registration_mobile_web_console_arguments_are_explicit() -> None:
     assert args.headless is True
     assert args.web_host == "127.0.0.1"
     assert args.web_port == 9876
+    assert args.web_url == "http://127.0.0.1:9876/"
+
+
+def test_two_human_development_scenario_flag_is_explicit() -> None:
+    module = _load_script()
+    args = module.parse_args(
+        [
+            "--profile",
+            "robot_camera_audiorelay",
+            "--mode",
+            "live",
+            "--button",
+            "seat_a",
+            "--consent-confirmed",
+            "--development-two-human-ad",
+        ]
+    )
+
+    assert args.development_two_human_ad is True
+
+
+def test_network_config_supplies_default_web_and_camera_endpoints(
+    tmp_path: Path,
+) -> None:
+    network_config = tmp_path / "network.json"
+    network_config.write_text(
+        json.dumps(
+            {
+                "schema_version": "1.0",
+                "mobile_web_console": {
+                    "bind_host": "0.0.0.0",
+                    "advertised_host": "192.168.8.20",
+                    "port": 9000,
+                },
+                "camera_streams": {
+                    "robot_camera": {
+                        "url": "http://192.168.8.30:5000/video_feed"
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    module = _load_script()
+    args = module.parse_args(
+        [
+            "--profile",
+            "robot_camera",
+            "--network-config",
+            str(network_config),
+        ]
+    )
+    profile = module._load_profile(args)
+
+    assert args.web_host == "0.0.0.0"
+    assert args.web_port == 9000
+    assert args.web_url == "http://192.168.8.20:9000/"
+    assert profile.camera.stream_url == "http://192.168.8.30:5000/video_feed"
 
 
 def test_registration_smoke_requires_consent_before_opening_devices(capsys) -> None:

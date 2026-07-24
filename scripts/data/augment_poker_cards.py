@@ -77,6 +77,7 @@ class AugmentConfig:
     seed: int = 20260723
     output_jpeg_quality: int = 92
     workers: int = 4
+    require_all_classes: bool = True
 
     def __post_init__(self) -> None:
         if self.variants_per_image <= 0:
@@ -924,7 +925,7 @@ def generate_dataset(
     sources = discover_sources(source_dir, labels_dir, len(class_names))
     source_classes = Counter(item.boxes[0].class_id for item in sources)
     missing_classes = sorted(set(range(len(class_names))) - set(source_classes))
-    if missing_classes:
+    if missing_classes and config.require_all_classes:
         raise ValueError(f"source set does not cover classes: {missing_classes}")
     if config.total_variants is None:
         source_variant_counts = [config.variants_per_image] * len(sources)
@@ -1164,7 +1165,7 @@ def validate_dataset(output_dir: Path) -> dict[str, object]:
     }
     unbalanced = {
         class_names[class_id]: class_counts[class_id]
-        for class_id in range(len(class_names))
+        for class_id in expected_by_class
         if class_counts[class_id] != expected_by_class[class_id]
     }
     if unbalanced:
@@ -1176,7 +1177,7 @@ def validate_dataset(output_dir: Path) -> dict[str, object]:
     else:
         expected_annotations = {
             class_names[class_id]: expected_by_class[class_id]
-            for class_id in range(len(class_names))
+            for class_id in expected_by_class
         }
     result = {
         "valid": not errors,

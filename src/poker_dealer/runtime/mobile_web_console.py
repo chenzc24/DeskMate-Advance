@@ -94,7 +94,7 @@ class MobileWebConsole:
         self,
         *,
         host: str = "127.0.0.1",
-        port: int = 8765,
+        port: int = 0,
         queue_limit: int = 32,
         jpeg_quality: int = 78,
         frame_rate: float = 10.0,
@@ -119,6 +119,7 @@ class MobileWebConsole:
             "role": "button",
             "seat": "",
             "completed_roles": [],
+            "simulated_roles": [],
             "face_samples": 0,
             "face_target": 0,
             "voice_samples": 0,
@@ -134,6 +135,7 @@ class MobileWebConsole:
         }
         self._face_boxes: tuple[tuple[int, int, int, int], ...] = ()
         self._face_status: str | None = None
+        self._action_marker: tuple[float, float, str, float] | None = None
         self._frame_size = (0, 0)
         self._jpeg: bytes | None = None
         self._frame_version = 0
@@ -193,6 +195,10 @@ class MobileWebConsole:
             raise TypeError("registration state must be a dataclass or mapping")
         completed = value.get("completed_roles", ())
         value["completed_roles"] = list(completed) if isinstance(completed, Sequence) else []
+        simulated = value.get("simulated_roles", ())
+        value["simulated_roles"] = (
+            list(simulated) if isinstance(simulated, Sequence) else []
+        )
         value["view"] = "registration"
         self._replace_state(value)
 
@@ -334,6 +340,24 @@ class MobileWebConsole:
             self._face_status = status
         self._notify_changed()
 
+    def publish_action_marker(
+        self,
+        marker: tuple[float, float, str, float] | None,
+    ) -> None:
+        if marker is not None:
+            x, y, action, confidence = marker
+            if not 0.0 <= x <= 1.0 or not 0.0 <= y <= 1.0:
+                raise ValueError("action marker coordinates must be normalized")
+            if not action.strip():
+                raise ValueError("action marker requires an action label")
+            if not 0.0 <= confidence <= 1.0:
+                raise ValueError("action marker confidence must be in [0, 1]")
+        with self._lock:
+            if marker == self._action_marker:
+                return
+            self._action_marker = marker
+        self._notify_changed()
+
     def publish_frame(self, image: np.ndarray, *, observed_at_ns: int) -> None:
         if cv2 is None:
             return
@@ -460,6 +484,16 @@ class MobileWebConsole:
                 "state": state,
                 "face_boxes": boxes,
                 "face_status": self._face_status,
+                "action_marker": (
+                    {
+                        "x": self._action_marker[0],
+                        "y": self._action_marker[1],
+                        "action": self._action_marker[2],
+                        "confidence": self._action_marker[3],
+                    }
+                    if self._action_marker is not None
+                    else None
+                ),
                 "video_ready": self._jpeg is not None,
                 "runtime_feedback": self._runtime_feedback,
                 "last_prompt": self._last_prompt,
@@ -538,7 +572,7 @@ class MobileWebConsole:
         phase = str(self._state.get("phase", ""))
         if view == "hand":
             if phase == HandPhase.AWAITING_ACTION.value:
-                return (ControlIntent.CONFIRM, ControlIntent.CANCEL)
+                return (ControlIntent.CANCEL,)
             return ()
         if view == "session_boundary":
             if phase == "recovery":

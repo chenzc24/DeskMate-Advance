@@ -10,8 +10,8 @@
     starting: ["1", "Starting", "Waiting for registration state."],
     ready_for_face: ["1", "Align one face", "Keep one player in view, then confirm capture."],
     capturing_face: ["2", "Capturing face", "Keep the current player centered and steady."],
-    ready_to_start: ["4", "Roster ready", "All four players are enrolled. Start the game."],
-    started: ["5", "Registration complete", "The roster is frozen for this session."],
+    ready_to_start: ["3", "Roster ready", "All four faces are enrolled. Start the game."],
+    started: ["4", "Registration complete", "The face roster is frozen for this session."],
   };
   const phaseDescriptions = {
     dealing_hole: "Dealing two face-down hole cards to every player.",
@@ -33,6 +33,8 @@
   let allowed = new Set();
   let pendingIntent = null;
   let latestFaceBoxes = [];
+  let latestFaceStatus = "";
+  let latestActionMarker = null;
   let commandPending = false;
   let phoneVoiceEnabled = true;
 
@@ -103,10 +105,26 @@
     $("alert").hidden = !state.alert_title && !state.paused_reason;
     $("alertTitle").textContent = state.alert_title || (state.paused_reason ? "Recovery required" : "");
     $("alertDetail").textContent = state.alert_detail || humanize(state.paused_reason || "");
-    $("faceStatus").textContent = view === "registration"
+    const simulated = isSimulatedActingSeat(state);
+    const runtimeFaceVisible = (
+      view === "hand"
+      && state.phase === "awaiting_action"
+      && !simulated
+    );
+    const faceStatus = view === "registration"
       ? (message.face_status || (message.video_ready ? "Waiting for one face" : "Waiting for camera"))
+      : simulated
+      ? `${seatShort(state.acting_seat)} SIMULATED · AUTO FOLD`
+      : runtimeFaceVisible
+      ? (message.face_status || runtimeFaceFallback(state))
       : `${humanize(state.phase || "live")} · ${humanize(state.current_target || state.acting_seat || "")}`;
-    renderFaceBoxes(view === "registration" ? (message.face_boxes || []) : []);
+    $("faceStatus").textContent = faceStatus;
+    renderFaceBoxes(
+      view === "registration" || runtimeFaceVisible ? (message.face_boxes || []) : [],
+      faceStatus,
+      runtimeFaceVisible ? message.action_marker : null,
+    );
+    document.querySelector("[data-intent='confirm']").hidden = view === "hand";
     if (message.runtime_feedback) $("feedback").textContent = message.runtime_feedback;
     updateButtons();
   }
@@ -121,10 +139,13 @@
     $("seat").textContent = `Seat ${String(state.seat || "—").replace("seat_", "").toUpperCase()}`;
     setProgress("face", state.face_samples, state.face_target);
     setProgress("voice", state.voice_samples, state.voice_target);
+    const voiceEnrollmentEnabled = Number(state.voice_target || 0) > 0;
+    document.querySelector(".voice-progress").hidden = !voiceEnrollmentEnabled;
+    document.querySelector(".mic-progress").hidden = !voiceEnrollmentEnabled;
     $("micStatus").classList.toggle("offline", !state.microphone_live);
     $("micStatus").lastChild.textContent = state.microphone_live ? " Mic live" : " Mic offline";
     renderMicLevel(state.microphone_level || 0, state.microphone_live);
-    renderRoster(state.completed_roles || []);
+    renderRoster(state.completed_roles || [], state.simulated_roles || []);
     $("confirmLabel").textContent = "Capture";
     $("startLabel").textContent = "Start";
     $("clearLabel").textContent = "Clear";
@@ -171,6 +192,12 @@
   }
 
   function handDetail(state) {
+    if (state.part_a_phase === "verifying_identity") {
+      return `Verifying Seat ${seatShort(state.acting_seat)} automatically. Keep one face in view.`;
+    }
+    if (state.part_a_phase === "waiting_player_action") {
+      return `Seat ${seatShort(state.acting_seat)} verified. Say one legal English action clearly.`;
+    }
     const lane = state.part_a_phase || state.part_b_phase;
     const detail = phaseDescriptions[state.phase] || "Synchronizing game state.";
     return lane ? `${detail} Runtime gate: ${humanize(lane)}.` : detail;
@@ -199,6 +226,25 @@
     const short = String(seat).replace("seat_", "").toUpperCase();
     const player = players?.[seat];
     return player ? `Seat ${short} · ${player}` : `Seat ${short}`;
+  }
+
+  function seatShort(seat) {
+    return String(seat || "?").replace("seat_", "").toUpperCase();
+  }
+
+  function isSimulatedActingSeat(state) {
+    const player = state.players_by_seat?.[state.acting_seat];
+    return String(player || "").startsWith("development-simulator-");
+  }
+
+  function runtimeFaceFallback(state) {
+    const seat = seatShort(state.acting_seat);
+    if (state.part_a_phase === "waiting_player_action") {
+      return `${seat} VERIFIED · LISTENING`;
+    }
+    if (state.part_a_phase === "verifying_identity") return `VERIFYING ${seat}`;
+    if (state.part_a_phase === "waiting_visual_settle") return `POSITIONING ${seat}`;
+    return `WAITING FOR ${seat}`;
   }
 
   function cardLabel(card) {
@@ -266,18 +312,23 @@
     return `Say “${phrase}”, then pause.`;
   }
 
-  function renderRoster(completed) {
+  function renderRoster(completed, simulated) {
     const done = new Set(completed);
+    const simulatedRoles = new Set(simulated);
     $("roster").replaceChildren(...roles.map((role) => {
       const item = document.createElement("span");
       item.textContent = `${done.has(role) ? "✓" : "○"} ${roleLabels[role]}`;
       item.classList.toggle("done", done.has(role));
+      if (simulatedRoles.has(role)) item.textContent += " · SIMULATED";
+      item.classList.toggle("simulated", simulatedRoles.has(role));
       return item;
     }));
   }
 
-  function renderFaceBoxes(boxes) {
+  function renderFaceBoxes(boxes, status = "", actionMarker = null) {
     latestFaceBoxes = boxes;
+    latestFaceStatus = status;
+    latestActionMarker = actionMarker;
     const layer = $("faceLayer");
     const image = $("video");
     const stage = $("videoStage");
@@ -296,15 +347,32 @@
       displayWidth = displayHeight * frameRatio;
       offsetX = (stage.clientWidth - displayWidth) / 2;
     }
-    layer.replaceChildren(...boxes.map((box) => {
+    const overlays = boxes.map((box) => {
       const node = document.createElement("div");
       node.className = "face-box";
+      node.classList.toggle(
+        "verified",
+        status.includes("VERIFIED") || status.includes("HEARD"),
+      );
+      node.classList.toggle(
+        "lost",
+        status.includes("LOST") || status.includes("WRONG"),
+      );
       node.style.left = `${offsetX + box.x * displayWidth}px`;
       node.style.top = `${offsetY + box.y * displayHeight}px`;
       node.style.width = `${box.width * displayWidth}px`;
       node.style.height = `${box.height * displayHeight}px`;
       return node;
-    }));
+    });
+    if (actionMarker) {
+      const marker = document.createElement("div");
+      marker.className = "action-marker";
+      marker.title = `${humanize(actionMarker.action)} detected`;
+      marker.style.left = `${offsetX + actionMarker.x * displayWidth}px`;
+      marker.style.top = `${offsetY + actionMarker.y * displayHeight}px`;
+      overlays.push(marker);
+    }
+    layer.replaceChildren(...overlays);
   }
 
   function updateButtons() {
@@ -350,8 +418,12 @@
   $("confirmButton").addEventListener("click", () => {
     $("confirmDialog").returnValue = "confirm";
   });
-  $("video").addEventListener("load", () => renderFaceBoxes(latestFaceBoxes));
-  window.addEventListener("resize", () => renderFaceBoxes(latestFaceBoxes));
+  $("video").addEventListener("load", () => (
+    renderFaceBoxes(latestFaceBoxes, latestFaceStatus, latestActionMarker)
+  ));
+  window.addEventListener("resize", () => (
+    renderFaceBoxes(latestFaceBoxes, latestFaceStatus, latestActionMarker)
+  ));
   $("voiceToggle").addEventListener("click", () => {
     phoneVoiceEnabled = !phoneVoiceEnabled;
     $("voiceToggle").textContent = phoneVoiceEnabled ? "Phone voice on" : "Phone voice off";

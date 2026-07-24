@@ -10,7 +10,7 @@ import time
 from typing import Mapping
 
 from poker_dealer.domain import DealerAck, DealerCommand, Seat
-from poker_dealer.game import CoreGameConfig, FixedLimitRules
+from poker_dealer.game import CoreGameConfig, FixedLimitRules, PromotionPolicy
 from poker_dealer.io.camera import CameraReadStatus, OpenCVCamera
 from poker_dealer.robotics.dealer import (
     DealerPort,
@@ -238,10 +238,16 @@ class LiveHandApplication:
         *,
         roster: FrozenSessionRoster,
         stacks: Mapping[Seat, int] | None = None,
+        action_promotion_policy: PromotionPolicy | None = None,
     ) -> SessionRuntime:
         if not self._opened:
             raise RuntimeError("application must be open before starting a session")
-        return SessionRuntime(roster, self.game_config, stacks=stacks)
+        return SessionRuntime(
+            roster,
+            self.game_config,
+            stacks=stacks,
+            action_promotion_policy=action_promotion_policy,
+        )
 
     def execute_dealer_command(self, command: DealerCommand) -> DealerAck:
         if not self._opened:

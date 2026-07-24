@@ -10,6 +10,7 @@ from typing import Any, Mapping
 
 from poker_dealer.domain import ControlSource
 from poker_dealer.io.camera import CameraConfig
+from poker_dealer.runtime.network import NetworkEndpoints
 
 
 class RuntimeProfileId(StrEnum):
@@ -34,6 +35,7 @@ class RuntimeCameraProfile:
     source_id: str
     device_index: int = 0
     stream_url: str | None = None
+    stream_endpoint: str | None = None
     backend: str = "auto"
     width: int | None = None
     height: int | None = None
@@ -42,10 +44,14 @@ class RuntimeCameraProfile:
     read_timeout_ms: int = 2000
 
     def __post_init__(self) -> None:
-        if self.kind is RuntimeCameraKind.LOCAL and self.stream_url is not None:
-            raise ValueError("local camera profile cannot contain stream_url")
+        if self.kind is RuntimeCameraKind.LOCAL and (
+            self.stream_url is not None or self.stream_endpoint is not None
+        ):
+            raise ValueError("local camera profile cannot contain a network stream")
         if self.kind is RuntimeCameraKind.MJPEG and self.stream_url is None:
             raise ValueError("MJPEG camera profile requires stream_url")
+        if self.stream_endpoint is not None and not self.stream_endpoint.strip():
+            raise ValueError("camera stream endpoint must not be blank")
         self.to_camera_config()
 
     def to_camera_config(self) -> CameraConfig:
@@ -168,14 +174,36 @@ class RuntimeProfile:
                 raise ValueError("robot-hardware profile requires a real dealer adapter")
 
     @classmethod
-    def from_json(cls, path: Path) -> RuntimeProfile:
+    def from_json(
+        cls,
+        path: Path,
+        *,
+        network_endpoints_path: Path | None = None,
+    ) -> RuntimeProfile:
         value = json.loads(path.read_text(encoding="utf-8"))
         if not isinstance(value, Mapping):
             raise ValueError("runtime profile root must be an object")
-        return cls.from_mapping(value)
+        camera = value.get("camera")
+        endpoint_name = (
+            camera.get("stream_endpoint")
+            if isinstance(camera, Mapping)
+            else None
+        )
+        endpoints = None
+        if endpoint_name is not None:
+            endpoint_path = network_endpoints_path or path.with_name(
+                "network_endpoints.json"
+            )
+            endpoints = NetworkEndpoints.from_json(endpoint_path)
+        return cls.from_mapping(value, network_endpoints=endpoints)
 
     @classmethod
-    def from_mapping(cls, value: Mapping[str, Any]) -> RuntimeProfile:
+    def from_mapping(
+        cls,
+        value: Mapping[str, Any],
+        *,
+        network_endpoints: NetworkEndpoints | None = None,
+    ) -> RuntimeProfile:
         cls._reject_unknown(
             value,
             {"schema_version", "profile_id", "camera", "dealer", "perception", "controls", "speech", "logging"},
@@ -189,8 +217,9 @@ class RuntimeProfile:
         cls._reject_unknown(
             camera,
             {
-                "kind", "source_id", "device_index", "stream_url", "backend",
-                "width", "height", "fps", "open_timeout_ms", "read_timeout_ms",
+                "kind", "source_id", "device_index", "stream_url",
+                "stream_endpoint", "backend", "width", "height", "fps",
+                "open_timeout_ms", "read_timeout_ms",
             },
             "camera",
         )
@@ -222,6 +251,29 @@ class RuntimeProfile:
             isinstance(item, str) for item in controls
         ):
             raise ValueError("controls must be a list of control-source strings")
+        stream_url_value = camera.get("stream_url")
+        stream_endpoint_value = camera.get("stream_endpoint")
+        if stream_url_value is not None and stream_endpoint_value is not None:
+            raise ValueError(
+                "camera stream_url and stream_endpoint are mutually exclusive"
+            )
+        stream_endpoint = (
+            str(stream_endpoint_value)
+            if stream_endpoint_value is not None
+            else None
+        )
+        if stream_endpoint is not None:
+            if network_endpoints is None:
+                raise ValueError(
+                    "camera stream_endpoint requires network endpoints"
+                )
+            stream_url = network_endpoints.camera_stream_url(stream_endpoint)
+        else:
+            stream_url = (
+                str(stream_url_value)
+                if stream_url_value is not None
+                else None
+            )
         return cls(
             schema_version=str(value.get("schema_version", "")),
             profile_id=RuntimeProfileId(str(value.get("profile_id", ""))),
@@ -229,11 +281,8 @@ class RuntimeProfile:
                 kind=RuntimeCameraKind(str(camera.get("kind", ""))),
                 source_id=str(camera.get("source_id", "")),
                 device_index=int(camera.get("device_index", 0)),
-                stream_url=(
-                    str(camera["stream_url"])
-                    if camera.get("stream_url") is not None
-                    else None
-                ),
+                stream_url=stream_url,
+                stream_endpoint=stream_endpoint,
                 backend=str(camera.get("backend", "auto")),
                 width=cls._optional_int(camera.get("width"), "camera.width"),
                 height=cls._optional_int(camera.get("height"), "camera.height"),
@@ -294,6 +343,7 @@ class RuntimeProfile:
                 kind=RuntimeCameraKind.LOCAL,
                 device_index=device_index,
                 stream_url=None,
+                stream_endpoint=None,
             )
         elif stream_url is not None:
             if self.profile_id is RuntimeProfileId.LAPTOP:
@@ -302,6 +352,7 @@ class RuntimeProfile:
                 self.camera,
                 kind=RuntimeCameraKind.MJPEG,
                 stream_url=stream_url,
+                stream_endpoint=None,
             )
         else:
             return self

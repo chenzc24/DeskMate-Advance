@@ -1,0 +1,43 @@
+{
+  "schema_version": "poker_dealer.card_model_comparison.v1",
+  "created_on": "2026-07-24",
+  "scope": {
+    "dataset": "data/work/poker_big_data_v4/dataset/dataset.yaml",
+    "dataset_sha256": "955c43b76005dc62666932fec81a1f09843b422f1ed29c684290af6a6787dead",
+    "split": "val",
+    "images": 455,
+    "instances": 1180,
+    "source_isolation": "all augmented siblings remain in one source-level split"
+  },
+  "v3": {
+    "weight_sha256": "c7b67016cf4db2d8cfa0e45e79454c41c37ac5245f145a9e0fe4e2abe76e9cb5",
+    "precision": 0.9193431977900729,
+    "recall": 0.9192342978368695,
+    "map50": 0.9778201789266132,
+    "map50_95": 0.8946852925570069
+  },
+  "v4": {
+    "weight_sha256": "0204fedbe0e83d887ed370dfc7cd17dfb1da57052d7c30583b127cddd43a2fa1",
+    "precision": 0.9365360675908326,
+    "recall": 0.9281446294223193,
+    "map50": 0.9791442217234282,
+    "map50_95": 0.9107895570550493
+  },
+  "v4_minus_v3_percentage_points": {
+    "precision": 1.71928698007597,
+    "recall": 0.89103315854498,
+    "map50": 0.1324042796815,
+    "map50_95": 1.61042644980424
+  },
+  "rotation_source_classes": {
+    "2C": {"v3_map50_95": 0.7010, "v4_map50_95": 0.7575},
+    "3D": {"v3_map50_95": 0.6244, "v4_map50_95": 0.7314},
+    "4H": {"v3_map50_95": 0.6877, "v4_map50_95": 0.7730},
+    "7D": {"v3_map50_95": 0.6285, "v4_map50_95": 0.6869},
+    "AS": {"v3_map50_95": 0.6499, "v4_map50_95": 0.7767},
+    "KC": {"v3_map50_95": 0.5608, "v4_map50_95": 0.6608},
+    "KH": {"v3_map50_95": 0.6508, "v4_map50_95": 0.7167},
+    "KS": {"v3_map50_95": 0.7099, "v4_map50_95": 0.7875}
+  },
+  "qualification": "Offline evidence supports V4 as a candidate. Live robot-camera rotation and distance testing is still required before runtime selection."
+}

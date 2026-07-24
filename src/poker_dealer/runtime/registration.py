@@ -37,6 +37,7 @@ class RegisteredParticipant:
     initial_role: TableRole
     face_sample_count: int
     voice_enrolled: bool = False
+    simulated: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -169,6 +170,46 @@ class RegistrationRuntime:
         )
         return participant
 
+    def add_simulated_participant(
+        self,
+        *,
+        seat: Seat,
+        participant_id: str,
+    ) -> RegisteredParticipant:
+        """Add one explicit development simulator without claiming enrollment."""
+
+        if self.phase in {RegistrationPhase.CAPTURING_FACE, RegistrationPhase.STARTED}:
+            raise ValueError("cannot add a simulator in the current phase")
+        if not participant_id.strip():
+            raise ValueError("simulated participant ID is required")
+        if seat in self._participants:
+            raise ValueError("seat is already registered")
+        if any(
+            participant.participant_id == participant_id
+            for participant in self._participants.values()
+        ):
+            raise ValueError("participant ID is already registered")
+        role = next(
+            role
+            for role, mapped_seat in self._role_seats.items()
+            if mapped_seat is seat
+        )
+        participant = RegisteredParticipant(
+            participant_id=participant_id,
+            seat=seat,
+            initial_role=role,
+            face_sample_count=0,
+            voice_enrolled=False,
+            simulated=True,
+        )
+        self._participants[seat] = participant
+        self.phase = (
+            RegistrationPhase.READY_TO_START
+            if len(self._participants) == len(SEAT_ORDER)
+            else RegistrationPhase.READY_FOR_FACE
+        )
+        return participant
+
     def reject_face_enrollment(self) -> None:
         if self.phase is not RegistrationPhase.CAPTURING_FACE:
             raise ValueError("face enrollment is not active")
@@ -186,4 +227,5 @@ class RegistrationRuntime:
             participant.initial_role,
             participant.face_sample_count,
             True,
+            participant.simulated,
         )

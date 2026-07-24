@@ -18,16 +18,26 @@ enrollment presents one word per sample in the fixed order `CHECK`, `CALL`,
 
 - `pyproject.toml`
 - `scripts/runtime/run_hand.py`
+- `configs/contracts/network_endpoints.schema.json`
+- `configs/contracts/runtime_profile.schema.json`
+- `configs/runtime/network_endpoints.json`
+- `configs/runtime/robot_camera.json`
+- `configs/runtime/robot_camera_audiorelay.json`
+- `configs/runtime/robot_hardware.json`
 - `src/poker_dealer/domain/controls.py`
 - `src/poker_dealer/runtime/__init__.py`
 - `src/poker_dealer/runtime/live_perception.py`
 - `src/poker_dealer/runtime/mobile_web_console.py`
 - `src/poker_dealer/runtime/mobile_web_assets/`
+- `src/poker_dealer/runtime/network.py`
 - `tests/domain/test_roles_and_controls.py`
 - `tests/runtime/test_mobile_web_console.py`
+- `tests/runtime/test_network_endpoints.py`
 - `tests/runtime/test_registration_runtime.py`
+- `tests/runtime/test_runtime_profiles.py`
 - `tests/runtime/test_run_hand_cli.py`
 - `docs/architecture/mobile-web-console.md`
+- `docs/architecture/network-endpoints.md`
 
 ## Dirty Read-Only Paths
 
@@ -40,7 +50,10 @@ edits where owned paths overlap that work.
 
 - `aiohttp` is an optional runtime dependency for the local HTTP and WebSocket
   service.
-- Android Chrome reaches the Windows endpoint through the private Tailnet.
+- Android Chrome reaches the configured Windows endpoint through trusted local
+  Wi-Fi or an optional private Tailnet.
+- Changeable mobile-web and robot-camera network values are resolved from the
+  single validated `configs/runtime/network_endpoints.json` file.
 - AudioRelay continues to provide the Android microphone and speaker channels;
   the web page does not request browser microphone access.
 
@@ -56,6 +69,8 @@ edits where owned paths overlap that work.
 - Run targeted runtime/domain/CLI tests, then the practical full test suite.
 - Parse affected JSON configurations, run `git diff --check`, and inspect scoped
   `git status --short --branch`.
+- Verify named robot profiles resolve their camera URL from the shared network
+  configuration and CLI network overrides remain explicit.
 - Confirm no camera frames, face images, embeddings, or microphone samples are
   written by the web console.
 

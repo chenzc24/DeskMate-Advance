@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Mapping
 
 from poker_dealer.domain import HandPhase, SEAT_ORDER, Seat, VisionSlot, role_seats
-from poker_dealer.game import CoreGameConfig
+from poker_dealer.game import CoreGameConfig, PromotionPolicy
 
 from .hand_runtime import HandRuntime
 from .registration import FrozenSessionRoster, RegisteredParticipant
@@ -22,6 +22,7 @@ class SessionRuntime:
         *,
         stacks: Mapping[Seat, int] | None = None,
         log: SessionEventLog | None = None,
+        action_promotion_policy: PromotionPolicy | None = None,
     ) -> None:
         if len(roster.participants) != 4:
             raise ValueError("session requires four registered participants")
@@ -37,6 +38,7 @@ class SessionRuntime:
         self._table_cleared = True
         self._hand_ids: set[str] = set()
         self.log = log or SessionEventLog()
+        self.action_promotion_policy = action_promotion_policy
         self._ended = False
         self._append(
             "session_started",
@@ -95,6 +97,7 @@ class SessionRuntime:
             roster=hand_roster,
             stacks=self.stacks,
             rules=self.game_config.rules,
+            action_promotion_policy=self.action_promotion_policy,
         )
         self.active_hand = runtime
         self._table_cleared = False
@@ -308,6 +311,7 @@ class SessionRuntime:
                 roles_by_seat[participant.seat],
                 participant.face_sample_count,
                 participant.voice_enrolled,
+                participant.simulated,
             )
             for participant in self.roster.participants
         )

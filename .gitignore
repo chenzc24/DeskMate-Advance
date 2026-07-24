@@ -47,6 +47,10 @@ models/assets/card_recognition/*
 !models/assets/card_recognition/lgd-cards-gen3/**
 !models/assets/card_recognition/poker-dealer-v2/
 !models/assets/card_recognition/poker-dealer-v2/**
+!models/assets/card_recognition/poker-dealer-v3/
+!models/assets/card_recognition/poker-dealer-v3/**
+!models/assets/card_recognition/poker-dealer-v4/
+!models/assets/card_recognition/poker-dealer-v4/**
 !models/assets/chip_recognition/
 models/assets/chip_recognition/*
 !models/assets/chip_recognition/yolo11n-localization-hard-negative-v3/
@@ -70,6 +74,8 @@ models/**/*.task
 !models/assets/vosk-model-spk-0.4/**
 !models/assets/card_recognition/lgd-cards-gen3/**
 !models/assets/card_recognition/poker-dealer-v2/**
+!models/assets/card_recognition/poker-dealer-v3/**
+!models/assets/card_recognition/poker-dealer-v4/**
 !models/assets/chip_recognition/yolo11n-localization-hard-negative-v3/**
 !models/assets/chip_recognition/las-vegas-denomination-templates-v1/**
 chip_recognition_workspace/pretrained/

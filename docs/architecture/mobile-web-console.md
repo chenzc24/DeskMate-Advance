@@ -41,18 +41,27 @@ committed event -> English announcement -> Windows TTS + mirrored phone TTS
   --headless
 ```
 
-The default endpoint is `http://127.0.0.1:8765/`. Omit `--headless` to retain
-the simultaneous OpenCV/keyboard fallback.
-
-For private phone access, keep loopback binding and use Tailnet-only serving:
+The bind address, phone-visible Windows address, web port and robot camera URL
+come from `configs/runtime/network_endpoints.json`. Omit `--headless` to retain
+the simultaneous OpenCV/keyboard fallback. Display the current phone URL with:
 
 ```powershell
-tailscale serve --bg 8765
+$network = Get-Content configs/runtime/network_endpoints.json | ConvertFrom-Json
+"http://$($network.mobile_web_console.advertised_host):$($network.mobile_web_console.port)/"
+```
+
+For optional Tailnet-only access, temporarily override the bind address and
+serve the configured port:
+
+```powershell
+$network = Get-Content configs/runtime/network_endpoints.json | ConvertFrom-Json
+.\.venv\Scripts\python.exe scripts\runtime\run_hand.py ... --web-host 127.0.0.1
+tailscale serve --bg $network.mobile_web_console.port
 tailscale serve status
 ```
 
-Do not use a public Funnel. Direct `--web-host 0.0.0.0` binding requires a
-restrictive Windows firewall and Tailnet ACL.
+Do not use a public Funnel. Direct local-Wi-Fi binding requires a restrictive
+Windows firewall and a trusted private network.
 
 ## State and control semantics
 

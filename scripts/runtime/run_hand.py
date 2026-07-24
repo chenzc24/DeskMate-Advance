@@ -13,6 +13,8 @@ import sys
 import time
 
 from poker_dealer.runtime.live_hand_app import LiveHandApplication
+from poker_dealer.game import PromotionPolicy
+from poker_dealer.runtime.network import MobileWebEndpoint, NetworkEndpoints
 from poker_dealer.runtime.profile import RuntimeProfile
 from poker_dealer.domain import Seat
 from poker_dealer.robotics.dealer import SimulatedDealerAdapter
@@ -34,6 +36,7 @@ from poker_dealer.runtime import (
     RuntimeEventWriter,
     ScriptedReplaySources,
     StepClock,
+    TwoHumanAutoFoldSource,
     SessionRuntime,
     SessionEventLog,
     SessionEventWriter,
@@ -56,6 +59,7 @@ from poker_dealer.runtime.live_perception import (
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_ANNOUNCEMENT_CATALOG = ROOT / "configs" / "runtime" / "announcements_en.json"
+DEFAULT_NETWORK_ENDPOINTS = ROOT / "configs" / "runtime" / "network_endpoints.json"
 NAMED_PROFILES = {name: ROOT / "configs" / "runtime" / f"{name}.json" for name in (
     "laptop",
     "laptop_audiorelay",
@@ -143,15 +147,30 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="serve the full registration, hand, recovery and session console",
     )
     parser.add_argument(
+        "--development-two-human-ad",
+        action="store_true",
+        help=(
+            "development live test: seats A/D remain human while explicitly "
+            "simulated seats B/C auto-fold through normal runtime gates"
+        ),
+    )
+    parser.add_argument(
+        "--network-config",
+        type=Path,
+        default=DEFAULT_NETWORK_ENDPOINTS,
+        help=(
+            "shared network endpoints JSON; defaults to "
+            "configs/runtime/network_endpoints.json"
+        ),
+    )
+    parser.add_argument(
         "--web-host",
-        default="127.0.0.1",
-        help="mobile web bind address; keep loopback when using Tailscale Serve",
+        help="temporary mobile-web bind override; otherwise use --network-config",
     )
     parser.add_argument(
         "--web-port",
         type=int,
-        default=8765,
-        help="mobile web TCP port",
+        help="temporary mobile-web port override; otherwise use --network-config",
     )
     parser.add_argument(
         "--identity-config",
@@ -228,7 +247,22 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=32,
         help="maximum MiB in each diagnostics JSONL stream",
     )
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    endpoints = NetworkEndpoints.from_json(_network_path(args.network_config))
+    requested_web_host = args.web_host
+    if args.web_host is None:
+        args.web_host = endpoints.mobile_web_console.bind_host
+    if args.web_port is None:
+        args.web_port = endpoints.mobile_web_console.port
+    advertised_host = endpoints.mobile_web_console.advertised_host
+    if requested_web_host not in {None, "0.0.0.0", "::"}:
+        advertised_host = requested_web_host
+    args.web_url = MobileWebEndpoint(
+        bind_host=args.web_host,
+        advertised_host=advertised_host,
+        port=args.web_port,
+    ).browser_url
+    return args
 
 
 def _profile_path(value: str) -> Path:
@@ -238,8 +272,15 @@ def _profile_path(value: str) -> Path:
     return path if path.is_absolute() else ROOT / path
 
 
+def _network_path(value: Path) -> Path:
+    return value if value.is_absolute() else ROOT / value
+
+
 def _load_profile(args: argparse.Namespace) -> RuntimeProfile:
-    profile = RuntimeProfile.from_json(_profile_path(args.profile))
+    profile = RuntimeProfile.from_json(
+        _profile_path(args.profile),
+        network_endpoints_path=_network_path(args.network_config),
+    )
     profile = profile.with_camera_override(
         device_index=args.camera_index,
         stream_url=args.stream_url,
@@ -290,6 +331,7 @@ def _create_diagnostics(
         max_bytes_per_stream=args.diagnostics_max_mib * 1024 * 1024,
     )
     diagnostics.add_config("runtime_profile", _profile_path(args.profile))
+    diagnostics.add_config("network_endpoints", _network_path(args.network_config))
     diagnostics.add_config("core_game", ROOT / "configs" / "game" / "core_v1.json")
     catalog_path = args.announcement_catalog or DEFAULT_ANNOUNCEMENT_CATALOG
     diagnostics.add_config(
@@ -318,6 +360,10 @@ def _run_with_error_boundary(
         if args.web_console and mode not in {"registration-smoke", "live"}:
             raise ValueError(
                 "--web-console is available only in registration-smoke or live mode"
+            )
+        if args.development_two_human_ad and mode != "live":
+            raise ValueError(
+                "--development-two-human-ad is available only in live mode"
             )
         if not 1 <= args.web_port <= 65535:
             raise ValueError("--web-port must be between 1 and 65535")
@@ -786,7 +832,7 @@ def _run_registration_smoke(
             json.dumps(
                 {
                     "type": "mobile_web_console_started",
-                    "url": mobile_console.url,
+                    "url": args.web_url,
                     "audio_transport": "audiorelay",
                     "frames_saved": False,
                 }
@@ -915,6 +961,12 @@ def _run_live(
 ) -> int:
     if profile.dealer.physical_motion:
         raise RuntimeError("live hardware mode remains Robotics-gated and unavailable")
+    if args.development_two_human_ad and not isinstance(
+        app.dealer, SimulatedDealerAdapter
+    ):
+        raise RuntimeError(
+            "the two-human development scenario requires the simulated dealer"
+        )
     if args.headless and not args.web_console:
         raise ValueError("headless live mode requires --web-console as the operator UI")
     if not args.consent_confirmed:
@@ -949,7 +1001,7 @@ def _run_live(
             json.dumps(
                 {
                     "type": "mobile_web_console_started",
-                    "url": mobile_console.url,
+                    "url": args.web_url,
                     "scope": "full_live_session",
                     "audio_transport": "audiorelay",
                     "frames_saved": False,
@@ -992,6 +1044,14 @@ def _run_live(
         try:
             if event_announcer is not None:
                 event_announcer.publish("registration_focus_changed", role="button")
+            simulated_players = (
+                {
+                    Seat.B: "development-simulator-seat-b",
+                    Seat.C: "development-simulator-seat-c",
+                }
+                if args.development_two_human_ad
+                else {}
+            )
             roster = session.acquire_roster(
                 frame_source=frame_source,
                 control_source=controls,
@@ -1000,10 +1060,28 @@ def _run_live(
                 button=Seat(args.button),
                 deadline_ns=time.monotonic_ns()
                 + int(args.registration_timeout_seconds * 1_000_000_000),
+                simulated_seats=simulated_players,
             )
             if event_announcer is not None:
                 event_announcer.publish("roster_ready")
-            game_session = app.create_session(roster=roster)
+            action_promotion_policy = PromotionPolicy(
+                minimum_confidence=(
+                    session.gesture_config.confirmation.minimum_score
+                )
+            )
+            game_session = app.create_session(
+                roster=roster,
+                action_promotion_policy=action_promotion_policy,
+            )
+            player_action_source = (
+                TwoHumanAutoFoldSource(
+                    session,
+                    simulated_players,
+                    promotion_policy=action_promotion_policy,
+                )
+                if simulated_players
+                else session
+            )
             controller = SessionOperatorController(
                 game_session,
                 operator_id=args.operator_id,
@@ -1060,8 +1138,8 @@ def _run_live(
                         loop = HandRuntimeLoop(
                             runtime,
                             app.dealer,
-                            identity_source=session,
-                            action_source=session,
+                            identity_source=player_action_source,
+                            action_source=player_action_source,
                             card_source=session,
                             visual_settle_source=session,
                             control_source=controls,
@@ -1183,6 +1261,11 @@ def _run_live(
         "face_down_evidence": "sensor_valid_dispense_ack_default_face_down",
         "card_gate_2b_passed": False,
         "announcer": args.announcer,
+        "development_scenario": (
+            "two_human_ad_bc_auto_fold"
+            if args.development_two_human_ad
+            else None
+        ),
         **_diagnostics_output(diagnostics),
     }
     print(json.dumps(output, ensure_ascii=False))

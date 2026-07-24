@@ -21,7 +21,9 @@ ROOT = Path(__file__).resolve().parents[2]
     ("name", "profile_id", "camera_kind", "dealer_kind", "ready"),
     [
         ("laptop", RuntimeProfileId.LAPTOP, RuntimeCameraKind.LOCAL, DealerAdapterKind.SIMULATED, True),
+        ("laptop_audiorelay", RuntimeProfileId.LAPTOP, RuntimeCameraKind.LOCAL, DealerAdapterKind.SIMULATED, True),
         ("robot_camera", RuntimeProfileId.ROBOT_CAMERA, RuntimeCameraKind.MJPEG, DealerAdapterKind.SIMULATED, True),
+        ("robot_camera_audiorelay", RuntimeProfileId.ROBOT_CAMERA, RuntimeCameraKind.MJPEG, DealerAdapterKind.SIMULATED, True),
         ("robot_hardware", RuntimeProfileId.ROBOT_HARDWARE, RuntimeCameraKind.MJPEG, DealerAdapterKind.REAL, False),
     ],
 )

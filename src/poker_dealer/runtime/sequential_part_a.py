@@ -182,7 +182,9 @@ class SequentialPartACoordinator:
             return False
         self.verified_player_id = observation.player_id
         self.active_actor_binding = None
-        self._action_window_opened_at_ns = observation.observed_at_ns
+        if self._action_window_opened_at_ns is None:
+            self._action_window_opened_at_ns = observation.observed_at_ns
+        self._attention_window_opened_at_ns = None
         self.phase = PartAPhase.WAITING_PLAYER_ACTION
         self.last_reason = "identity_verified_action_window_open"
         return True
@@ -277,7 +279,6 @@ class SequentialPartACoordinator:
             raise ValueError("identity revocation reason is required")
         self.verified_player_id = None
         self.active_actor_binding = None
-        self._action_window_opened_at_ns = None
         self.phase = PartAPhase.VERIFYING_IDENTITY
         self.last_reason = f"identity_revoked:{reason}"
 
@@ -316,23 +317,33 @@ class SequentialPartACoordinator:
         ):
             self._enter_recovery("visual_settle_timeout")
             return True
-        if (
+        action_deadline_reached = (
+            self.phase
+            in {
+                PartAPhase.VERIFYING_IDENTITY,
+                PartAPhase.WAITING_PLAYER_ACTION,
+            }
+            and self._action_window_opened_at_ns is not None
+            and now_ns
+            >= self._action_window_opened_at_ns
+            + self.engine.rules.action_timeout_seconds * 1_000_000_000
+        )
+        if action_deadline_reached:
+            self._enter_recovery("player_action_timeout")
+            return True
+        attention_deadline_reached = (
             self.phase
             in {
                 PartAPhase.WAITING_VISUAL_SETTLE,
                 PartAPhase.VERIFYING_IDENTITY,
-                PartAPhase.WAITING_PLAYER_ACTION,
             }
             and self._attention_window_opened_at_ns is not None
             and now_ns
             >= self._attention_window_opened_at_ns
             + self.engine.rules.action_timeout_seconds * 1_000_000_000
-        ):
-            self._enter_recovery(
-                "player_action_timeout"
-                if self.phase is PartAPhase.WAITING_PLAYER_ACTION
-                else "attention_window_timeout"
-            )
+        )
+        if attention_deadline_reached:
+            self._enter_recovery("attention_window_timeout")
             return True
         return False
 
