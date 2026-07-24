@@ -1,0 +1,28 @@
+{
+  "roi_top_ratio": 0.42,
+  "segmentation_mode": "hsv_white_on_green",
+  "line_polarity": "light",
+  "white_saturation_max": 82,
+  "white_value_min": 168,
+  "green_hue_min": 32,
+  "green_hue_max": 96,
+  "green_saturation_min": 45,
+  "green_value_min": 28,
+  "minimum_green_roi_ratio": 0.18,
+  "minimum_green_component_ratio": 0.01,
+  "blur_kernel": 5,
+  "morphology_kernel": 5,
+  "minimum_component_area_ratio": 0.006,
+  "maximum_component_area_ratio": 0.5,
+  "minimum_component_width_ratio": 0.015,
+  "maximum_component_width_ratio": 0.6,
+  "target_component_area_ratio": 0.1,
+  "minimum_valid_bands": 2,
+  "minimum_confidence": 0.38,
+  "continuity_scale": 0.28,
+  "band_weights": [
+    0.15,
+    0.3,
+    0.55
+  ]
+}

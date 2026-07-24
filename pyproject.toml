@@ -29,6 +29,7 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 "poker_dealer.runtime" = ["mobile_web_assets/*"]
+"track_line" = ["*.json", "README.md"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

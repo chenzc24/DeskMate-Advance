@@ -1,0 +1,20 @@
+{
+  "roi_top_ratio": 0.42,
+  "segmentation_mode": "gray_otsu",
+  "line_polarity": "dark",
+  "blur_kernel": 5,
+  "morphology_kernel": 5,
+  "minimum_component_area_ratio": 0.006,
+  "maximum_component_area_ratio": 0.5,
+  "minimum_component_width_ratio": 0.015,
+  "maximum_component_width_ratio": 0.6,
+  "target_component_area_ratio": 0.1,
+  "minimum_valid_bands": 2,
+  "minimum_confidence": 0.38,
+  "continuity_scale": 0.28,
+  "band_weights": [
+    0.15,
+    0.3,
+    0.55
+  ]
+}
