@@ -3,7 +3,102 @@
   "updated_on": "2026-07-24",
   "asset_root": "models/assets",
   "runtime_downloads_allowed": false,
-  "notes": "No Poker Dealer model is admitted for release without the required held-out metrics. The operational MediaPipe gesture/pose, Vosk English/speaker verification, YuNet and SFace assets are now selectively visible for Git LFS packaging but remain development runtime components until their admission blockers are closed. The chip-v2 localization checkpoint and fixed-design 10/20 rim-colour classifier are tracked development models only; physical chip evidence remains Plus-only and never replaces the digital ledger. The frozen card-recognition v2 checkpoint remains a candidate under debugging; both card-recognition asset families remain tracked and are not re-ignored.",
+  "notes": "No Poker Dealer model is admitted for release without the required held-out metrics. The 2026-07-24 perception freeze locks Card V4, chip-v2-v1 localization, fixed-design 10/20 denomination, original English speech/speaker, YuNet/SFace, canned gesture and pose-attribution bytes in Git/Git LFS without changing their admission states or runtime selection. Physical chip evidence remains Plus-only and never replaces the digital ledger.",
+  "frozen_sets": [
+    {
+      "freeze_id": "perception-baseline-20260724",
+      "frozen_on": "2026-07-24",
+      "status": "immutable_git_snapshot",
+      "runtime_selection_changed": false,
+      "admission_state_changed": false,
+      "assets": [
+        {
+          "model_id": "card-identity-lgd-yolo11s-52class",
+          "version": "poker-dealer-v4-20260724",
+          "state": "candidate",
+          "path": "models/assets/card_recognition/poker-dealer-v4/best.pt",
+          "bytes": 19279130,
+          "sha256": "0204fedbe0e83d887ed370dfc7cd17dfb1da57052d7c30583b127cddd43a2fa1",
+          "storage": "git-lfs"
+        },
+        {
+          "model_id": "chip-localization-yolo11n",
+          "version": "chip-v2-v1-20260724",
+          "state": "development",
+          "path": "models/assets/chip_recognition/yolo11n-localization-hard-negative-v3/best.pt",
+          "bytes": 5532435,
+          "sha256": "80998949eb499a1c2f82045439757fdb697739fd9ab54df78fe4118109db5b20",
+          "storage": "git-lfs",
+          "path_note": "The historical hard-negative-v3 directory name is retained; the frozen bytes are chip-v2-v1."
+        },
+        {
+          "model_id": "chip-denomination-rim-colour-binary",
+          "version": "v1-20260724",
+          "state": "development",
+          "path": "models/assets/chip_recognition/rim-colour-binary-10-20-v1/model.json",
+          "bytes": 5206,
+          "sha256": "c0be8c9dcbed5aaca933d5566e0d5275db3fc0a3cf6a81f0206f158ccfda52c2",
+          "storage": "git"
+        },
+        {
+          "model_id": "player-action-vosk-small-en-us",
+          "version": "vosk-model-small-en-us-0.15",
+          "state": "development",
+          "path": "models/assets/vosk-model-small-en-us-0.15",
+          "tree_files": 14,
+          "tree_bytes": 70898967,
+          "tree_sha256": "57929637421baa20ff74ffb194f48e7c4a5bd0c09eac1c79a3c305ddf32db038",
+          "storage": "git-lfs"
+        },
+        {
+          "model_id": "player-speaker-vosk-spk",
+          "version": "vosk-model-spk-0.4",
+          "state": "development",
+          "path": "models/assets/vosk-model-spk-0.4",
+          "tree_files": 5,
+          "tree_bytes": 15001021,
+          "tree_sha256": "bfb2d247c774f5e721607923e14ee1d91282fcb158c9d634ecae7d14cae28639",
+          "storage": "git-lfs"
+        },
+        {
+          "model_id": "face-identity-opencv-yunet",
+          "version": "face_detection_yunet_2023mar",
+          "state": "development",
+          "path": "models/assets/face_identity/face_detection_yunet_2023mar.onnx",
+          "bytes": 232589,
+          "sha256": "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4",
+          "storage": "git-lfs"
+        },
+        {
+          "model_id": "face-identity-opencv-sface",
+          "version": "face_recognition_sface_2021dec",
+          "state": "development",
+          "path": "models/assets/face_identity/face_recognition_sface_2021dec.onnx",
+          "bytes": 38696353,
+          "sha256": "0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e83484087c34e79",
+          "storage": "git-lfs"
+        },
+        {
+          "model_id": "player-action-mediapipe-canned-gesture",
+          "version": "float16-latest-downloaded-20260721",
+          "state": "development",
+          "path": "models/assets/gesture_recognizer.task",
+          "bytes": 8373440,
+          "sha256": "97952348cf6a6a4915c2ea1496b4b37ebabc50cbbf80571435643c455f2b0482",
+          "storage": "git-lfs"
+        },
+        {
+          "asset_id": "mediapipe-pose-landmarker-lite",
+          "version": "float16-local-20260721",
+          "state": "development",
+          "path": "models/assets/pose_landmarker_lite.task",
+          "bytes": 5777746,
+          "sha256": "59929e1d1ee95287735ddd833b19cf4ac46d29bc7afddbbf6753c459690d574a",
+          "storage": "git-lfs"
+        }
+      ]
+    }
+  ],
   "models": [
     {
       "model_id": "player-action-mediapipe-canned-gesture",
@@ -26,7 +121,8 @@
         "path": "models/assets/gesture_recognizer.task",
         "bytes": 8373440,
         "sha256": "97952348cf6a6a4915c2ea1496b4b37ebabc50cbbf80571435643c455f2b0482",
-        "git_tracked": false
+        "git_tracked": true,
+        "storage": "git-lfs"
       },
       "framework": {
         "name": "mediapipe-tasks-python",
@@ -75,7 +171,9 @@
         "tree_files": 14,
         "tree_bytes": 70898967,
         "tree_sha256": "57929637421baa20ff74ffb194f48e7c4a5bd0c09eac1c79a3c305ddf32db038",
-        "git_tracked": false
+        "git_tracked": true,
+        "storage": "git-lfs",
+        "archive_git_tracked": false
       },
       "framework": {
         "name": "vosk",
@@ -123,7 +221,9 @@
         "tree_files": 5,
         "tree_bytes": 15001021,
         "tree_sha256": "bfb2d247c774f5e721607923e14ee1d91282fcb158c9d634ecae7d14cae28639",
-        "git_tracked": false
+        "git_tracked": true,
+        "storage": "git-lfs",
+        "archive_git_tracked": false
       },
       "framework": {
         "name": "vosk",
@@ -164,7 +264,8 @@
         "path": "models/assets/face_identity/face_detection_yunet_2023mar.onnx",
         "bytes": 232589,
         "sha256": "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4",
-        "git_tracked": false
+        "git_tracked": true,
+        "storage": "git-lfs"
       },
       "framework": {
         "name": "opencv-dnn",
@@ -204,7 +305,8 @@
         "path": "models/assets/face_identity/face_recognition_sface_2021dec.onnx",
         "bytes": 38696353,
         "sha256": "0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e83484087c34e79",
-        "git_tracked": false
+        "git_tracked": true,
+        "storage": "git-lfs"
       },
       "framework": {
         "name": "opencv-dnn",
@@ -1070,7 +1172,8 @@
         "path": "models/assets/pose_landmarker_lite.task",
         "bytes": 5777746,
         "sha256": "59929e1d1ee95287735ddd833b19cf4ac46d29bc7afddbbf6753c459690d574a",
-        "git_tracked": false
+        "git_tracked": true,
+        "storage": "git-lfs"
       }
     }
   ]
