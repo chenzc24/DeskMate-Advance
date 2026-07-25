@@ -3,7 +3,7 @@
   "updated_on": "2026-07-25",
   "asset_root": "models/assets",
   "runtime_downloads_allowed": false,
-  "notes": "No Poker Dealer model is admitted for release without the required held-out metrics. The 2026-07-25 chip card-hard-negative update selects the development chip-localization candidate while retaining chip-v2-v1 as fallback; fixed-design 10/20 denomination remains unchanged. Card, speech, speaker, face and action assets retain their separately recorded states. Physical chip evidence remains Plus-only and never replaces the digital ledger.",
+  "notes": "No Poker Dealer model is admitted for release without the required held-out metrics. The 2026-07-25 chip 20x card-hard-negative update selects the 441-negative development chip-localization checkpoint after live review while retaining chip-v2-v1 as fallback; fixed-design 10/20 denomination remains unchanged. Card, speech, speaker, face and action assets retain their separately recorded states. Physical chip evidence remains Plus-only and never replaces the digital ledger.",
   "frozen_sets": [
     {
       "freeze_id": "perception-baseline-20260724",
@@ -150,6 +150,25 @@
           "sha256": "d68548783f77a2144b1a4d2870e9dd55b4d6c208817d6cb4165735b4a89544a9",
           "storage": "git-lfs",
           "path_note": "The historical directory name is retained so existing runtime paths select the new card-hard-negative checkpoint."
+        }
+      ]
+    },
+    {
+      "freeze_id": "chip-card-hard-negative-20x-v3-20260725",
+      "frozen_on": "2026-07-25",
+      "status": "immutable_git_snapshot",
+      "runtime_selection_changed": true,
+      "admission_state_changed": false,
+      "assets": [
+        {
+          "model_id": "chip-localization-yolo11n",
+          "version": "chip-card-hard-negative-20x-v3-20260725",
+          "state": "development",
+          "path": "models/assets/chip_recognition/yolo11n-localization-hard-negative-v3/best.pt",
+          "bytes": 5532115,
+          "sha256": "311748e2ee5eefb332e5f7e1b4167ce399fb5861dc08cbd847292b3105a71d1d",
+          "storage": "git-lfs",
+          "path_note": "The historical directory name is retained so existing runtime paths select the user-approved 441-negative checkpoint."
         }
       ]
     }
@@ -383,12 +402,12 @@
     },
     {
       "model_id": "chip-localization-yolo11n",
-      "version": "chip-card-hard-negative-v2-20260725",
+      "version": "chip-card-hard-negative-20x-v3-20260725",
       "state": "development",
       "task": "single-class poker-chip localization for bounded development camera views; denomination and ledger authority are out of contract",
       "source": {
         "provider": "Poker Dealer project-owned fine-tune",
-        "training_config_path": "chip_recognition_workspace/chip_yolo11n_card_hard_negative_v2.json",
+        "training_config_path": "chip_recognition_workspace/chip_yolo11n_card_hard_negative_20x_v3.json",
         "base_checkpoint_sha256": "80998949eb499a1c2f82045439757fdb697739fd9ab54df78fe4118109db5b20",
         "prepared_on": "2026-07-25",
         "upstream_datasets": [
@@ -409,7 +428,7 @@
           }
         ],
         "target_capture": "40 project-captured fixed-design 10/20 chip images with 75 reviewed chip boxes; complete chip_v2:20 sequence held out before train-only augmentation",
-        "card_hard_negatives": "21 face-up-card frames train-only with 126 deterministic views; complete 15-frame card-back sequence held out"
+        "card_hard_negatives": "21 face-up-card frames train-only with the original plus 20 deterministic augmentations per source (441 negative views); complete 15-frame card-back sequence held out"
       },
       "license": {
         "identifier": "AGPL-3.0 with CC-BY-4.0 training-data attribution obligations",
@@ -418,8 +437,8 @@
       },
       "asset": {
         "path": "models/assets/chip_recognition/yolo11n-localization-hard-negative-v3/best.pt",
-        "bytes": 5532243,
-        "sha256": "d68548783f77a2144b1a4d2870e9dd55b4d6c208817d6cb4165735b4a89544a9",
+        "bytes": 5532115,
+        "sha256": "311748e2ee5eefb332e5f7e1b4167ce399fb5861dc08cbd847292b3105a71d1d",
         "git_tracked": true,
         "storage": "git-lfs"
       },
@@ -437,45 +456,45 @@
       },
       "input_contract": "one project-owned BGR camera frame; YOLO letterboxing to 960x960; bounded development view only",
       "output_contract": "zero or more poker-chip bounding boxes with confidence as non-authoritative Plus perception evidence; never a denomination, ledger mutation, game transition or robot command",
-      "dataset_manifest_sha256": "8f8a2f393e1d664168d2f1924b08991f016c1b59fd67a4548108d0bc54ed0efe",
-      "view_manifest_sha256": "8f8a2f393e1d664168d2f1924b08991f016c1b59fd67a4548108d0bc54ed0efe",
-      "dataset_yaml_sha256": "9e1a68282306368056d3493f7488058841b80844d96eefa0bece30e9b97d746c",
+      "dataset_manifest_sha256": "ba771456d71d792f34578fc2b70cb3d0f1c2c6504f4dca5d23c4551d984c07e9",
+      "view_manifest_sha256": "ba771456d71d792f34578fc2b70cb3d0f1c2c6504f4dca5d23c4551d984c07e9",
+      "dataset_yaml_sha256": "910a8dc74a921e8d76123a104eceeaf7cdba9d0be063291b95a76226a94d4d3b",
       "metrics": {
         "combined_validation": {
-          "precision": 0.985,
-          "recall": 0.969,
-          "map50": 0.991,
-          "map50_95": 0.890
+          "precision": 0.98369,
+          "recall": 0.975,
+          "map50": 0.99175,
+          "map50_95": 0.88485
         },
         "public_test": {
           "images": 460,
           "instances": 1514,
-          "precision": 0.9409068820725003,
-          "recall": 0.8811096433289299,
-          "f1": 0.9100270120612436,
-          "map50": 0.9361363009068342,
-          "map50_95": 0.8302473915433207
+          "precision": 0.9509403735457018,
+          "recall": 0.8778071334214003,
+          "f1": 0.9129114218082646,
+          "map50": 0.9290469347222488,
+          "map50_95": 0.8195565942663967
         },
         "target_chip_v2_20_holdout": {
           "images": 13,
           "instances": 23,
-          "precision": 0.9975378440657781,
+          "precision": 0.9974418027972193,
           "recall": 1.0,
-          "f1": 0.9987674046118643,
+          "f1": 0.9987192632099728,
           "map50": 0.995,
-          "map50_95": 0.6627726913786696,
+          "map50_95": 0.6214128100515568,
           "independent_of_training": true
         },
         "poker_card_negative_replay": {
           "images": 36,
           "train_sequence_images": 21,
           "independent_card_back_images": 15,
-          "confidence_threshold": 0.25,
-          "baseline_false_detections": 16,
+          "confidence_threshold": 0.05,
+          "baseline_false_detections": 25,
           "candidate_false_detections": 0,
           "baseline_maximum_false_confidence": 0.8410583138465881,
-          "candidate_maximum_false_confidence": 0.20406581461429596,
-          "independent_card_back_maximum_false_confidence": 0.07239814847707748
+          "candidate_maximum_false_confidence": 0.04557185620069504,
+          "independent_card_back_false_detections": 0
         },
         "validation_speed": {
           "hardware": "NVIDIA GeForce RTX 4060 Laptop GPU",
@@ -485,7 +504,8 @@
       },
       "admission_blockers": [
         "the target-camera holdout is small and contains only denomination 20 from one capture sequence",
-        "original public-test recall decreased from 0.89564 to 0.88111 versus chip-v2-v1 while precision and mAP improved",
+        "original public-test recall decreased from 0.89564 to 0.87781 and mAP50-95 changed from 0.81703 to 0.81956 versus chip-v2-v1",
+        "target-camera mAP50-95 is 0.62141, below the superseded 126-negative runtime checkpoint's 0.66277",
         "the independent card-negative replay contains only 15 adjacent frames from one card-back capture sequence",
         "no independent mixed 10/20 live session covers distance, glare, occlusion, stacks or partial chips",
         "PyTorch checkpoint has no validated offline ONNX or OpenVINO export",

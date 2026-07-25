@@ -1,0 +1,67 @@
+{
+  "schema_version": "1.0",
+  "training_id": "chip-yolo11n-localization-card-hard-negative-20x-v3",
+  "status": "development_target_capture_holdout",
+  "base_model": {
+    "path": "models/assets/chip_recognition/yolo11n-localization-chip-v2-v1-fallback/best.pt",
+    "sha256": "80998949eb499a1c2f82045439757fdb697739fd9ab54df78fe4118109db5b20",
+    "source_url": "local immutable chip-v2 development checkpoint",
+    "license_identifier": "project-development-and-upstream-dataset-licenses"
+  },
+  "dataset": {
+    "yaml_path": "data/work/chips/2026-07-25-card-hard-negative-20x-v3/dataset/data.yaml",
+    "manifest_path": "data/work/chips/2026-07-25-card-hard-negative-20x-v3/dataset/dataset_manifest.json",
+    "manifest_sha256": "ba771456d71d792f34578fc2b70cb3d0f1c2c6504f4dca5d23c4551d984c07e9",
+    "required_splits": [
+      "train",
+      "val",
+      "test"
+    ],
+    "split_policy": "full previous chip-v2 train/validation/test replay; complete chip_neg face-up-card sequence and 20 augmentations per source train-only; complete cards_neg card-back sequence held out",
+    "class_names": {
+      "0": "poker_chip"
+    },
+    "independent_validation": true,
+    "metrics_policy": "report new untouched card-back negative holdout, previous chip test, and unchanged target-camera chip-v2 holdout separately; never use training-negative fit as generalization evidence"
+  },
+  "framework": {
+    "ultralytics": "8.4.93",
+    "torch": "2.5.1+cu121",
+    "device": 0,
+    "polars_skip_cpu_check": true
+  },
+  "train": {
+    "epochs": 10,
+    "batch": 8,
+    "imgsz": 960,
+    "workers": 4,
+    "seed": 20260725,
+    "deterministic": true,
+    "optimizer": "AdamW",
+    "lr0": 0.00003,
+    "lrf": 0.05,
+    "weight_decay": 0.0005,
+    "warmup_epochs": 1.0,
+    "amp": false,
+    "cache": false,
+    "patience": 4,
+    "save": true,
+    "save_period": 5,
+    "mosaic": 0.1,
+    "close_mosaic": 4,
+    "mixup": 0.0,
+    "copy_paste": 0.0,
+    "degrees": 10.0,
+    "translate": 0.05,
+    "scale": 0.18,
+    "shear": 1.0,
+    "perspective": 0.0003,
+    "flipud": 0.0,
+    "fliplr": 0.0,
+    "hsv_h": 0.01,
+    "hsv_s": 0.18,
+    "hsv_v": 0.2,
+    "project": "runs/chip_finetune",
+    "name": "yolo11n-localization-card-hard-negative-20x-v3"
+  }
+}

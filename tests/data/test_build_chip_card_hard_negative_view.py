@@ -68,10 +68,12 @@ def test_build_view_preserves_base_and_keeps_negative_groups_separate(
         work_root=tmp_path / "work",
         base_root=base,
         variants_per_train_source=3,
+        dataset_id="chip-negative-test-v3",
     )
 
     manifest_path = Path(report["manifest_path"])
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["dataset_id"] == "chip-negative-test-v3"
     assert manifest["previous_dataset_replay"] == {
         "train_images": 1,
         "valid_images": 1,

@@ -20,6 +20,7 @@ DEFAULT_SOURCE = Path(
 DEFAULT_RAW = ROOT / "data/raw/chips/2026-07-25-card-hard-negative-source"
 DEFAULT_WORK = ROOT / "data/work/chips/2026-07-25-card-hard-negative-v2"
 DEFAULT_BASE = ROOT / "data/work/chips/2026-07-24-chip-v2-optimization/dataset"
+DEFAULT_DATASET_ID = "poker-chip-localization-card-hard-negative-20260725-v2"
 IMAGE_SUFFIXES = {".bmp", ".jpeg", ".jpg", ".png", ".tif", ".tiff", ".webp"}
 TRAIN_GROUP = "chip_neg"
 HOLDOUT_GROUP = "cards_neg"
@@ -246,9 +247,12 @@ def build_view(
     work_root: Path,
     base_root: Path,
     variants_per_train_source: int,
+    dataset_id: str = DEFAULT_DATASET_ID,
 ) -> dict[str, object]:
     if variants_per_train_source < 1:
         raise ValueError("variants_per_train_source must include at least the original")
+    if not dataset_id.strip():
+        raise ValueError("dataset_id must be non-empty")
     required_base = [
         base_root / split / kind
         for split in ("train", "valid", "test")
@@ -377,7 +381,7 @@ def build_view(
     }
     manifest: dict[str, object] = {
         "schema_version": "1.0",
-        "dataset_id": "poker-chip-localization-card-hard-negative-20260725-v2",
+        "dataset_id": dataset_id,
         "class_map": {"0": "poker_chip"},
         "base_dataset": str(base_root.resolve()),
         "base_manifest_sha256": sha256(base_root / "dataset_manifest.json"),
@@ -439,6 +443,7 @@ def parse_args() -> argparse.Namespace:
         default=6,
         help="including the unchanged original",
     )
+    parser.add_argument("--dataset-id", default=DEFAULT_DATASET_ID)
     return parser.parse_args()
 
 
@@ -450,6 +455,7 @@ def main() -> int:
         work_root=args.work_root.resolve(),
         base_root=args.base_root.resolve(),
         variants_per_train_source=args.variants_per_train_source,
+        dataset_id=args.dataset_id,
     )
     print(json.dumps(report, ensure_ascii=False))
     return 0
