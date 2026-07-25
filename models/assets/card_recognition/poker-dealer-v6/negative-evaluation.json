@@ -1,0 +1,310 @@
+{
+  "schema_version": "poker_dealer.card_negative_evaluation.v1",
+  "created_at": "2026-07-25T06:44:29.874673+00:00",
+  "expected_output": "zero card detections",
+  "images": {
+    "root": "E:\\NOS_NUS\\DeepLearning\\advanced_project\\data\\raw\\poker_label\\neg_new\\cards_neg",
+    "count": 15,
+    "records": [
+      {
+        "path": "E:\\NOS_NUS\\DeepLearning\\advanced_project\\data\\raw\\poker_label\\neg_new\\cards_neg\\ScreenShot_2026-07-25_131824_594.png",
+        "sha256": "ee4dc4f4b2c28bc9682619eb099468f2cda187c18440f150a850a52abac9257f"
+      },
+      {
+        "path": "E:\\NOS_NUS\\DeepLearning\\advanced_project\\data\\raw\\poker_label\\neg_new\\cards_neg\\ScreenShot_2026-07-25_131838_617.png",
+        "sha256": "d2c150bb4d560f05ecb23f84e31b3a603d2578b3ceedcf372f6bc8e07b13a99e"
+      },
+      {
+        "path": "E:\\NOS_NUS\\DeepLearning\\advanced_project\\data\\raw\\poker_label\\neg_new\\cards_neg\\ScreenShot_2026-07-25_131846_927.png",
+        "sha256": "d4e827b77adf267c27885fce5625d392dd07e188b275a0d19bfdb1999a8d131b"
+      },
+      {
+        "path": "E:\\NOS_NUS\\DeepLearning\\advanced_project\\data\\raw\\poker_label\\neg_new\\cards_neg\\ScreenShot_2026-07-25_131854_720.png",
+        "sha256": "efc4cc6671ec1e526b6018659773aff9923bf05b8c75cd949f07afcb3dfea04c"
+      },
+      {
+        "path": "E:\\NOS_NUS\\DeepLearning\\advanced_project\\data\\raw\\poker_label\\neg_new\\cards_neg\\ScreenShot_2026-07-25_131901_650.png",
+        "sha256": "5480ceec4a9d13599dd099bce9da2eb8810f7d83b1ab7128e7da5c6b26b0b7a9"
+      },
+      {
+        "path": "E:\\NOS_NUS\\DeepLearning\\advanced_project\\data\\raw\\poker_label\\neg_new\\cards_neg\\ScreenShot_2026-07-25_131909_486.png",
+        "sha256": "570e116d0249f707985a61ff1ecb3bc9c7973e28612132b752fd18eb4974890f"
+      },
+      {
+        "path": "E:\\NOS_NUS\\DeepLearning\\advanced_project\\data\\raw\\poker_label\\neg_new\\cards_neg\\ScreenShot_2026-07-25_131914_408.png",
+        "sha256": "5c45bfdb1cfa42ddd092a2daa8f07eaf83a38f7216228495eb237dc0a57b8ac7"
+      },
+      {
+        "path": "E:\\NOS_NUS\\DeepLearning\\advanced_project\\data\\raw\\poker_label\\neg_new\\cards_neg\\ScreenShot_2026-07-25_131919_657.png",
+        "sha256": "fdb1d894f0cadc4ba630c5c61afddffef000f16bbbe42c5f3dea937af1e812f6"
+      },
+      {
+        "path": "E:\\NOS_NUS\\DeepLearning\\advanced_project\\data\\raw\\poker_label\\neg_new\\cards_neg\\ScreenShot_2026-07-25_131925_363.png",
+        "sha256": "7167b145847a02deb04dcef4fff330ec66c955ba56410b5136fb94e17975946c"
+      },
+      {
+        "path": "E:\\NOS_NUS\\DeepLearning\\advanced_project\\data\\raw\\poker_label\\neg_new\\cards_neg\\ScreenShot_2026-07-25_131930_944.png",
+        "sha256": "e1e196a8c8cf3699b21de42fdd7f4d031c10ce7c6de900a976fb14fee48a2a62"
+      },
+      {
+        "path": "E:\\NOS_NUS\\DeepLearning\\advanced_project\\data\\raw\\poker_label\\neg_new\\cards_neg\\ScreenShot_2026-07-25_131946_574.png",
+        "sha256": "73d3e54c0b85943e9fe8f76470fe9461515fe5b0cf35a15b5a9a430a80670a0f"
+      },
+      {
+        "path": "E:\\NOS_NUS\\DeepLearning\\advanced_project\\data\\raw\\poker_label\\neg_new\\cards_neg\\ScreenShot_2026-07-25_131954_343.png",
+        "sha256": "68d77c4ccc0937fc141dcce24ca30b23803a7ff47b5f4750a1bdf2a7597b56b6"
+      },
+      {
+        "path": "E:\\NOS_NUS\\DeepLearning\\advanced_project\\data\\raw\\poker_label\\neg_new\\cards_neg\\ScreenShot_2026-07-25_132040_959.png",
+        "sha256": "0736401f1183e58c4057299b1737963822365cab9f12c4b153db503945231e1f"
+      },
+      {
+        "path": "E:\\NOS_NUS\\DeepLearning\\advanced_project\\data\\raw\\poker_label\\neg_new\\cards_neg\\ScreenShot_2026-07-25_132124_877.png",
+        "sha256": "4cd7556066de7012cdcfff7247aed47367784d1ab803fedc42e1afb692f0490b"
+      },
+      {
+        "path": "E:\\NOS_NUS\\DeepLearning\\advanced_project\\data\\raw\\poker_label\\neg_new\\cards_neg\\ScreenShot_2026-07-25_132132_519.png",
+        "sha256": "212d2eccffe6ce782fc12eece2ee19c148a561ac54ac3fdb4d1764286b40d285"
+      }
+    ]
+  },
+  "settings": {
+    "imgsz": 960,
+    "device": "0",
+    "thresholds": [
+      0.15,
+      0.25,
+      0.5
+    ]
+  },
+  "models": {
+    "v5": {
+      "path": "E:\\NOS_NUS\\DeepLearning\\advanced_project\\models\\assets\\card_recognition\\poker-dealer-v5\\best.pt",
+      "sha256": "40a3815f55b06f3138c760be941d05d61048b6d5feb1b782a70a7e665c91fa53",
+      "metrics": {
+        "0.15": {
+          "images": 15,
+          "images_with_false_detection": 6,
+          "false_boxes": 10,
+          "false_boxes_per_image": 0.6666666666666666
+        },
+        "0.25": {
+          "images": 15,
+          "images_with_false_detection": 3,
+          "false_boxes": 4,
+          "false_boxes_per_image": 0.26666666666666666
+        },
+        "0.5": {
+          "images": 15,
+          "images_with_false_detection": 1,
+          "false_boxes": 1,
+          "false_boxes_per_image": 0.06666666666666667
+        }
+      },
+      "records": [
+        {
+          "image": "E:\\NOS_NUS\\DeepLearning\\advanced_project\\data\\raw\\poker_label\\neg_new\\cards_neg\\ScreenShot_2026-07-25_131824_594.png",
+          "detections": [
+            {
+              "class_id": 21,
+              "class_name": "6D",
+              "confidence": 0.5015807151794434
+            },
+            {
+              "class_id": 29,
+              "class_name": "8D",
+              "confidence": 0.15303127467632294
+            }
+          ]
+        },
+        {
+          "image": "E:\\NOS_NUS\\DeepLearning\\advanced_project\\data\\raw\\poker_label\\neg_new\\cards_neg\\ScreenShot_2026-07-25_131838_617.png",
+          "detections": []
+        },
+        {
+          "image": "E:\\NOS_NUS\\DeepLearning\\advanced_project\\data\\raw\\poker_label\\neg_new\\cards_neg\\ScreenShot_2026-07-25_131846_927.png",
+          "detections": []
+        },
+        {
+          "image": "E:\\NOS_NUS\\DeepLearning\\advanced_project\\data\\raw\\poker_label\\neg_new\\cards_neg\\ScreenShot_2026-07-25_131854_720.png",
+          "detections": [
+            {
+              "class_id": 5,
+              "class_name": "2D",
+              "confidence": 0.3550322651863098
+            }
+          ]
+        },
+        {
+          "image": "E:\\NOS_NUS\\DeepLearning\\advanced_project\\data\\raw\\poker_label\\neg_new\\cards_neg\\ScreenShot_2026-07-25_131901_650.png",
+          "detections": [
+            {
+              "class_id": 1,
+              "class_name": "10D",
+              "confidence": 0.35741594433784485
+            },
+            {
+              "class_id": 1,
+              "class_name": "10D",
+              "confidence": 0.2808699905872345
+            }
+          ]
+        },
+        {
+          "image": "E:\\NOS_NUS\\DeepLearning\\advanced_project\\data\\raw\\poker_label\\neg_new\\cards_neg\\ScreenShot_2026-07-25_131909_486.png",
+          "detections": []
+        },
+        {
+          "image": "E:\\NOS_NUS\\DeepLearning\\advanced_project\\data\\raw\\poker_label\\neg_new\\cards_neg\\ScreenShot_2026-07-25_131914_408.png",
+          "detections": []
+        },
+        {
+          "image": "E:\\NOS_NUS\\DeepLearning\\advanced_project\\data\\raw\\poker_label\\neg_new\\cards_neg\\ScreenShot_2026-07-25_131919_657.png",
+          "detections": [
+            {
+              "class_id": 1,
+              "class_name": "10D",
+              "confidence": 0.20599600672721863
+            },
+            {
+              "class_id": 49,
+              "class_name": "QD",
+              "confidence": 0.15567120909690857
+            },
+            {
+              "class_id": 1,
+              "class_name": "10D",
+              "confidence": 0.15257669985294342
+            }
+          ]
+        },
+        {
+          "image": "E:\\NOS_NUS\\DeepLearning\\advanced_project\\data\\raw\\poker_label\\neg_new\\cards_neg\\ScreenShot_2026-07-25_131925_363.png",
+          "detections": [
+            {
+              "class_id": 5,
+              "class_name": "2D",
+              "confidence": 0.15379400551319122
+            }
+          ]
+        },
+        {
+          "image": "E:\\NOS_NUS\\DeepLearning\\advanced_project\\data\\raw\\poker_label\\neg_new\\cards_neg\\ScreenShot_2026-07-25_131930_944.png",
+          "detections": [
+            {
+              "class_id": 29,
+              "class_name": "8D",
+              "confidence": 0.17786133289337158
+            }
+          ]
+        },
+        {
+          "image": "E:\\NOS_NUS\\DeepLearning\\advanced_project\\data\\raw\\poker_label\\neg_new\\cards_neg\\ScreenShot_2026-07-25_131946_574.png",
+          "detections": []
+        },
+        {
+          "image": "E:\\NOS_NUS\\DeepLearning\\advanced_project\\data\\raw\\poker_label\\neg_new\\cards_neg\\ScreenShot_2026-07-25_131954_343.png",
+          "detections": []
+        },
+        {
+          "image": "E:\\NOS_NUS\\DeepLearning\\advanced_project\\data\\raw\\poker_label\\neg_new\\cards_neg\\ScreenShot_2026-07-25_132040_959.png",
+          "detections": []
+        },
+        {
+          "image": "E:\\NOS_NUS\\DeepLearning\\advanced_project\\data\\raw\\poker_label\\neg_new\\cards_neg\\ScreenShot_2026-07-25_132124_877.png",
+          "detections": []
+        },
+        {
+          "image": "E:\\NOS_NUS\\DeepLearning\\advanced_project\\data\\raw\\poker_label\\neg_new\\cards_neg\\ScreenShot_2026-07-25_132132_519.png",
+          "detections": []
+        }
+      ]
+    },
+    "v6": {
+      "path": "E:\\NOS_NUS\\DeepLearning\\advanced_project\\runs\\card_finetune\\finetune_v6_card_back_negative_20ep\\weights\\best.pt",
+      "sha256": "2ef5eb0fd90d02fa5756effc1640f4e253629b842d423f7673fc50ac318e210f",
+      "metrics": {
+        "0.15": {
+          "images": 15,
+          "images_with_false_detection": 0,
+          "false_boxes": 0,
+          "false_boxes_per_image": 0.0
+        },
+        "0.25": {
+          "images": 15,
+          "images_with_false_detection": 0,
+          "false_boxes": 0,
+          "false_boxes_per_image": 0.0
+        },
+        "0.5": {
+          "images": 15,
+          "images_with_false_detection": 0,
+          "false_boxes": 0,
+          "false_boxes_per_image": 0.0
+        }
+      },
+      "records": [
+        {
+          "image": "E:\\NOS_NUS\\DeepLearning\\advanced_project\\data\\raw\\poker_label\\neg_new\\cards_neg\\ScreenShot_2026-07-25_131824_594.png",
+          "detections": []
+        },
+        {
+          "image": "E:\\NOS_NUS\\DeepLearning\\advanced_project\\data\\raw\\poker_label\\neg_new\\cards_neg\\ScreenShot_2026-07-25_131838_617.png",
+          "detections": []
+        },
+        {
+          "image": "E:\\NOS_NUS\\DeepLearning\\advanced_project\\data\\raw\\poker_label\\neg_new\\cards_neg\\ScreenShot_2026-07-25_131846_927.png",
+          "detections": []
+        },
+        {
+          "image": "E:\\NOS_NUS\\DeepLearning\\advanced_project\\data\\raw\\poker_label\\neg_new\\cards_neg\\ScreenShot_2026-07-25_131854_720.png",
+          "detections": []
+        },
+        {
+          "image": "E:\\NOS_NUS\\DeepLearning\\advanced_project\\data\\raw\\poker_label\\neg_new\\cards_neg\\ScreenShot_2026-07-25_131901_650.png",
+          "detections": []
+        },
+        {
+          "image": "E:\\NOS_NUS\\DeepLearning\\advanced_project\\data\\raw\\poker_label\\neg_new\\cards_neg\\ScreenShot_2026-07-25_131909_486.png",
+          "detections": []
+        },
+        {
+          "image": "E:\\NOS_NUS\\DeepLearning\\advanced_project\\data\\raw\\poker_label\\neg_new\\cards_neg\\ScreenShot_2026-07-25_131914_408.png",
+          "detections": []
+        },
+        {
+          "image": "E:\\NOS_NUS\\DeepLearning\\advanced_project\\data\\raw\\poker_label\\neg_new\\cards_neg\\ScreenShot_2026-07-25_131919_657.png",
+          "detections": []
+        },
+        {
+          "image": "E:\\NOS_NUS\\DeepLearning\\advanced_project\\data\\raw\\poker_label\\neg_new\\cards_neg\\ScreenShot_2026-07-25_131925_363.png",
+          "detections": []
+        },
+        {
+          "image": "E:\\NOS_NUS\\DeepLearning\\advanced_project\\data\\raw\\poker_label\\neg_new\\cards_neg\\ScreenShot_2026-07-25_131930_944.png",
+          "detections": []
+        },
+        {
+          "image": "E:\\NOS_NUS\\DeepLearning\\advanced_project\\data\\raw\\poker_label\\neg_new\\cards_neg\\ScreenShot_2026-07-25_131946_574.png",
+          "detections": []
+        },
+        {
+          "image": "E:\\NOS_NUS\\DeepLearning\\advanced_project\\data\\raw\\poker_label\\neg_new\\cards_neg\\ScreenShot_2026-07-25_131954_343.png",
+          "detections": []
+        },
+        {
+          "image": "E:\\NOS_NUS\\DeepLearning\\advanced_project\\data\\raw\\poker_label\\neg_new\\cards_neg\\ScreenShot_2026-07-25_132040_959.png",
+          "detections": []
+        },
+        {
+          "image": "E:\\NOS_NUS\\DeepLearning\\advanced_project\\data\\raw\\poker_label\\neg_new\\cards_neg\\ScreenShot_2026-07-25_132124_877.png",
+          "detections": []
+        },
+        {
+          "image": "E:\\NOS_NUS\\DeepLearning\\advanced_project\\data\\raw\\poker_label\\neg_new\\cards_neg\\ScreenShot_2026-07-25_132132_519.png",
+          "detections": []
+        }
+      ]
+    }
+  }
+}
