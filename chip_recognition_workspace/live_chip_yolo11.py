@@ -186,7 +186,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--width", type=int, default=1280)
     parser.add_argument("--height", type=int, default=720)
     parser.add_argument("--fps", type=float, default=30.0)
-    parser.add_argument("--confidence", type=float, default=0.25)
+    parser.add_argument("--confidence", type=float, default=0.40)
     parser.add_argument("--nms-iou", type=float, default=0.45)
     parser.add_argument("--imgsz", type=int, default=960)
     parser.add_argument("--device", default="0")

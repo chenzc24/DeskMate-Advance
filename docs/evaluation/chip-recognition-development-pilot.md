@@ -111,7 +111,7 @@ YOLO 定位
 
 | 参数 | 默认值 | 作用 |
 |---|---:|---|
-| `--confidence` | `0.25` | YOLO 最低定位置信度 |
+| `--confidence` | `0.40` | YOLO 最低定位置信度 |
 | `--nms-iou` | `0.45` | 重叠框抑制阈值 |
 | `--imgsz` | `960` | YOLO 推理尺寸 |
 | `--device` | `0` | CUDA 设备；无 CUDA 时使用 `cpu` |

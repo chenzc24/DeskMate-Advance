@@ -156,7 +156,7 @@ def decode(
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--stream-url", required=True)
-    parser.add_argument("--confidence", type=float, default=0.25)
+    parser.add_argument("--confidence", type=float, default=0.40)
     parser.add_argument("--nms-iou", type=float, default=0.45)
     parser.add_argument("--max-seconds", type=float, default=300.0)
     parser.add_argument("--max-frames", type=int)
