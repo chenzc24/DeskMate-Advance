@@ -131,6 +131,17 @@ class RuntimePerceptionProfile:
 
 
 @dataclass(frozen=True, slots=True)
+class RuntimeTimeoutProfile:
+    visual_settle_ms: int
+    dealer_command_ms: int
+    card_visual_ms: int
+
+    def __post_init__(self) -> None:
+        if min(self.visual_settle_ms, self.dealer_command_ms, self.card_visual_ms) <= 0:
+            raise ValueError("runtime timeouts must be positive")
+
+
+@dataclass(frozen=True, slots=True)
 class RuntimeProfile:
     schema_version: str
     profile_id: RuntimeProfileId
@@ -138,6 +149,7 @@ class RuntimeProfile:
     player_camera: RuntimeCameraProfile | None
     dealer: RuntimeDealerProfile
     perception: RuntimePerceptionProfile
+    timeouts: RuntimeTimeoutProfile
     controls: tuple[ControlSource, ...]
     speech_enabled: bool
     speech_device: int | str | None
@@ -224,7 +236,7 @@ class RuntimeProfile:
             value,
             {
                 "schema_version", "profile_id", "camera", "player_camera",
-                "dealer", "perception", "controls", "speech", "logging",
+                "dealer", "perception", "timeouts", "controls", "speech", "logging",
             },
             "runtime profile",
         )
@@ -236,6 +248,7 @@ class RuntimeProfile:
             raise ValueError("player_camera must be an object")
         dealer = cls._object(value, "dealer")
         perception = cls._object(value, "perception")
+        timeouts = cls._object(value, "timeouts")
         speech = cls._object(value, "speech")
         logging = cls._object(value, "logging")
         cls._reject_unknown(
@@ -273,6 +286,11 @@ class RuntimeProfile:
                 "target_geometry_validated",
             },
             "perception",
+        )
+        cls._reject_unknown(
+            timeouts,
+            {"visual_settle_ms", "dealer_command_ms", "card_visual_ms"},
+            "timeouts",
         )
         cls._reject_unknown(
             speech,
@@ -331,6 +349,11 @@ class RuntimeProfile:
                     perception.get("target_geometry_validated"),
                     "perception.target_geometry_validated",
                 ),
+            ),
+            timeouts=RuntimeTimeoutProfile(
+                visual_settle_ms=int(timeouts.get("visual_settle_ms", 0)),
+                dealer_command_ms=int(timeouts.get("dealer_command_ms", 0)),
+                card_visual_ms=int(timeouts.get("card_visual_ms", 0)),
             ),
             controls=tuple(ControlSource(str(item)) for item in controls),
             speech_enabled=cls._bool(speech.get("enabled"), "speech.enabled"),

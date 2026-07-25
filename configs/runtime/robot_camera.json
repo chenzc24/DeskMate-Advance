@@ -30,6 +30,11 @@
     "calibration_id": "robot-state-directed-full-frame-development-v1",
     "target_geometry_validated": false
   },
+  "timeouts": {
+    "visual_settle_ms": 5000,
+    "dealer_command_ms": 5000,
+    "card_visual_ms": 60000
+  },
   "controls": ["laptop_keyboard"],
   "speech": {"enabled": true, "device": null},
   "logging": {"root": "runs/runtime/robot_camera"}

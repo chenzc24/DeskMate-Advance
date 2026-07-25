@@ -19,6 +19,7 @@ from poker_dealer.runtime import (
 )
 from poker_dealer.domain import PlayerActionType, Seat
 from poker_dealer.game import ActionRequest, HandEngine
+from poker_dealer.game import HandEvent
 from poker_dealer.runtime.live_perception import LivePerceptionSession
 
 
@@ -198,6 +199,85 @@ def test_runtime_writer_announces_blinds_and_dealing_from_committed_begin() -> N
     ]
 
 
+def test_runtime_writer_announces_card_only_on_first_confirmed_transition() -> None:
+    catalog = AnnouncementCatalog.from_json(CATALOG_PATH)
+    port = RecordingPort()
+    writer = AnnouncingRuntimeEventWriter(
+        None, EventAnnouncer(port, AnnouncementPolicy(catalog))
+    )
+    state = {
+        "button": "seat_a",
+        "confirmed_cards": {
+            "board_flop_1": {"rank": "J", "suit": "hearts"}
+        },
+    }
+    first = HandEvent(
+        sequence=0,
+        event_id="card-first",
+        kind="card_observation_applied",
+        observed_at_ns=1,
+        before_version=4,
+        after_version=5,
+        accepted=True,
+        payload={"slot_id": "board_flop_1", "status": "confirmed"},
+        state_after=state,
+        previous_hash="0" * 64,
+        event_hash="1" * 64,
+    )
+    repeated = HandEvent(
+        sequence=1,
+        event_id="card-repeat",
+        kind="card_observation_applied",
+        observed_at_ns=2,
+        before_version=5,
+        after_version=5,
+        accepted=True,
+        payload={"slot_id": "board_flop_1", "status": "confirmed"},
+        state_after=state,
+        previous_hash="1" * 64,
+        event_hash="2" * 64,
+    )
+
+    writer._announce_engine_event(first)
+    writer._announce_engine_event(repeated)
+
+    assert [item.text for item in port.items] == ["Recognized Jack of hearts."]
+
+
+def test_runtime_writer_announces_completed_board_batch_before_next_turn() -> None:
+    catalog = AnnouncementCatalog.from_json(CATALOG_PATH)
+    port = RecordingPort()
+    writer = AnnouncingRuntimeEventWriter(
+        None, EventAnnouncer(port, AnnouncementPolicy(catalog))
+    )
+
+    writer._announce_engine_event(
+        HandEvent(
+            sequence=0,
+            event_id="flop-confirmed",
+            kind="board_confirmed",
+            observed_at_ns=1,
+            before_version=7,
+            after_version=8,
+            accepted=True,
+            payload={"street": "flop"},
+            state_after={
+                "hand_id": "board-hand",
+                "button": "seat_a",
+                "phase": "awaiting_action",
+                "acting_seat": "seat_b",
+            },
+            previous_hash="0" * 64,
+            event_hash="1" * 64,
+        )
+    )
+
+    assert [item.text for item in port.items] == [
+        "Flop cards recognized. Betting may continue.",
+        "Small Blind to act.",
+    ]
+
+
 def test_uncontested_settlement_announces_award_and_completion() -> None:
     port = RecordingPort()
     engine = HandEngine.start("uncontested-announcement", Seat.A)
@@ -221,6 +301,82 @@ def test_uncontested_settlement_announces_award_and_completion() -> None:
 
     assert [item.text for item in port.items][-2:] == [
         "Big Blind wins 3.",
+        "Hand complete.",
+    ]
+
+
+def test_table_clear_prompt_does_not_preempt_committed_result() -> None:
+    catalog = AnnouncementCatalog.from_json(CATALOG_PATH)
+    result = catalog.render(
+        "pot_awarded", {"winner": "Button", "amount_units": 11}
+    )
+    table_clear = catalog.render("table_not_clear", {})
+
+    assert result is not None
+    assert table_clear is not None
+    assert result.priority is AnnouncementPriority.INFORMATION
+    assert table_clear.priority is AnnouncementPriority.INFORMATION
+
+
+def test_showdown_settlement_announces_winning_hand_category() -> None:
+    catalog = AnnouncementCatalog.from_json(CATALOG_PATH)
+    port = RecordingPort()
+    writer = AnnouncingRuntimeEventWriter(
+        None, EventAnnouncer(port, AnnouncementPolicy(catalog))
+    )
+    writer._announce_engine_event(
+        HandEvent(
+            sequence=0,
+            event_id="river-check",
+            kind="action_applied",
+            observed_at_ns=1,
+            before_version=1,
+            after_version=2,
+            accepted=True,
+            payload={"seat": "seat_d", "action": "check"},
+            state_after={
+                "hand_id": "showdown-hand",
+                "button": "seat_a",
+                "phase": "showdown",
+            },
+            previous_hash="0" * 64,
+            event_hash="1" * 64,
+        )
+    )
+    writer._announce_engine_event(
+        HandEvent(
+            sequence=1,
+            event_id="showdown",
+            kind="showdown_settled",
+            observed_at_ns=2,
+            before_version=2,
+            after_version=3,
+            accepted=True,
+            payload={
+                "winners_by_pot": {"main": ["seat_a"]},
+                "hand_ranks": {
+                    "seat_a": {
+                        "category": "full_house",
+                        "comparison_key": [11, 5],
+                    }
+                },
+            },
+            state_after={
+                "hand_id": "showdown-hand",
+                "button": "seat_a",
+                "phase": "settled",
+                "awards": {"seat_a": 11, "seat_d": 0},
+            },
+            previous_hash="1" * 64,
+            event_hash="2" * 64,
+        )
+    )
+
+    assert [item.text for item in port.items] == [
+        "Showdown started. Reveal the remaining players' hole cards.",
+        "Under the Gun checks.",
+        "Button wins 11 with Full House.",
+        "Showdown complete.",
         "Hand complete.",
     ]
 

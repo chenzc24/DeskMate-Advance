@@ -22,6 +22,7 @@ ROOT = Path(__file__).resolve().parents[2]
     [
         ("laptop", RuntimeProfileId.LAPTOP, RuntimeCameraKind.LOCAL, DealerAdapterKind.SIMULATED, True),
         ("laptop_audiorelay", RuntimeProfileId.LAPTOP, RuntimeCameraKind.LOCAL, DealerAdapterKind.SIMULATED, True),
+        ("phone_front_ad_audiorelay", RuntimeProfileId.LAPTOP, RuntimeCameraKind.LOCAL, DealerAdapterKind.SIMULATED, True),
         ("robot_camera", RuntimeProfileId.ROBOT_CAMERA, RuntimeCameraKind.MJPEG, DealerAdapterKind.SIMULATED, True),
         ("robot_camera_audiorelay", RuntimeProfileId.ROBOT_CAMERA, RuntimeCameraKind.MJPEG, DealerAdapterKind.SIMULATED, True),
         ("robot_hardware", RuntimeProfileId.ROBOT_HARDWARE, RuntimeCameraKind.MJPEG, DealerAdapterKind.REAL, False),
@@ -45,6 +46,9 @@ def test_declared_profiles_validate_and_freeze_dependency_combinations(
     assert profile.camera.kind is camera_kind
     assert profile.dealer.adapter is dealer_kind
     assert profile.dealer.enabled is ready
+    assert profile.timeouts.visual_settle_ms == 5000
+    assert profile.timeouts.dealer_command_ms == 5000
+    assert profile.timeouts.card_visual_ms == 60000
     assert profile.resolved_log_root(ROOT).is_relative_to(ROOT / "runs")
     if name == "robot_camera_audiorelay":
         assert profile.player_camera is not None

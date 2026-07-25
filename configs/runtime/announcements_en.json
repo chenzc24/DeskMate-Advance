@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
   "catalog_id": "poker-dealer-en-us",
-  "catalog_version": "1.4.0",
+  "catalog_version": "1.6.0",
   "language": "en-US",
   "speech_rate": 0,
   "speech_volume": 100,
@@ -118,6 +118,10 @@
       "text": "{street}.",
       "priority": "information"
     },
+    "board_cards_confirmed": {
+      "text": "{street} cards recognized. Betting may continue.",
+      "priority": "information"
+    },
     "dealing_flop": {
       "text": "Dealing the flop.",
       "priority": "information"
@@ -142,12 +146,24 @@
       "text": "Card delivery failed. The hand is paused.",
       "priority": "recovery"
     },
+    "card_confirmed": {
+      "text": "Recognized {card}.",
+      "priority": "information"
+    },
     "showdown_started": {
-      "text": "Showdown.",
+      "text": "Showdown started. Reveal the remaining players' hole cards.",
+      "priority": "information"
+    },
+    "showdown_completed": {
+      "text": "Showdown complete.",
       "priority": "information"
     },
     "pot_awarded": {
       "text": "{winner} wins {amount_units}.",
+      "priority": "information"
+    },
+    "showdown_pot_awarded": {
+      "text": "{winner} wins {amount_units} with {hand_category}.",
       "priority": "information"
     },
     "split_pot": {
@@ -180,7 +196,7 @@
     },
     "table_not_clear": {
       "text": "Clear the table before the next hand.",
-      "priority": "recovery"
+      "priority": "information"
     },
     "operator_adjustment": {
       "text": "Operator adjustment recorded.",

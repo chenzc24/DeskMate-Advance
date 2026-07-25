@@ -199,7 +199,8 @@
       "required": [
         "dealing_profile", "manual_shuffle_and_load_before_each_hand", "hole_cards_per_player",
         "hole_cards_face_down", "hole_deal_rounds", "burn_before_each_board_street",
-        "flop_cards", "turn_cards", "river_cards", "board_reveal_mode",
+        "flop_cards", "flop_delivery_mode", "turn_cards", "river_cards",
+        "turn_and_river_delivery_mode", "board_reveal_mode",
         "manual_card_return_after_hand", "deal_progress_requires_success_ack",
         "hole_slot_advance_policy", "misdeal_before_player_action",
         "physical_state_uncertain"
@@ -212,8 +213,14 @@
         "hole_deal_rounds": {"const": 2},
         "burn_before_each_board_street": {"const": false},
         "flop_cards": {"const": 3},
+        "flop_delivery_mode": {
+          "const": "three_consecutive_single_dispense_acks_then_batch_visual_confirmation"
+        },
         "turn_cards": {"const": 1},
         "river_cards": {"const": 1},
+        "turn_and_river_delivery_mode": {
+          "const": "single_dispense_ack_then_single_visual_confirmation"
+        },
         "board_reveal_mode": {"const": "pending_s0_13_decision"},
         "manual_card_return_after_hand": {"const": true},
         "deal_progress_requires_success_ack": {"const": true},

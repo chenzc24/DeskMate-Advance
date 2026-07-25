@@ -9,7 +9,7 @@
 | --- | --- | --- |
 | `DEALING_HOLE` | Part B | 转向 ACK、带完整安全/单张证据的发牌 ACK；ACK 默认该底牌槽背面在位 |
 | `AWAITING_ACTION` | Part A | 画面稳定、身份/归属、当前玩家动作证据 |
-| `DEALING_BOARD` | Part B | 转向 ACK、发牌 ACK、当前公共牌槽观察 |
+| `DEALING_BOARD` | Part B | 转向 ACK、发牌 ACK；Flop 三张连续发完后批量观察，Turn/River 单牌观察 |
 | `SHOWDOWN` | Part B | 转向 ACK、未弃牌玩家两张底牌的确认观察 |
 | `SETTLED/PAUSED_RECOVERY/VOIDED` | 无 | 仅允许对应的操作员流程 |
 
@@ -27,7 +27,8 @@ Part B 只维护当前目标和命令相关性：
 WAITING_ROTATION_ACK
   -> WAITING_DISPENSE_ACK
   -> 底牌：ACK 后直接进入下一目标或 COMPLETE
-  -> 公共牌：WAITING_VISUAL_CONFIRMATION -> 下一目标或 COMPLETE
+  -> Flop：连续三个 DISPENSE ACK -> 一次三牌 WAITING_VISUAL_CONFIRMATION -> COMPLETE
+  -> Turn/River：单个 DISPENSE ACK -> 单牌 WAITING_VISUAL_CONFIRMATION -> COMPLETE
 ```
 
 Showdown 不发牌，因此成功转向后直接等待该玩家两个固定底牌槽。所有命令
@@ -42,8 +43,9 @@ ACK 仍先把目标槽持久化为 `delivery_pending`，之后必须等待稳定
 `delivery_pending/face_up_unconfirmed` 从视觉步骤恢复。若恢复快照仍有未决
 command，则进入 `PAUSED_RECOVERY`，不猜测 MCU 是否已经执行。
 
-Core v1 无烧牌。完整走到 River 时，Part B 只执行八次底牌和五次公共牌
-发放，共十三次 `dispense_one`。
+Core v1 无烧牌。完整走到 River 时，Part B 仍执行八次底牌和五次公共牌
+发放，共十三次带单张传感器证据的 `dispense_one`。区别是 Flop 的三次
+发牌连续执行，第三次成功 ACK 后才进行一次三牌批量视觉确认。
 
 ## Part A 约束
 

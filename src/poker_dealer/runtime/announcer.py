@@ -82,14 +82,18 @@ class AnnouncementCatalog:
             "action_timeout",
             "action_confirmation_timeout",
             "street_started",
+            "board_cards_confirmed",
             "dealing_flop",
             "dealing_turn",
             "dealing_river",
             "card_unknown",
             "duplicate_card",
             "card_delivery_failed",
+            "card_confirmed",
             "showdown_started",
+            "showdown_completed",
             "pot_awarded",
+            "showdown_pot_awarded",
             "split_pot",
             "hand_completed",
             "hand_voided",
@@ -114,6 +118,8 @@ class AnnouncementCatalog:
             "existing_role",
             "street",
             "winner",
+            "hand_category",
+            "card",
         }
     )
 
@@ -606,6 +612,7 @@ class AnnouncingRuntimeEventWriter(RuntimeEventWriter):
         super().__init__(path)
         self.announcer = announcer
         self._roles_by_seat: dict[str, str] = {}
+        self._showdown_announced_hands: set[str] = set()
 
     def emit(
         self,
@@ -703,6 +710,9 @@ class AnnouncingRuntimeEventWriter(RuntimeEventWriter):
         def role_for(seat_value: object) -> str:
             return role_for_seat(button, Seat(str(seat_value))).value
 
+        if state.get("phase") == HandPhase.SHOWDOWN.value:
+            self._announce_showdown_start(state)
+
         if event.kind == "hand_begun":
             players = state.get("players")
             if isinstance(players, Mapping):
@@ -723,6 +733,32 @@ class AnnouncingRuntimeEventWriter(RuntimeEventWriter):
             if acting_seat is not None:
                 self.announcer.publish("turn_started", role=role_for(acting_seat))
             return
+        if (
+            event.kind == "card_observation_applied"
+            and event.payload.get("status") == "confirmed"
+            and event.before_version != event.after_version
+        ):
+            confirmed_cards = state.get("confirmed_cards")
+            card = (
+                confirmed_cards.get(str(event.payload.get("slot_id", "")))
+                if isinstance(confirmed_cards, Mapping)
+                else None
+            )
+            if isinstance(card, Mapping):
+                rank_names = {
+                    "T": "Ten",
+                    "J": "Jack",
+                    "Q": "Queen",
+                    "K": "King",
+                    "A": "Ace",
+                }
+                rank = str(card.get("rank", ""))
+                suit = str(card.get("suit", ""))
+                self.announcer.publish(
+                    "card_confirmed",
+                    card=f"{rank_names.get(rank, rank)} of {suit}",
+                )
+            return
         if event.kind == "action_applied":
             self.announcer.publish(
                 "action_committed",
@@ -741,7 +777,8 @@ class AnnouncingRuntimeEventWriter(RuntimeEventWriter):
             return
         if event.kind == "board_confirmed":
             self.announcer.publish(
-                "street_started", street=event.payload.get("street", "")
+                "board_cards_confirmed",
+                street=event.payload.get("street", ""),
             )
             if (
                 state.get("phase") == HandPhase.AWAITING_ACTION.value
@@ -776,14 +813,20 @@ class AnnouncingRuntimeEventWriter(RuntimeEventWriter):
                 )
             return
         if event.kind == "showdown_settled":
-            self.announcer.publish("showdown_started")
+            self._announce_showdown_start(state)
             winners_by_pot = event.payload.get("winners_by_pot")
             if isinstance(winners_by_pot, Mapping) and any(
                 isinstance(winners, list) and len(winners) > 1
                 for winners in winners_by_pot.values()
             ):
                 self.announcer.publish("split_pot")
-            self._announce_settlement(state, role_for)
+            hand_ranks = event.payload.get("hand_ranks")
+            self._announce_settlement(
+                state,
+                role_for,
+                hand_ranks=hand_ranks if isinstance(hand_ranks, Mapping) else None,
+                showdown=True,
+            )
             return
         if event.kind == "operator_adjustment":
             self.announcer.publish("operator_adjustment")
@@ -795,15 +838,42 @@ class AnnouncingRuntimeEventWriter(RuntimeEventWriter):
         self,
         state: Mapping[str, object],
         role_for: Callable[[object], str],
+        *,
+        hand_ranks: Mapping[str, object] | None = None,
+        showdown: bool = False,
     ) -> None:
         awards = state.get("awards")
         if isinstance(awards, Mapping):
             for seat, amount in awards.items():
+                if not isinstance(amount, (int, float)) or amount <= 0:
+                    continue
+                rank = (
+                    hand_ranks.get(str(seat))
+                    if hand_ranks is not None
+                    else None
+                )
+                category = (
+                    str(rank.get("category", "")).replace("_", " ").title()
+                    if isinstance(rank, Mapping)
+                    else ""
+                )
                 self.announcer.publish(
-                    "pot_awarded",
+                    "showdown_pot_awarded" if category else "pot_awarded",
                     winner=AnnouncementPolicy._ROLE_LABELS.get(
                         role_for(seat), "Player"
                     ),
                     amount_units=amount,
+                    hand_category=category,
                 )
+        if showdown:
+            self.announcer.publish("showdown_completed")
         self.announcer.publish("hand_completed")
+
+    def _announce_showdown_start(self, state: Mapping[str, object]) -> None:
+        hand_id = str(state.get("hand_id", ""))
+        if not hand_id:
+            hand_id = "__unknown_hand__"
+        if hand_id in self._showdown_announced_hands:
+            return
+        self._showdown_announced_hands.add(hand_id)
+        self.announcer.publish("showdown_started")

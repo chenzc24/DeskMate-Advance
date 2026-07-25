@@ -50,6 +50,17 @@ class PartBStep:
     target: DealerTargetSlot
     vision_slots: tuple[VisionSlot, ...]
     dispense: bool
+    dispense_count: int = 1
+
+    def __post_init__(self) -> None:
+        if not self.vision_slots:
+            raise ValueError("Part B step requires at least one vision slot")
+        if self.dispense_count < 0:
+            raise ValueError("Part B dispense count cannot be negative")
+        if self.dispense and self.dispense_count != len(self.vision_slots):
+            raise ValueError("dispense count must match the delivery slots")
+        if not self.dispense and self.dispense_count != 1:
+            raise ValueError("non-dispense steps use the default count")
 
 
 class SequentialPartBCoordinator:
@@ -106,10 +117,21 @@ class SequentialPartBCoordinator:
             return PartBMode.HOLE_DEAL, steps
         if state.phase is HandPhase.DEALING_BOARD:
             assert state.street is not None
-            steps = tuple(
-                PartBStep(target, (VisionSlot(target.value),), True)
-                for target in board_deal_targets(state.street)
-            )
+            targets = board_deal_targets(state.street)
+            if len(targets) == 3:
+                steps = (
+                    PartBStep(
+                        targets[0],
+                        tuple(VisionSlot(target.value) for target in targets),
+                        True,
+                        dispense_count=3,
+                    ),
+                )
+            else:
+                steps = tuple(
+                    PartBStep(target, (VisionSlot(target.value),), True)
+                    for target in targets
+                )
             return PartBMode.BOARD_DEAL, steps
         if state.phase is HandPhase.SHOWDOWN:
             ordered_live = clockwise_order_after(state.button, state.live_seats())
@@ -193,10 +215,21 @@ class SequentialPartBCoordinator:
         if not self._accept_matching_ack(ack):
             return False
         step = self.current_step
-        assert step is not None and len(step.vision_slots) == 1
+        assert step is not None
+        pending_slot = next(
+            (
+                slot
+                for slot in step.vision_slots
+                if self.engine.state.slot_states[slot] is SlotLifecycle.EXPECTED_EMPTY
+            ),
+            None,
+        )
+        if pending_slot is None:
+            self._enter_recovery("dispense_ack_without_expected_slot")
+            return False
         self.engine.mark_delivery_pending(
             f"delivery:{ack.command_id}",
-            step.vision_slots[0],
+            pending_slot,
             ack.observed_at_ns,
             face_down_by_default=self.mode is PartBMode.HOLE_DEAL,
         )
@@ -204,9 +237,20 @@ class SequentialPartBCoordinator:
             self.last_reason = "dispense_confirmed_face_down_by_default"
             self._advance_step(ack.observed_at_ns)
             return True
+        if any(
+            self.engine.state.slot_states[slot] is SlotLifecycle.EXPECTED_EMPTY
+            for slot in step.vision_slots
+        ):
+            self.phase = PartBPhase.WAITING_DISPENSE_ACK
+            self.last_reason = "dispense_confirmed_request_next_batch_card"
+            return True
         self.phase = PartBPhase.WAITING_VISUAL_CONFIRMATION
         self.visual_window_opened_at_ns = ack.observed_at_ns
-        self.last_reason = "dispense_confirmed_wait_visual"
+        self.last_reason = (
+            "flop_batch_dispensed_wait_three_card_visual"
+            if len(step.vision_slots) == 3
+            else "dispense_confirmed_wait_visual"
+        )
         return True
 
     def _accept_matching_ack(self, ack: DealerAck) -> bool:
@@ -309,10 +353,8 @@ class SequentialPartBCoordinator:
             visual_pending = {SlotLifecycle.DELIVERY_PENDING}
             if self.mode is PartBMode.BOARD_DEAL:
                 visual_pending.add(SlotLifecycle.FACE_UP_UNCONFIRMED)
-            if any(
-                self.engine.state.slot_states[slot] in visual_pending
-                for slot in step.vision_slots
-            ):
+            states = tuple(self.engine.state.slot_states[slot] for slot in step.vision_slots)
+            if all(state in visual_pending or state is expected for state in states):
                 self.phase = PartBPhase.WAITING_VISUAL_CONFIRMATION
                 delivery_event = next(
                     (
@@ -328,6 +370,9 @@ class SequentialPartBCoordinator:
                     delivery_event.observed_at_ns if delivery_event else 0
                 )
                 self.last_reason = "recovered_waiting_visual_confirmation"
+            elif any(state in visual_pending for state in states):
+                self.phase = PartBPhase.WAITING_DISPENSE_ACK
+                self.last_reason = "recovered_batch_requires_remaining_dispense"
             return
         self._complete_mode(self.engine.log.events[-1].observed_at_ns)
 

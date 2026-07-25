@@ -23,6 +23,9 @@ class SessionRuntime:
         stacks: Mapping[Seat, int] | None = None,
         log: SessionEventLog | None = None,
         action_promotion_policy: PromotionPolicy | None = None,
+        visual_settle_timeout_ms: int = 5000,
+        command_timeout_ms: int = 5000,
+        visual_timeout_ms: int = 5000,
     ) -> None:
         if len(roster.participants) != 4:
             raise ValueError("session requires four registered participants")
@@ -39,6 +42,9 @@ class SessionRuntime:
         self._hand_ids: set[str] = set()
         self.log = log or SessionEventLog()
         self.action_promotion_policy = action_promotion_policy
+        self.visual_settle_timeout_ms = visual_settle_timeout_ms
+        self.command_timeout_ms = command_timeout_ms
+        self.visual_timeout_ms = visual_timeout_ms
         self._ended = False
         self._append(
             "session_started",
@@ -98,6 +104,9 @@ class SessionRuntime:
             stacks=self.stacks,
             rules=self.game_config.rules,
             action_promotion_policy=self.action_promotion_policy,
+            visual_settle_timeout_ms=self.visual_settle_timeout_ms,
+            command_timeout_ms=self.command_timeout_ms,
+            visual_timeout_ms=self.visual_timeout_ms,
         )
         self.active_hand = runtime
         self._table_cleared = False

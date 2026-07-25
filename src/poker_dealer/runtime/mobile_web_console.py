@@ -135,6 +135,9 @@ class MobileWebConsole:
         }
         self._face_boxes: tuple[tuple[int, int, int, int], ...] = ()
         self._face_status: str | None = None
+        self._card_boxes: tuple[
+            tuple[int, int, int, int, str, float, str], ...
+        ] = ()
         self._action_marker: tuple[float, float, str, float] | None = None
         self._frame_size = (0, 0)
         self._jpeg: bytes | None = None
@@ -144,6 +147,7 @@ class MobileWebConsole:
         self._new_session_requested = False
         self._runtime_feedback: str | None = None
         self._last_prompt: str | None = None
+        self._last_hand_result: dict[str, object] | None = None
         self._prompt_callback: Callable[[Mapping[str, object]], None] | None = None
         self._controller_id: str | None = None
         self._clients: dict[str, object] = {}
@@ -209,6 +213,10 @@ class MobileWebConsole:
         engine = getattr(runtime, "engine")
         value = state_to_dict(engine.state)
         phase = engine.state.phase
+        if phase is HandPhase.SETTLED:
+            self._last_hand_result = self._settlement_result(runtime)
+        else:
+            self._last_hand_result = None
         if phase not in {HandPhase.SHOWDOWN, HandPhase.SETTLED}:
             value["hole_cards"] = {}
         value.update(
@@ -235,13 +243,59 @@ class MobileWebConsole:
                         else None
                     )
                 ),
+                "required_card_slots": (
+                    [
+                        slot.value
+                        for slot in runtime.part_b.current_step.vision_slots
+                    ]
+                    if runtime.part_b is not None
+                    and runtime.part_b.current_step is not None
+                    else []
+                ),
                 "players_by_seat": {
                     seat.value: runtime.expected_player_by_seat.get(seat, "")
                     for seat in SEAT_ORDER
                 },
+                "result": (
+                    dict(self._last_hand_result)
+                    if self._last_hand_result is not None
+                    else None
+                ),
             }
         )
         self._replace_state(value)
+
+    @staticmethod
+    def _settlement_result(runtime: object) -> dict[str, object]:
+        engine = getattr(runtime, "engine")
+        ranks = getattr(runtime, "last_showdown_ranks", None) or {}
+        winners: list[dict[str, object]] = []
+        for seat in SEAT_ORDER:
+            amount = int(engine.state.awards.get(seat, 0))
+            if amount <= 0:
+                continue
+            hand_rank = ranks.get(seat)
+            winners.append(
+                {
+                    "seat": seat.value,
+                    "player_id": runtime.expected_player_by_seat.get(seat, ""),
+                    "amount_units": amount,
+                    "hand_category": (
+                        hand_rank.category.name.lower()
+                        if hand_rank is not None
+                        else None
+                    ),
+                }
+            )
+        return {
+            "hand_id": engine.state.hand_id,
+            "reason": "showdown" if ranks else "all_opponents_folded",
+            "winners": winners,
+            "split": len(winners) > 1,
+            "total_awarded_units": sum(
+                int(winner["amount_units"]) for winner in winners
+            ),
+        }
 
     def publish_session_state(
         self,
@@ -289,6 +343,11 @@ class MobileWebConsole:
             ),
             "paused_reason": (
                 runtime.engine.state.paused_reason if runtime is not None else None
+            ),
+            "result": (
+                dict(self._last_hand_result)
+                if self._last_hand_result is not None
+                else None
             ),
         }
         self._replace_state(value)
@@ -341,6 +400,23 @@ class MobileWebConsole:
                 return
             self._face_boxes = boxes
             self._face_status = status
+        self._notify_changed()
+
+    def publish_card_detections(
+        self,
+        boxes: tuple[tuple[int, int, int, int, str, float, str], ...],
+    ) -> None:
+        for x, y, width, height, label, confidence, status in boxes:
+            if min(x, y, width, height) < 0 or not label.strip():
+                raise ValueError("card boxes require non-negative geometry and label")
+            if not 0.0 <= confidence <= 1.0:
+                raise ValueError("card box confidence must be in [0, 1]")
+            if status not in {"candidate", "confirmed"}:
+                raise ValueError("card box status must be candidate or confirmed")
+        with self._lock:
+            if boxes == self._card_boxes:
+                return
+            self._card_boxes = boxes
         self._notify_changed()
 
     def publish_action_marker(
@@ -398,8 +474,10 @@ class MobileWebConsole:
             self._new_session_requested = False
             self._runtime_feedback = None
             self._last_prompt = None
+            self._last_hand_result = None
             self._face_boxes = ()
             self._face_status = None
+            self._card_boxes = ()
             self._action_marker = None
             while True:
                 try:
@@ -530,12 +608,33 @@ class MobileWebConsole:
                 }
                 for x, y, box_width, box_height in self._face_boxes
             ]
+            card_boxes = [
+                {
+                    "x": x / width if width else 0.0,
+                    "y": y / height if height else 0.0,
+                    "width": box_width / width if width else 0.0,
+                    "height": box_height / height if height else 0.0,
+                    "label": label,
+                    "confidence": confidence,
+                    "status": status,
+                }
+                for (
+                    x,
+                    y,
+                    box_width,
+                    box_height,
+                    label,
+                    confidence,
+                    status,
+                ) in self._card_boxes
+            ]
             result: dict[str, object] = {
                 "type": "state",
                 "view_version": self._view_version,
                 "state": state,
                 "face_boxes": boxes,
                 "face_status": self._face_status,
+                "card_boxes": card_boxes,
                 "action_marker": (
                     {
                         "x": self._action_marker[0],

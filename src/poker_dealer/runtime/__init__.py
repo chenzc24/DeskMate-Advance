@@ -68,6 +68,7 @@ from .profile import (
     RuntimePerceptionProfile,
     RuntimeProfile,
     RuntimeProfileId,
+    RuntimeTimeoutProfile,
 )
 from .resource_lock import ResourceBusyError, ResourceLock, RuntimeResourceLocks
 from .ports import (
@@ -169,6 +170,7 @@ __all__ = [
     "RuntimePreflight",
     "RuntimeProfile",
     "RuntimeProfileId",
+    "RuntimeTimeoutProfile",
     "RuntimeResourceLocks",
     "ActionEvidence",
     "RecordedReplaySources",

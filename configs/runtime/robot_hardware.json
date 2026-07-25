@@ -31,6 +31,11 @@
     "calibration_id": "robot-hardware-target-geometry-pending-v1",
     "target_geometry_validated": false
   },
+  "timeouts": {
+    "visual_settle_ms": 5000,
+    "dealer_command_ms": 5000,
+    "card_visual_ms": 60000
+  },
   "controls": ["robot_button", "laptop_keyboard"],
   "speech": {"enabled": true, "device": null},
   "logging": {"root": "runs/runtime/robot_hardware"}

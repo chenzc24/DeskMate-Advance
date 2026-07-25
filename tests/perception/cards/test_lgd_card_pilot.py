@@ -16,6 +16,7 @@ from poker_dealer.domain import (
     VisionSlot,
 )
 from poker_dealer.perception.cards import (
+    CardDetection,
     CardFrameEvidence,
     CardObservationPromoter,
     CardPilotConfig,
@@ -24,6 +25,7 @@ from poker_dealer.perception.cards import (
     card_observation_to_dict,
     crop_fixed_card_roi,
 )
+from poker_dealer.runtime.live_perception import LivePerceptionSession
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -167,6 +169,78 @@ def test_low_confidence_and_conflicting_labels_are_unknown() -> None:
     ambiguous = adapter.analyze(frame())
     assert ambiguous.card is None
     assert ambiguous.quality_flags == ("ambiguous_card_identity",)
+
+
+def test_flop_batch_binds_three_unique_cards_left_to_right_in_one_frame() -> None:
+    session = object.__new__(LivePerceptionSession)
+    session.card_config = load_config()
+    cards = (
+        CardIdentity(Rank.ACE, Suit.SPADES),
+        CardIdentity(Rank.KING, Suit.HEARTS),
+        CardIdentity(Rank.QUEEN, Suit.DIAMONDS),
+    )
+    batch = CardFrameEvidence(
+        "phone-front",
+        10,
+        1_000_000_000,
+        None,
+        None,
+        (
+            CardDetection(cards[1], 0.91, (250, 50, 80, 120)),
+            CardDetection(cards[2], 0.92, (450, 50, 80, 120)),
+            CardDetection(cards[0], 0.93, (50, 50, 80, 120)),
+        ),
+        10.0,
+        ("ambiguous_card_identity",),
+    )
+    slots = (
+        VisionSlot.BOARD_FLOP_1,
+        VisionSlot.BOARD_FLOP_2,
+        VisionSlot.BOARD_FLOP_3,
+    )
+
+    bound = session._bind_card_batch(batch, slots)
+
+    assert tuple(bound[slot].card for slot in slots) == cards
+    assert all(
+        item.quality_flags
+        == ("state_directed_batch", "batch_size:3", "slot_order:left_to_right")
+        for item in bound.values()
+    )
+
+
+def test_flop_batch_rejects_incomplete_shared_frame() -> None:
+    session = object.__new__(LivePerceptionSession)
+    session.card_config = load_config()
+    batch = CardFrameEvidence(
+        "phone-front",
+        11,
+        1_000_000_000,
+        None,
+        None,
+        (
+            CardDetection(
+                CardIdentity(Rank.ACE, Suit.SPADES),
+                0.93,
+                (50, 50, 80, 120),
+            ),
+        ),
+        10.0,
+        ("ambiguous_card_identity",),
+    )
+    slots = (
+        VisionSlot.BOARD_FLOP_1,
+        VisionSlot.BOARD_FLOP_2,
+        VisionSlot.BOARD_FLOP_3,
+    )
+
+    bound = session._bind_card_batch(batch, slots)
+
+    assert all(item.card is None for item in bound.values())
+    assert all(
+        item.quality_flags == ("batch_card_count_mismatch:1_of_3",)
+        for item in bound.values()
+    )
 
 
 def test_actual_model_loads_offline_and_blank_frame_is_unknown() -> None:

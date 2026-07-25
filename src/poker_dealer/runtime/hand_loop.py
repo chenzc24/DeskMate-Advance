@@ -375,6 +375,24 @@ class HandRuntimeLoop:
             if evidence.actor_binding is None:
                 self.runtime.accept_action(observation)
                 return
+            if not evidence.actor_binding.is_valid_at(observation.observed_at_ns):
+                self.event_writer.emit(
+                    "player_action_observation_rejected",
+                    observed_at_ns=now_ns,
+                    payload={
+                        "observation_id": observation.observation_id,
+                        "binding_id": evidence.actor_binding.binding_id,
+                        "reason": "actor_binding_time_mismatch",
+                        "observation_observed_at_ns": observation.observed_at_ns,
+                        "binding_verified_at_ns": (
+                            evidence.actor_binding.verified_at_ns
+                        ),
+                        "binding_valid_until_ns": (
+                            evidence.actor_binding.valid_until_ns
+                        ),
+                    },
+                )
+                return
             active = coordinator.active_actor_binding
             if active is None or active.binding_id != evidence.actor_binding.binding_id:
                 self.runtime.bind_actor(evidence.actor_binding)

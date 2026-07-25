@@ -4,7 +4,7 @@
   "title": "Poker Dealer Runtime Profile",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "profile_id", "camera", "dealer", "perception", "controls", "speech", "logging"],
+  "required": ["schema_version", "profile_id", "camera", "dealer", "perception", "timeouts", "controls", "speech", "logging"],
   "$defs": {
     "camera": {
       "type": "object",
@@ -80,6 +80,16 @@
         "card_geometry_config": {"type": "string", "pattern": "^configs/perception/[^.].*\\.json$"},
         "calibration_id": {"type": "string", "minLength": 1},
         "target_geometry_validated": {"type": "boolean"}
+      }
+    },
+    "timeouts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["visual_settle_ms", "dealer_command_ms", "card_visual_ms"],
+      "properties": {
+        "visual_settle_ms": {"type": "integer", "minimum": 1},
+        "dealer_command_ms": {"type": "integer", "minimum": 1},
+        "card_visual_ms": {"type": "integer", "minimum": 1}
       }
     },
     "controls": {

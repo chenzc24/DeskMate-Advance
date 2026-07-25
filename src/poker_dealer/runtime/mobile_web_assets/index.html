@@ -27,6 +27,7 @@
           <div class="video-stage" id="videoStage">
             <img id="video" src="/video.mjpeg" alt="Live dealer camera">
             <div id="faceLayer" class="face-layer"></div>
+            <div id="cardLayer" class="face-layer card-layer"></div>
             <div class="live-pill"><i></i> LIVE · NO RECORDING</div>
             <div id="faceStatus" class="face-message">Waiting for camera</div>
           </div>
@@ -80,6 +81,11 @@
           </div>
 
           <div id="gamePanel" class="game-panel" hidden>
+            <div id="resultBlock" class="result-block" hidden>
+              <p class="label">HAND RESULT</p>
+              <strong id="resultWinner">—</strong>
+              <span id="resultDetail">—</span>
+            </div>
             <div class="game-summary">
               <div><span class="label">STREET</span><strong id="gameStreet">—</strong></div>
               <div><span class="label">POT</span><strong id="gamePot">0</strong></div>

@@ -54,6 +54,7 @@ from poker_dealer.perception.attribution import (
     attribute_hands_to_target,
 )
 from poker_dealer.perception.cards import (
+    CardFrameEvidence,
     CardObservationPromoter,
     CardPilotConfig,
     CardSlotGeometryConfig,
@@ -224,6 +225,9 @@ class InteractiveOpenCVFrameSource:
         self._registration_ui: RegistrationUiState | None = None
         self._face_boxes: tuple[tuple[int, int, int, int], ...] = ()
         self._face_status: str | None = None
+        self._card_boxes: tuple[
+            tuple[int, int, int, int, str, float, str], ...
+        ] = ()
         self._action_marker: tuple[float, float, str, float] | None = None
         self._window_initialized = False
 
@@ -303,6 +307,15 @@ class InteractiveOpenCVFrameSource:
         observer = self.registration_observer
         if observer is not None:
             observer.publish_action_marker(marker)
+
+    def set_card_detections(
+        self,
+        boxes: tuple[tuple[int, int, int, int, str, float, str], ...],
+    ) -> None:
+        self._card_boxes = boxes
+        observer = self.registration_observer
+        if observer is not None:
+            observer.publish_card_detections(boxes)
 
     def read(self) -> FrameRead:
         observer = self.registration_observer
@@ -469,6 +482,34 @@ class InteractiveOpenCVFrameSource:
             self._text(
                 canvas,
                 label,
+                (x1 + 7, label_y - 7),
+                0.42,
+                background,
+                1,
+            )
+        for x, y, width, height, label, confidence, status in self._card_boxes:
+            x1 = image_x + int(round(x * scale))
+            y1 = image_y + int(round(y * scale))
+            x2 = image_x + int(round((x + width) * scale))
+            y2 = image_y + int(round((y + height) * scale))
+            color = success if status == "confirmed" else accent
+            cv2.rectangle(canvas, (x1, y1), (x2, y2), color, 3, cv2.LINE_AA)
+            card_label = f"{label} {confidence:.0%}"
+            label_width = min(
+                max(120, 10 + len(card_label) * 10),
+                max(120, image_x + scaled_width - x1),
+            )
+            label_y = max(image_y + 26, y1)
+            cv2.rectangle(
+                canvas,
+                (x1, label_y - 25),
+                (x1 + label_width, label_y),
+                color,
+                -1,
+            )
+            self._text(
+                canvas,
+                card_label,
                 (x1 + 7, label_y - 7),
                 0.42,
                 background,
@@ -890,6 +931,11 @@ class LivePerceptionSession:
         self.identity_temporal = FaceIdentityTemporalAdapter(self.identity_config)
         self.gesture_temporal = GestureTemporalAdapter(self.gesture_config)
         self.card_temporal = CardObservationPromoter(self.card_config)
+        self._card_hand_id: str | None = None
+        self._card_batch_cache_key: tuple[
+            str, int, tuple[VisionSlot, ...]
+        ] | None = None
+        self._card_batch_cache: dict[VisionSlot, CardFrameEvidence] = {}
         self._runtime_controls: tuple[ControlObservation, ...] = ()
         self.actor_lease = ActorBindingLease(
             lease_ms=self.attribution_config.actor_lease_ms
@@ -902,7 +948,7 @@ class LivePerceptionSession:
         )
         self.visual_settle = VisualSettleGate()
         self._visual_started = False
-        self._identity_context: tuple[int, Seat] | None = None
+        self._identity_context: tuple[str, int, Seat] | None = None
         self._audio_queue: queue.Queue[bytes] = queue.Queue(
             maxsize=int(self.speech_config.audio["queue_max_blocks"])
         )
@@ -1616,14 +1662,12 @@ class LivePerceptionSession:
         observed_at_ns: int,
     ) -> FaceIdentityObservation | None:
         del observed_at_ns
+        self.frame_source.set_card_detections(())
         if frame is None or context.focus_seat is None:
             return None
         if self.gallery is None or self.face_model is None or self.pose_model is None:
             raise RuntimeError("live perception session is not open")
-        key = (context.state_version, context.focus_seat)
-        if key != self._identity_context:
-            self._reset_action_context()
-            self._identity_context = key
+        self._ensure_action_context(context)
         face = self.face_model.analyze(frame)
         pose = self.pose_model.recognize(frame)
         match = self.gallery.match_expected_seat(face, context.focus_seat)
@@ -1698,6 +1742,7 @@ class LivePerceptionSession:
         context: RuntimeObservationContext,
         observed_at_ns: int,
     ) -> ActionEvidence | None:
+        self.frame_source.set_card_detections(())
         if frame is None or context.focus_seat is None:
             return None
         if any(
@@ -1998,6 +2043,7 @@ class LivePerceptionSession:
         slot: VisionSlot,
         observed_at_ns: int,
     ) -> CardObservation | None:
+        self._ensure_card_hand_context(context.hand_id)
         if frame is None or self.card_model is None:
             return None
         if context.hand_phase is HandPhase.DEALING_HOLE:
@@ -2006,21 +2052,119 @@ class LivePerceptionSession:
                 "not by live card perception"
             )
         full_frame = self.card_geometry.binding_mode == "state_directed_full_frame"
+        required_slots = context.required_card_slots
+        batch_size = len(required_slots)
         self.frame_source.set_status(
-            f"FACE-UP CARD: {slot.value}",
             (
-                "show only the current target card; YOLO scans the full frame"
+                f"FACE-UP CARDS: FLOP BATCH ({batch_size})"
+                if full_frame and batch_size > 1
+                else f"FACE-UP CARD: {slot.value}"
+            ),
+            (
+                "show all required cards left-to-right; YOLO confirms one shared frame"
+                if full_frame and batch_size > 1
+                else "show only the current target card; YOLO scans the full frame"
                 if full_frame
                 else "place/reveal one card inside the active fixed ROI"
             ),
         )
         inference_frame = frame
+        roi_offset = (0, 0)
         if not full_frame:
-            inference_frame, _pixel_roi = crop_fixed_card_roi(
+            inference_frame, pixel_roi = crop_fixed_card_roi(
                 frame, self.card_geometry.roi_for(slot), slot
             )
-        evidence = self.card_model.analyze(inference_frame)
-        return self.card_temporal.process(slot, evidence)
+            roi_offset = (pixel_roi.x, pixel_roi.y)
+        if full_frame and batch_size > 1:
+            cache_key = (
+                frame.source_id,
+                frame.sequence_id,
+                required_slots,
+            )
+            if self._card_batch_cache_key != cache_key:
+                analyzed = self.card_model.analyze(inference_frame)
+                self._card_batch_cache = self._bind_card_batch(
+                    analyzed,
+                    required_slots,
+                )
+                self._card_batch_cache_key = cache_key
+            evidence = self._card_batch_cache[slot]
+        else:
+            evidence = self.card_model.analyze(inference_frame)
+        observation = self.card_temporal.process(slot, evidence)
+        minimum = self.card_config.inference.minimum_confidence
+        overlays = []
+        for detection in evidence.detections:
+            if detection.confidence < minimum:
+                continue
+            x, y, width, height = detection.bbox_xywh
+            overlays.append(
+                (
+                    x + roi_offset[0],
+                    y + roi_offset[1],
+                    width,
+                    height,
+                    f"{detection.card.rank.value} {detection.card.suit.value}",
+                    detection.confidence,
+                    (
+                        "confirmed"
+                        if observation.status is ObservationStatus.CONFIRMED
+                        and observation.card == detection.card
+                        else "candidate"
+                    ),
+                )
+            )
+        self.frame_source.set_card_detections(tuple(overlays))
+        return observation
+
+    def _bind_card_batch(
+        self,
+        evidence: CardFrameEvidence,
+        slots: tuple[VisionSlot, ...],
+    ) -> dict[VisionSlot, CardFrameEvidence]:
+        """Bind one stable full-frame card set to logical slots left-to-right."""
+
+        minimum = self.card_config.inference.minimum_confidence
+        strongest_by_identity = {}
+        for detection in evidence.detections:
+            if detection.confidence < minimum:
+                continue
+            previous = strongest_by_identity.get(detection.card)
+            if previous is None or detection.confidence > previous.confidence:
+                strongest_by_identity[detection.card] = detection
+        detections = tuple(
+            sorted(
+                strongest_by_identity.values(),
+                key=lambda item: (
+                    item.bbox_xywh[0] + item.bbox_xywh[2] / 2,
+                    item.bbox_xywh[1] + item.bbox_xywh[3] / 2,
+                ),
+            )
+        )
+        if len(detections) != len(slots):
+            flag = f"batch_card_count_mismatch:{len(detections)}_of_{len(slots)}"
+            return {
+                slot: replace(
+                    evidence,
+                    card=None,
+                    confidence=None,
+                    quality_flags=(flag,),
+                )
+                for slot in slots
+            }
+        return {
+            slot: replace(
+                evidence,
+                card=detection.card,
+                confidence=detection.confidence,
+                quality_flags=(
+                    "state_directed_batch",
+                    f"batch_size:{len(slots)}",
+                    "slot_order:left_to_right",
+                ),
+            )
+            for slot, detection in zip(slots, detections, strict=True)
+        }
 
     def _reset_action_context(self) -> None:
         self.identity_temporal = FaceIdentityTemporalAdapter(self.identity_config)
@@ -2035,6 +2179,24 @@ class LivePerceptionSession:
         if self._speech_recognizer is not None:
             self._speech_recognizer.reset_window()
         self._discard_audio_queue()
+
+    def _ensure_action_context(self, context: RuntimeObservationContext) -> None:
+        if context.focus_seat is None:
+            return
+        key = (context.hand_id, context.state_version, context.focus_seat)
+        if key == self._identity_context:
+            return
+        self._reset_action_context()
+        self._identity_context = key
+
+    def _ensure_card_hand_context(self, hand_id: str) -> None:
+        if hand_id == self._card_hand_id:
+            return
+        self.card_temporal.reset()
+        self._card_batch_cache_key = None
+        self._card_batch_cache.clear()
+        self._card_hand_id = hand_id
+        self.frame_source.set_card_detections(())
 
     def _discard_audio_queue(self) -> None:
         while True:

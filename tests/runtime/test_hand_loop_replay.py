@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 import json
 from pathlib import Path
 
@@ -29,6 +30,7 @@ from poker_dealer.runtime.replay import (
     default_replay_roster,
 )
 from poker_dealer.runtime.ports import FrameRead, FrameReadState
+from poker_dealer.runtime.ports import ActionEvidence
 
 
 def _run_complete_hand(
@@ -129,6 +131,31 @@ class _RouteCheckingReplaySources(ScriptedReplaySources):
         return super().visual_is_settled(frame, context, observed_at_ns)
 
 
+class _OneStaleBindingSources(ScriptedReplaySources):
+    def __init__(self) -> None:
+        super().__init__()
+        self.stale_emitted = False
+
+    def observe_action(self, frame, context, observed_at_ns):
+        evidence = super().observe_action(frame, context, observed_at_ns)
+        if self.stale_emitted or evidence.actor_binding is None:
+            return evidence
+        self.stale_emitted = True
+        observation = evidence.observation
+        stale = replace(
+            evidence.actor_binding,
+            verified_at_ns=observation.observed_at_ns + 1,
+            valid_until_ns=observation.observed_at_ns + 1_000_000_000,
+        )
+        return ActionEvidence(
+            observation,
+            stale,
+            evidence.attribution_source,
+            evidence.attribution_confidence,
+            evidence.quality_flags,
+        )
+
+
 def test_live_hand_loop_routes_player_and_table_perception_frames(tmp_path: Path) -> None:
     frame_source = _RouteRecordingFrameSource()
     sources = _RouteCheckingReplaySources()
@@ -148,6 +175,26 @@ def test_live_hand_loop_routes_player_and_table_perception_frames(tmp_path: Path
     assert set(sources.action_routes) == {"player-camera"}
     assert set(sources.visual_routes) == {"player-camera"}
     assert set(sources.card_routes) == {"table-camera"}
+
+
+def test_stale_actor_bound_action_is_audited_and_ignored_without_crash(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "stale-binding.jsonl"
+    sources = _OneStaleBindingSources()
+
+    runtime = _run_complete_hand(path, sources, hand_id="stale-binding")
+    log = RuntimeEventLog.from_path(path)
+
+    assert sources.stale_emitted
+    assert runtime.phase is HandPhase.SETTLED
+    rejected = [
+        record
+        for record in log.records
+        if record.kind == "player_action_observation_rejected"
+    ]
+    assert len(rejected) == 1
+    assert rejected[0].payload["reason"] == "actor_binding_time_mismatch"
 
 
 def test_vertical_replay_fold_path_settles_uncontested(tmp_path: Path) -> None:

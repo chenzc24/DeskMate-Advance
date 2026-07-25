@@ -183,7 +183,7 @@ def test_one_runtime_drives_a_complete_no_burn_hand() -> None:
         for event in runtime.engine.log.events
         if event.kind == "dealer_ack_received"
     ]
-    assert len(command_events) == len(ack_events) == 46
+    assert len(command_events) == len(ack_events) == 44
     assert runtime.engine.state.pending_command_id is None
 
 

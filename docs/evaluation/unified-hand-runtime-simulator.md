@@ -8,10 +8,11 @@
 - 八张底牌逐张执行转向 ACK、发牌 ACK 和背面槽观察。
 - Pre-flop、Flop、Turn、River 四轮 Part A 均由引擎给出唯一
   `acting_seat` 和合法动作。
-- Flop 3 张、Turn 1 张、River 1 张公共牌逐槽确认，无烧牌。
+- Flop 连续发 3 张后在一个共享画面中批量确认，Turn 1 张、River 1 张分别确认，无烧牌。
 - Showdown 逐名未弃牌玩家确认两个底牌槽，并只从已确认槽结算。
 - 完整手牌恰好执行十三次 `dispense_one`。
-- 测试牌局产生 46 个 command/ACK 对：13 张牌各两条命令、四轮各四次
+- Flop 只旋转一次，因此测试牌局产生 44 个 command/ACK 对：13 次单张
+  发牌均有独立 ACK，Flop 的三次发牌共享一次 rotation；四轮各四次
   玩家转向、Showdown 四次玩家转向。
 - 重复 ACK 幂等；未知牌保持；错命令、命令/视觉/动作超时和牌面冲突暂停。
 - 发牌 ACK 后重启会恢复为等待视觉，不重复发牌；未决命令重启会暂停。

@@ -6,8 +6,8 @@ from dataclasses import replace
 from aiohttp import ClientSession
 import numpy as np
 
-from poker_dealer.domain import ControlIntent, ControlSource, Seat
-from poker_dealer.game import CoreGameConfig
+from poker_dealer.domain import ControlIntent, ControlSource, PlayerActionType, Seat
+from poker_dealer.game import ActionRequest, CoreGameConfig, HandEngine
 from poker_dealer.runtime import HandRuntime
 from poker_dealer.runtime import SessionRuntime, default_replay_roster
 from poker_dealer.runtime.live_perception import RegistrationUiState
@@ -110,6 +110,9 @@ def test_state_contains_face_boxes_action_marker_and_memory_only_video() -> None
         observed_at_ns=1_000_000,
     )
     console.publish_face_detections(((20, 10, 40, 30),), status="FACE READY")
+    console.publish_card_detections(
+        ((100, 20, 30, 50, "J hearts", 0.91, "confirmed"),)
+    )
     console.publish_action_marker((0.35, 0.7, "call", 0.82))
 
     snapshot = console.snapshot()
@@ -118,6 +121,17 @@ def test_state_contains_face_boxes_action_marker_and_memory_only_video() -> None
     assert snapshot["face_status"] == "FACE READY"
     assert snapshot["face_boxes"] == [
         {"x": 0.1, "y": 0.1, "width": 0.2, "height": 0.3}
+    ]
+    assert snapshot["card_boxes"] == [
+        {
+            "x": 0.5,
+            "y": 0.2,
+            "width": 0.15,
+            "height": 0.5,
+            "label": "J hearts",
+            "confidence": 0.91,
+            "status": "confirmed",
+        }
     ]
     assert snapshot["action_marker"] == {
         "x": 0.35,
@@ -229,6 +243,48 @@ def test_full_hand_state_exposes_ledger_without_private_cards() -> None:
     assert state["part_b_mode"] == "hole_deal"
 
 
+def test_uncontested_result_remains_visible_at_session_boundary() -> None:
+    roster = default_replay_roster("ui-result-session", Seat.A)
+    session = SessionRuntime(
+        roster, CoreGameConfig.from_json("configs/game/core_v1.json")
+    )
+    runtime = session.start_hand("ui-result-hand")
+    runtime.engine = HandEngine.start(
+        "ui-result-hand",
+        Seat.A,
+        stacks=session.stacks,
+        rules=session.game_config.rules,
+    )
+    runtime.sync()
+    console = MobileWebConsole()
+
+    for index in range(3):
+        state = runtime.engine.state
+        runtime.engine.apply_action(
+            ActionRequest(
+                f"fold-{index}",
+                state.hand_id,
+                state.state_version,
+                state.acting_seat,
+                PlayerActionType.FOLD,
+            )
+        )
+    runtime.sync()
+
+    console.publish_hand_state(runtime)
+    hand_result = console.snapshot()["state"]["result"]
+    assert hand_result["reason"] == "all_opponents_folded"
+    assert hand_result["winners"][0]["amount_units"] == 3
+
+    session.close_terminal_hand(
+        hand_log_path="ignored.jsonl",
+        hand_log_sha256="0" * 64,
+        hand_log_check_passed=True,
+    )
+    console.publish_session_state(session)
+    assert console.snapshot()["state"]["result"] == hand_result
+
+
 def test_composite_adapters_preserve_controls_and_copy_events() -> None:
     class Source:
         def __init__(self, value: tuple[object, ...]) -> None:
@@ -279,6 +335,8 @@ def test_http_and_websocket_console_round_trip() -> None:
                 assert "createCommandId()" in script
                 assert "globalThis.crypto?.randomUUID" in script
                 assert "runtimeFaceVisible" in script
+                assert "function restartVideoStream()" in script
+                assert 'new URL("/video.mjpeg", location.href)' in script
                 assert "VERIFIED · LISTENING" in script
                 assert "Say one legal English action clearly" in script
                 assert "message.action_marker" in script

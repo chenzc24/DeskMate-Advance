@@ -70,17 +70,28 @@ def test_board_visual_unknown_holds_and_timeout_pauses_authoritative_hand() -> N
     dealer.homed = True
     rotation = coordinator.request_rotation(1)
     assert coordinator.accept_rotation_ack(dealer.execute(rotation, 2))
-    dispense = coordinator.request_dispense(3)
-    assert coordinator.accept_dispense_ack(dealer.execute(dispense, 4))
+    last_ack_ns = 2
+    for index in range(3):
+        dispense = coordinator.request_dispense(3 + index * 2)
+        last_ack_ns = 4 + index * 2
+        assert coordinator.accept_dispense_ack(
+            dealer.execute(dispense, last_ack_ns)
+        )
+        if index < 2:
+            assert coordinator.phase is PartBPhase.WAITING_DISPENSE_ACK
+    assert coordinator.phase is PartBPhase.WAITING_VISUAL_CONFIRMATION
     step = coordinator.current_step
     assert step is not None
+    assert len(step.vision_slots) == 3
     unknown = SimulatedCardPerception().emit(
-        step.vision_slots[0], ObservationStatus.UNKNOWN, observed_at_ns=5
+        step.vision_slots[0],
+        ObservationStatus.UNKNOWN,
+        observed_at_ns=last_ack_ns + 1,
     )
     assert not coordinator.accept_card_observation(unknown).accepted
     assert engine.state.phase is HandPhase.DEALING_BOARD
 
-    assert coordinator.check_timeout(4 + 5_000_000)
+    assert coordinator.check_timeout(last_ack_ns + 5_000_000)
     assert coordinator.phase is PartBPhase.RECOVERY_REQUIRED
     assert engine.state.phase is HandPhase.PAUSED_RECOVERY
     assert engine.state.paused_reason == "card_visual_timeout"
@@ -166,6 +177,48 @@ def test_restart_after_hole_dispense_ack_advances_without_visual_or_redeal() -> 
     assert resumed.current_step is not None
     assert resumed.current_step.vision_slots == coordinator.steps[1].vision_slots
     assert dealer.dispensed_cards == 1
+
+
+def test_restart_mid_flop_batch_requests_remaining_dispenses_before_visual() -> None:
+    engine = HandEngine.start("resume-flop-batch", Seat.A)
+    from poker_dealer.domain import PlayerActionType
+    from poker_dealer.game import ActionRequest
+
+    for index, action in enumerate(
+        (
+            PlayerActionType.CALL,
+            PlayerActionType.CALL,
+            PlayerActionType.CALL,
+            PlayerActionType.CHECK,
+        )
+    ):
+        state = engine.state
+        assert engine.apply_action(
+            ActionRequest(
+                f"action-{index}",
+                state.hand_id,
+                state.state_version,
+                state.acting_seat,  # type: ignore[arg-type]
+                action,
+            )
+        ).accepted
+
+    coordinator = SequentialPartBCoordinator(engine)
+    dealer = SimulatedDealer()
+    dealer.homed = True
+    rotation = coordinator.request_rotation(1)
+    assert coordinator.accept_rotation_ack(dealer.execute(rotation, 2))
+    first = coordinator.request_dispense(3)
+    assert coordinator.accept_dispense_ack(dealer.execute(first, 4))
+
+    recovered = HandEngine.from_log(
+        FixedLimitRules(), EventLog.from_jsonl(engine.log.to_jsonl())
+    )
+    resumed = SequentialPartBCoordinator(recovered)
+
+    assert resumed.phase is PartBPhase.WAITING_DISPENSE_ACK
+    assert resumed.current_step is not None
+    assert len(resumed.current_step.vision_slots) == 3
 
 
 def test_restart_with_unresolved_command_pauses_instead_of_guessing() -> None:

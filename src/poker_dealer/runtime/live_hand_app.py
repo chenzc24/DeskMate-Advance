@@ -272,6 +272,9 @@ class LiveHandApplication:
             roster=roster,
             stacks=stacks or self.game_config.default_stacks(),
             rules=rules or self.game_config.rules,
+            visual_settle_timeout_ms=self.profile.timeouts.visual_settle_ms,
+            command_timeout_ms=self.profile.timeouts.dealer_command_ms,
+            visual_timeout_ms=self.profile.timeouts.card_visual_ms,
         )
 
     def create_session(
@@ -288,6 +291,9 @@ class LiveHandApplication:
             self.game_config,
             stacks=stacks,
             action_promotion_policy=action_promotion_policy,
+            visual_settle_timeout_ms=self.profile.timeouts.visual_settle_ms,
+            command_timeout_ms=self.profile.timeouts.dealer_command_ms,
+            visual_timeout_ms=self.profile.timeouts.card_visual_ms,
         )
 
     def execute_dealer_command(self, command: DealerCommand) -> DealerAck:

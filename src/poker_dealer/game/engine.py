@@ -1236,7 +1236,14 @@ class HandEngine:
                 "winners_by_pot": {
                     pot: [seat.value for seat in winners]
                     for pot, winners in result.winners_by_pot.items()
-                }
+                },
+                "hand_ranks": {
+                    seat.value: {
+                        "category": rank.category.name.lower(),
+                        "comparison_key": list(rank.comparison_key),
+                    }
+                    for seat, rank in result.ranks.items()
+                },
             },
             state=self.state,
         )

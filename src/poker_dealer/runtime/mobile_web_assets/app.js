@@ -22,7 +22,7 @@
   const phaseDescriptions = {
     dealing_hole: "Dealing two face-down hole cards to every player.",
     awaiting_action: "Waiting for the focused player’s voice or hand action.",
-    dealing_board: "Recognizing the current face-up community card.",
+    dealing_board: "Recognizing the required face-up community cards.",
     showdown: "Revealing live players and determining the winner.",
     settled: "The pot has been awarded. Return all cards.",
     paused_recovery: "The hand is paused. Resolve the displayed issue.",
@@ -41,11 +41,13 @@
   let latestFaceBoxes = [];
   let latestFaceStatus = "";
   let latestActionMarker = null;
+  let latestCardBoxes = [];
   let commandPending = false;
   let phoneVoiceEnabled = false;
   let hasPrompt = false;
   let awaitingNewSession = false;
   let reconnectDelayMs = 1200;
+  let socketOpenedOnce = false;
 
   function setLink(text, mode = "") {
     $("linkStatus").className = `status ${mode}`.trim();
@@ -56,6 +58,8 @@
     const scheme = location.protocol === "https:" ? "wss" : "ws";
     socket = new WebSocket(`${scheme}://${location.host}/ws`);
     socket.addEventListener("open", () => {
+      if (socketOpenedOnce) restartVideoStream();
+      socketOpenedOnce = true;
       reconnectDelayMs = 1200;
       setLink("Connected");
     });
@@ -107,6 +111,13 @@
     });
   }
 
+  function restartVideoStream() {
+    const video = $("video");
+    const url = new URL("/video.mjpeg", location.href);
+    url.searchParams.set("reconnect", String(Date.now()));
+    video.src = url.toString();
+  }
+
   function renderState(message) {
     const state = message.state || {};
     const view = state.view || "registration";
@@ -145,6 +156,11 @@
       faceStatus,
       runtimeFaceVisible ? message.action_marker : null,
     );
+    const runtimeCardVisible = (
+      view === "hand"
+      && (state.phase === "dealing_board" || state.phase === "showdown")
+    );
+    renderCardBoxes(runtimeCardVisible ? (message.card_boxes || []) : []);
     document.querySelector("[data-intent='confirm']").hidden = view === "hand";
     if (message.runtime_feedback) $("feedback").textContent = message.runtime_feedback;
     updateButtons();
@@ -186,6 +202,7 @@
     renderPlayerLedger(state.players || {}, state.players_by_seat || {}, state.acting_seat);
     renderLegalActions(state.legal_actions || []);
     $("legalActionsBlock").hidden = state.phase !== "awaiting_action";
+    renderResult(state.result);
     $("confirmLabel").textContent = "Confirm action";
     $("startLabel").textContent = "Retry";
     $("clearLabel").textContent = "Void hand";
@@ -209,6 +226,7 @@
     renderPlayerLedger(players, {}, null);
     renderLegalActions([]);
     $("legalActionsBlock").hidden = true;
+    renderResult(state.result);
     $("confirmLabel").textContent = state.phase === "table_clearance"
       ? "Table clear"
       : state.selected_seat
@@ -227,6 +245,13 @@
     }
     if (state.part_a_phase === "waiting_player_action") {
       return `Seat ${seatShort(state.acting_seat)} verified. Say one legal English action clearly.`;
+    }
+    if (
+      state.phase === "dealing_board"
+      && Array.isArray(state.required_card_slots)
+      && state.required_card_slots.length === 3
+    ) {
+      return "Flop batch: show all three face-up cards together, arranged left-to-right. The camera has up to 60 seconds.";
     }
     const lane = state.part_a_phase || state.part_b_phase;
     const detail = phaseDescriptions[state.phase] || "Synchronizing game state.";
@@ -284,6 +309,30 @@
     const rank = String(card?.rank || "?").replace("10", "10").toUpperCase();
     const suit = suitSymbols[String(card?.suit || "").toLowerCase()] || "?";
     return `${rank}${suit}`;
+  }
+
+  function renderResult(result) {
+    const block = $("resultBlock");
+    const winners = Array.isArray(result?.winners) ? result.winners : [];
+    block.hidden = winners.length === 0;
+    if (!winners.length) {
+      $("resultWinner").textContent = "—";
+      $("resultDetail").textContent = "—";
+      return;
+    }
+    $("resultWinner").textContent = winners.map((winner) => (
+      seatLabel(winner.seat) + (winner.player_id ? ` · ${winner.player_id}` : "")
+    )).join(" / ");
+    const awards = winners.map((winner) => `${winner.amount_units} units`).join(" + ");
+    const categories = [...new Set(
+      winners.map((winner) => winner.hand_category).filter(Boolean).map(humanize)
+    )];
+    const reason = result.reason === "all_opponents_folded"
+      ? "All opponents folded"
+      : categories.length
+      ? `Winning hand: ${categories.join(" / ")}`
+      : "Showdown";
+    $("resultDetail").textContent = `${reason} · Award: ${awards}`;
   }
 
   function renderCards(cards) {
@@ -408,6 +457,40 @@
     layer.replaceChildren(...overlays);
   }
 
+  function renderCardBoxes(boxes) {
+    latestCardBoxes = boxes;
+    const layer = $("cardLayer");
+    const image = $("video");
+    const stage = $("videoStage");
+    const frameRatio = image.naturalWidth && image.naturalHeight
+      ? image.naturalWidth / image.naturalHeight
+      : stage.clientWidth / stage.clientHeight;
+    const stageRatio = stage.clientWidth / stage.clientHeight;
+    let displayWidth = stage.clientWidth;
+    let displayHeight = stage.clientHeight;
+    let offsetX = 0;
+    let offsetY = 0;
+    if (frameRatio > stageRatio) {
+      displayHeight = displayWidth / frameRatio;
+      offsetY = (stage.clientHeight - displayHeight) / 2;
+    } else {
+      displayWidth = displayHeight * frameRatio;
+      offsetX = (stage.clientWidth - displayWidth) / 2;
+    }
+    layer.replaceChildren(...boxes.map((box) => {
+      const node = document.createElement("div");
+      node.className = `card-box ${box.status || "candidate"}`;
+      node.style.left = `${offsetX + box.x * displayWidth}px`;
+      node.style.top = `${offsetY + box.y * displayHeight}px`;
+      node.style.width = `${box.width * displayWidth}px`;
+      node.style.height = `${box.height * displayHeight}px`;
+      const label = document.createElement("span");
+      label.textContent = `${box.label} ${Math.round(100 * box.confidence)}%`;
+      node.appendChild(label);
+      return node;
+    }));
+  }
+
   function updateButtons() {
     document.querySelectorAll("[data-intent]").forEach((button) => {
       const intent = button.dataset.intent;
@@ -460,12 +543,14 @@
   $("confirmButton").addEventListener("click", () => {
     $("confirmDialog").returnValue = "confirm";
   });
-  $("video").addEventListener("load", () => (
-    renderFaceBoxes(latestFaceBoxes, latestFaceStatus, latestActionMarker)
-  ));
-  window.addEventListener("resize", () => (
-    renderFaceBoxes(latestFaceBoxes, latestFaceStatus, latestActionMarker)
-  ));
+  $("video").addEventListener("load", () => {
+    renderFaceBoxes(latestFaceBoxes, latestFaceStatus, latestActionMarker);
+    renderCardBoxes(latestCardBoxes);
+  });
+  window.addEventListener("resize", () => {
+    renderFaceBoxes(latestFaceBoxes, latestFaceStatus, latestActionMarker);
+    renderCardBoxes(latestCardBoxes);
+  });
   $("voiceToggle").addEventListener("click", () => {
     phoneVoiceEnabled = !phoneVoiceEnabled;
     $("voiceToggle").textContent = phoneVoiceEnabled ? "Phone voice on" : "Phone voice off";

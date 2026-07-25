@@ -116,6 +116,32 @@ h1 { margin-bottom: 0; font-size: clamp(1.45rem, 3vw, 2.35rem); line-height: 1; 
 }
 .face-box::before { left: -4px; top: -4px; border-left: 4px solid; border-top: 4px solid; }
 .face-box::after { right: -4px; bottom: -4px; border-right: 4px solid; border-bottom: 4px solid; }
+.card-layer { z-index: 2; }
+.card-box {
+  position: absolute;
+  border: 3px solid #37d5b8;
+  border-radius: 7px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .7), 0 0 22px rgba(55, 213, 184, .3);
+}
+.card-box.confirmed {
+  border-color: var(--good);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .7), 0 0 26px rgba(137, 214, 92, .4);
+}
+.card-box span {
+  position: absolute;
+  left: -3px;
+  top: -31px;
+  min-width: max-content;
+  padding: 5px 8px;
+  border-radius: 6px 6px 6px 0;
+  background: #1aa78f;
+  color: #04110d;
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 18px;
+  box-shadow: 0 1px 8px rgba(0, 0, 0, .5);
+}
+.card-box.confirmed span { background: var(--good); }
 .action-marker {
   position: absolute;
   width: 14px;
@@ -158,6 +184,15 @@ h1 { margin-bottom: 0; font-size: clamp(1.45rem, 3vw, 2.35rem); line-height: 1; 
 .roster span.done { color: var(--good); border: 1px solid rgba(137, 214, 92, .25); }
 .roster span.simulated { color: var(--warn); border-color: rgba(235, 184, 87, .38); }
 .game-panel { display: flex; flex-direction: column; gap: 15px; min-height: 0; }
+.result-block {
+  padding: 13px;
+  border: 1px solid rgba(137, 214, 92, .55);
+  border-radius: 12px;
+  background: rgba(137, 214, 92, .1);
+}
+.result-block strong, .result-block span { display: block; }
+.result-block strong { color: var(--good); font-size: 1rem; }
+.result-block span { margin-top: 4px; color: var(--text); font-size: .76rem; }
 .game-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .game-summary > div {
   padding: 10px; border-radius: 10px; background: var(--panel-2);
@@ -273,6 +308,13 @@ dialog::backdrop { background: rgba(0, 0, 0, .72); backdrop-filter: blur(4px); }
     gap: 5px 7px;
     overflow: hidden;
   }
+  .game-panel .result-block {
+    grid-column: 1 / -1;
+    padding: 6px 8px;
+  }
+  .result-block .label { font-size: .47rem; }
+  .result-block strong { font-size: .7rem; }
+  .result-block span { margin-top: 1px; font-size: .57rem; }
   .game-panel .game-summary {
     grid-column: 1;
     grid-row: 1 / 3;
