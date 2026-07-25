@@ -1,0 +1,74 @@
+{
+  "schema_version": "poker_dealer.card_v6_comparison.v1",
+  "created_on": "2026-07-25",
+  "validation": {
+    "dataset": "data/work/card_negative_v6/dataset/dataset.yaml",
+    "images": 450,
+    "instances": 1311,
+    "validation_list_sha256": "3b8e8a692444da17b092813dcb81850e22da1eb39b01cd988388f6069e75ca0f",
+    "scope": "the exact same source-isolated 450-image validation list used for V5"
+  },
+  "positive_metrics": {
+    "v5": {
+      "precision": 0.9487365820695101,
+      "recall": 0.8107495542850907,
+      "map50": 0.9140854320947993,
+      "map50_95": 0.7689537251548086
+    },
+    "v6": {
+      "precision": 0.9369280113853313,
+      "recall": 0.8155164674638405,
+      "map50": 0.9140725949810437,
+      "map50_95": 0.7672977765728654
+    },
+    "v6_minus_v5_percentage_points": {
+      "precision": -1.18085706841788,
+      "recall": 0.47669131787498,
+      "map50": -0.00128371137556,
+      "map50_95": -0.16559485819432
+    }
+  },
+  "accepted_negative_training_session": {
+    "images": 15,
+    "expected": "zero face-up card identities on face-down red-backed cards",
+    "confidence": 0.15,
+    "v5": {
+      "images_with_false_detection": 6,
+      "false_boxes": 10,
+      "false_boxes_per_image": 0.6666666666666666
+    },
+    "v6": {
+      "images_with_false_detection": 0,
+      "false_boxes": 0,
+      "false_boxes_per_image": 0.0
+    },
+    "caveat": "These 15 sources were used to create the V6 negative training view; this measures fitted rejection, not independent generalization."
+  },
+  "largest_recall_regressions_over_five_percentage_points": [
+    {
+      "class": "10D",
+      "delta_percentage_points": -8.69565217391303
+    },
+    {
+      "class": "4D",
+      "delta_percentage_points": -8.55883709554198
+    },
+    {
+      "class": "9S",
+      "delta_percentage_points": -7.4074074074074
+    },
+    {
+      "class": "3D",
+      "delta_percentage_points": -6.65648491975302
+    },
+    {
+      "class": "JD",
+      "delta_percentage_points": -5.6216994418088
+    }
+  ],
+  "decision": {
+    "state": "development",
+    "runtime_selected": false,
+    "reason": "Aggregate positive metrics remain near V5 and fitted card-back rejection improves, but five class-recall regressions exceed the planned gate and no independent negative capture session has been evaluated."
+  }
+}
