@@ -1,0 +1,580 @@
+{
+  "schema_version": "1.0",
+  "freeze_id": "all-tracked-model-assets-20260725",
+  "frozen_on": "2026-07-25",
+  "scope": "all Git-tracked files under models/assets",
+  "source_asset_commit": "ad1c7d8bf6540b391498b181ace7b08690a6f18c",
+  "semantics": {
+    "runtime_selection_changed": false,
+    "admission_state_changed": false,
+    "release_promotion": false
+  },
+  "registered_models": [
+    {
+      "model_id": "player-action-mediapipe-canned-gesture",
+      "version": "float16-latest-downloaded-20260721",
+      "state": "development",
+      "asset_path": "models/assets/gesture_recognizer.task"
+    },
+    {
+      "model_id": "player-action-vosk-small-en-us",
+      "version": "vosk-model-small-en-us-0.15",
+      "state": "development",
+      "asset_path": "models/assets/vosk-model-small-en-us-0.15"
+    },
+    {
+      "model_id": "player-speaker-vosk-spk",
+      "version": "vosk-model-spk-0.4",
+      "state": "development",
+      "asset_path": "models/assets/vosk-model-spk-0.4"
+    },
+    {
+      "model_id": "face-identity-opencv-yunet",
+      "version": "face_detection_yunet_2023mar",
+      "state": "development",
+      "asset_path": "models/assets/face_identity/face_detection_yunet_2023mar.onnx"
+    },
+    {
+      "model_id": "face-identity-opencv-sface",
+      "version": "face_recognition_sface_2021dec",
+      "state": "development",
+      "asset_path": "models/assets/face_identity/face_recognition_sface_2021dec.onnx"
+    },
+    {
+      "model_id": "chip-localization-yolo11n",
+      "version": "chip-card-hard-negative-20x-v3-20260725",
+      "state": "development",
+      "asset_path": "models/assets/chip_recognition/yolo11n-localization-hard-negative-v3/best.pt"
+    },
+    {
+      "model_id": "chip-denomination-fixed-design-template",
+      "version": "las-vegas-v1-20260723",
+      "state": "development",
+      "asset_path": "models/assets/chip_recognition/las-vegas-denomination-templates-v1/manifest.json"
+    },
+    {
+      "model_id": "chip-denomination-rim-colour-binary",
+      "version": "v1-20260724",
+      "state": "development",
+      "asset_path": "models/assets/chip_recognition/rim-colour-binary-10-20-v1/model.json"
+    },
+    {
+      "model_id": "card-identity-lgd-yolo11s-52class",
+      "version": "gen3-hf-b2e9e89cc0138a70",
+      "state": "development",
+      "asset_path": "models/assets/card_recognition/lgd-cards-gen3/model.onnx"
+    },
+    {
+      "model_id": "card-identity-lgd-yolo11s-52class",
+      "version": "poker-dealer-v2-20260723",
+      "state": "candidate",
+      "asset_path": "models/assets/card_recognition/poker-dealer-v2/best.pt"
+    },
+    {
+      "model_id": "card-identity-lgd-yolo11s-52class",
+      "version": "poker-dealer-v3-20260724",
+      "state": "candidate",
+      "asset_path": "models/assets/card_recognition/poker-dealer-v3/best.pt"
+    },
+    {
+      "model_id": "card-identity-lgd-yolo11s-52class",
+      "version": "poker-dealer-v4-20260724",
+      "state": "candidate",
+      "asset_path": "models/assets/card_recognition/poker-dealer-v4/best.pt"
+    },
+    {
+      "model_id": "card-identity-lgd-yolo11s-52class",
+      "version": "poker-dealer-v5-20260725",
+      "state": "candidate",
+      "asset_path": "models/assets/card_recognition/poker-dealer-v5/best.pt"
+    },
+    {
+      "model_id": "card-identity-lgd-yolo11s-52class",
+      "version": "poker-dealer-v6-20260725",
+      "state": "development",
+      "asset_path": "models/assets/card_recognition/poker-dealer-v6/best.pt"
+    }
+  ],
+  "registered_models_without_assets": [
+    "player-action-landmark-tcn@untrained-v1"
+  ],
+  "summary": {
+    "registered_models_with_assets": 14,
+    "registered_models_without_assets": 1,
+    "tracked_files": 67,
+    "git_lfs_files": 32,
+    "git_files": 35,
+    "total_bytes": 304159175
+  },
+  "files": [
+    {
+      "path": "models/assets/card_recognition/lgd-cards-gen3/best.pt",
+      "bytes": 19217939,
+      "sha256": "3513b77ab418ac2e86d3bf53be6566522666e656cbccb12678ba93feb6201004",
+      "storage": "git-lfs",
+      "git_index_blob_oid": "5b30f5f8eea16036e205bee6c7799b197947a2d8"
+    },
+    {
+      "path": "models/assets/card_recognition/lgd-cards-gen3/model.classes.json",
+      "bytes": 316,
+      "sha256": "8a2d7e9dacf245aca5ef5a402cb404def919e9994e9142644d80c6d6248ee038",
+      "storage": "git",
+      "git_index_blob_oid": "67bcc3e5d6fa563a6111873c24cae0554e0e824f"
+    },
+    {
+      "path": "models/assets/card_recognition/lgd-cards-gen3/model.onnx",
+      "bytes": 38233687,
+      "sha256": "8b767cdfed2c8e954a9134013ac3d2f2c53be048768d559675be01277a8a8fd1",
+      "storage": "git-lfs",
+      "git_index_blob_oid": "b9592032ba2f7ccc9001da0a3ef02c50b99970b7"
+    },
+    {
+      "path": "models/assets/card_recognition/poker-dealer-v2/best.pt",
+      "bytes": 19279386,
+      "sha256": "620718e8ac16c8a3f666a7e0ac5e1f533eff3385b0f689ad6ba09cab0724b29b",
+      "storage": "git-lfs",
+      "git_index_blob_oid": "ef20462170a41b0861adf0693ae30cb2d0a6638e"
+    },
+    {
+      "path": "models/assets/card_recognition/poker-dealer-v2/model.classes.json",
+      "bytes": 316,
+      "sha256": "8a2d7e9dacf245aca5ef5a402cb404def919e9994e9142644d80c6d6248ee038",
+      "storage": "git",
+      "git_index_blob_oid": "67bcc3e5d6fa563a6111873c24cae0554e0e824f"
+    },
+    {
+      "path": "models/assets/card_recognition/poker-dealer-v3/best.pt",
+      "bytes": 19279386,
+      "sha256": "c7b67016cf4db2d8cfa0e45e79454c41c37ac5245f145a9e0fe4e2abe76e9cb5",
+      "storage": "git-lfs",
+      "git_index_blob_oid": "35cf68da1a910742ba1e356364859fc466cac7b0"
+    },
+    {
+      "path": "models/assets/card_recognition/poker-dealer-v3/comparison.json",
+      "bytes": 1559,
+      "sha256": "6764279ada9ec549a83beeee559c9f25a94a893a159c248ccc016f8eb1e6390d",
+      "storage": "git",
+      "git_index_blob_oid": "c8dd89bd58dd41eb43b82af02c126683c6475efe"
+    },
+    {
+      "path": "models/assets/card_recognition/poker-dealer-v3/evaluation.json",
+      "bytes": 53808,
+      "sha256": "1d22df8ebbcab22164a2aa8e1ad37b2420e3ca641dc0ab74be99afb900e5d2f0",
+      "storage": "git",
+      "git_index_blob_oid": "d34755acabafdc8e09f53ffb2f6712626349a21e"
+    },
+    {
+      "path": "models/assets/card_recognition/poker-dealer-v3/model.classes.json",
+      "bytes": 316,
+      "sha256": "8a2d7e9dacf245aca5ef5a402cb404def919e9994e9142644d80c6d6248ee038",
+      "storage": "git",
+      "git_index_blob_oid": "67bcc3e5d6fa563a6111873c24cae0554e0e824f"
+    },
+    {
+      "path": "models/assets/card_recognition/poker-dealer-v4/best.pt",
+      "bytes": 19279130,
+      "sha256": "0204fedbe0e83d887ed370dfc7cd17dfb1da57052d7c30583b127cddd43a2fa1",
+      "storage": "git-lfs",
+      "git_index_blob_oid": "31df819be0c57cdd20cb9fa85645c786617a2b6a"
+    },
+    {
+      "path": "models/assets/card_recognition/poker-dealer-v4/comparison.json",
+      "bytes": 1772,
+      "sha256": "b8db3cc8361a2d1d64b5f66b6936ee0ffbdca5a4c3099737821e441ba5386d5a",
+      "storage": "git",
+      "git_index_blob_oid": "dc0079695a5ace208471e1eead9f3309862a3de8"
+    },
+    {
+      "path": "models/assets/card_recognition/poker-dealer-v4/evaluation.json",
+      "bytes": 53707,
+      "sha256": "5684eb55748fa38af0b87a4e206307d0ffc250a0c2639a4d415dcb2ada8c87df",
+      "storage": "git",
+      "git_index_blob_oid": "01f39bfbaa7cb59dc49ca9fe942dda795b439704"
+    },
+    {
+      "path": "models/assets/card_recognition/poker-dealer-v4/model.classes.json",
+      "bytes": 316,
+      "sha256": "8a2d7e9dacf245aca5ef5a402cb404def919e9994e9142644d80c6d6248ee038",
+      "storage": "git",
+      "git_index_blob_oid": "67bcc3e5d6fa563a6111873c24cae0554e0e824f"
+    },
+    {
+      "path": "models/assets/card_recognition/poker-dealer-v5/best.pt",
+      "bytes": 19279386,
+      "sha256": "40a3815f55b06f3138c760be941d05d61048b6d5feb1b782a70a7e665c91fa53",
+      "storage": "git-lfs",
+      "git_index_blob_oid": "b09446ffa1b36b45c065d719a0984ba29fb60d3f"
+    },
+    {
+      "path": "models/assets/card_recognition/poker-dealer-v5/comparison.json",
+      "bytes": 3166,
+      "sha256": "8f5a117a9aacc3e465c0933a5195a8bab20bf6d6310604014862374056c8a78b",
+      "storage": "git",
+      "git_index_blob_oid": "ade9b4cf4b3e773d2b814ff1c8492d772da6dfbb"
+    },
+    {
+      "path": "models/assets/card_recognition/poker-dealer-v5/evaluation.json",
+      "bytes": 55057,
+      "sha256": "aeb80a4f83871a284ea1f2ad03d7c41fb64c12f68811e43f2d60030163768ee7",
+      "storage": "git",
+      "git_index_blob_oid": "0f0bcb593ee4409e55bc6aa596ba19a814032b97"
+    },
+    {
+      "path": "models/assets/card_recognition/poker-dealer-v5/model.classes.json",
+      "bytes": 316,
+      "sha256": "8a2d7e9dacf245aca5ef5a402cb404def919e9994e9142644d80c6d6248ee038",
+      "storage": "git",
+      "git_index_blob_oid": "67bcc3e5d6fa563a6111873c24cae0554e0e824f"
+    },
+    {
+      "path": "models/assets/card_recognition/poker-dealer-v6/best.pt",
+      "bytes": 19278746,
+      "sha256": "2ef5eb0fd90d02fa5756effc1640f4e253629b842d423f7673fc50ac318e210f",
+      "storage": "git-lfs",
+      "git_index_blob_oid": "a192839c3dafb876dda1400275dfc4a7cce6d6ff"
+    },
+    {
+      "path": "models/assets/card_recognition/poker-dealer-v6/comparison.json",
+      "bytes": 2310,
+      "sha256": "2ab3825ac8546d66705c2b333c51aa935cb6b866be6b53a7dce0e1437c52bfe7",
+      "storage": "git",
+      "git_index_blob_oid": "6fa0f15047d8dce4fb39fad8de738106feacd884"
+    },
+    {
+      "path": "models/assets/card_recognition/poker-dealer-v6/evaluation.json",
+      "bytes": 51341,
+      "sha256": "f395e8e42b4ed5056b5586acb9e11246fde70b5fe94d09ef50c56f3dbb554d15",
+      "storage": "git",
+      "git_index_blob_oid": "a61b36a9ff512d2f00d290cee01c4d12324360ed"
+    },
+    {
+      "path": "models/assets/card_recognition/poker-dealer-v6/model.classes.json",
+      "bytes": 316,
+      "sha256": "8a2d7e9dacf245aca5ef5a402cb404def919e9994e9142644d80c6d6248ee038",
+      "storage": "git",
+      "git_index_blob_oid": "67bcc3e5d6fa563a6111873c24cae0554e0e824f"
+    },
+    {
+      "path": "models/assets/card_recognition/poker-dealer-v6/negative-evaluation.json",
+      "bytes": 13111,
+      "sha256": "594a0fad3c735dc95d1bbd5e91618af77f408d7f628ec42f8309cd66ae0c1291",
+      "storage": "git",
+      "git_index_blob_oid": "92350375294e07cb81db44ff1309c57d1d2894b5"
+    },
+    {
+      "path": "models/assets/chip_recognition/las-vegas-denomination-templates-v1/manifest.json",
+      "bytes": 12082,
+      "sha256": "f4a5c6255a61e1961a822d380bd0cb01b65351efa2410059a626a75015b3bc25",
+      "storage": "git",
+      "git_index_blob_oid": "78b45fdbead06cff4ca8aacd63ddcc28da344134"
+    },
+    {
+      "path": "models/assets/chip_recognition/las-vegas-denomination-templates-v1/masks/chip_10_53B705A2F14196B111CF93DEC2B2EFD6.png",
+      "bytes": 842,
+      "sha256": "b8614548fdf02e002e199d1aa2e2c7afe2b1b68e899c47bddbfd1d63fb8d5a65",
+      "storage": "git",
+      "git_index_blob_oid": "763b493eb4ea57558965a51237928bb9f52b4299"
+    },
+    {
+      "path": "models/assets/chip_recognition/las-vegas-denomination-templates-v1/masks/chip_10_672ACF2EBC6B55A933BA855710494314.png",
+      "bytes": 850,
+      "sha256": "aab5893395cd60984a4547c0715905ab6630f01c943c98bf0f7138e81dc179bb",
+      "storage": "git",
+      "git_index_blob_oid": "3d08c032480c2004b39362caf397937389a1af34"
+    },
+    {
+      "path": "models/assets/chip_recognition/las-vegas-denomination-templates-v1/masks/chip_10_B312E985D1B26028020290753CDAFAAC.png",
+      "bytes": 870,
+      "sha256": "cc5d2aa404e560d4dba5c46019fbd9c23ad3f836f2e03dda7d5d3f69d5743555",
+      "storage": "git",
+      "git_index_blob_oid": "3fe5a08e466526013ffe7df953b6bd85327758eb"
+    },
+    {
+      "path": "models/assets/chip_recognition/las-vegas-denomination-templates-v1/masks/chip_10_D9BAAA2CAA90968DDEC645A29854F217.png",
+      "bytes": 806,
+      "sha256": "ad191df570c32078118002e54d5ba3c5a25dbfc28cd8f83c88718eecc8704f31",
+      "storage": "git",
+      "git_index_blob_oid": "94bf931072977c65b31ece382acb2b14ecaaafe5"
+    },
+    {
+      "path": "models/assets/chip_recognition/las-vegas-denomination-templates-v1/masks/chip_1_13ADBA55B0D74CC37137EEE2CC21A0DB.png",
+      "bytes": 484,
+      "sha256": "3499437231376103d6e59086ef022830d81655226cec36234b6c90eaf74b9b6f",
+      "storage": "git",
+      "git_index_blob_oid": "854119e373d646e4b8d73c88fc6792cb3bdc349f"
+    },
+    {
+      "path": "models/assets/chip_recognition/las-vegas-denomination-templates-v1/masks/chip_1_3AE32BAB6971DAC5FB1B47E12D59C928.png",
+      "bytes": 494,
+      "sha256": "ace540aaf6f57112050d4fab650ca818b258294ee66f3e5b266c89bbed4e1845",
+      "storage": "git",
+      "git_index_blob_oid": "fc4f2a73579a5b0234b05ddf0cb2796cac237831"
+    },
+    {
+      "path": "models/assets/chip_recognition/las-vegas-denomination-templates-v1/masks/chip_1_603A42A83AFB702445F21F77D0EF4E80.png",
+      "bytes": 533,
+      "sha256": "f2d752855c29119e8fbb12dcfc7a0bb057f1dc26676946b5e20f99ceb62bae5b",
+      "storage": "git",
+      "git_index_blob_oid": "206fb4c391580a6a2590ab6b15b5c08476147424"
+    },
+    {
+      "path": "models/assets/chip_recognition/las-vegas-denomination-templates-v1/masks/chip_1_BE24580263028F157536921373462F15.png",
+      "bytes": 529,
+      "sha256": "b6a0d6746f848f001a20e28bc127bea73610b9d60d3521554609c82054be6410",
+      "storage": "git",
+      "git_index_blob_oid": "a018126b66c8726d808a874212b76885ed8c443e"
+    },
+    {
+      "path": "models/assets/chip_recognition/las-vegas-denomination-templates-v1/masks/chip_1_E4ABA07F01E6C6C712DABA96B5CB0A66.png",
+      "bytes": 563,
+      "sha256": "5d3df30eb7a3e1bf8661385613d6e5e4201c0c64f28c30a77f61f620ce50754b",
+      "storage": "git",
+      "git_index_blob_oid": "dd38ba6aca2c087be70c50d4de1e322c232c7b96"
+    },
+    {
+      "path": "models/assets/chip_recognition/las-vegas-denomination-templates-v1/masks/chip_20_0812ACF3694428A10BF666B84F5B2F46.png",
+      "bytes": 749,
+      "sha256": "2e9a9aa5865914307789f76866ed53e68d336e3fd1409705569f210199cb2e0f",
+      "storage": "git",
+      "git_index_blob_oid": "b01ec9da7c6797f7e0d77bf52ca12f47e606a22c"
+    },
+    {
+      "path": "models/assets/chip_recognition/las-vegas-denomination-templates-v1/masks/chip_20_D0D93FD4BAADA88A75C157ED0649800A.png",
+      "bytes": 718,
+      "sha256": "271edae4d65e7a141c9a8ec4c4c91fa38ed61eb59692d3847776ae4637dc5a6a",
+      "storage": "git",
+      "git_index_blob_oid": "40048cd89c0ce63b4761e0646703ac88fc79dd82"
+    },
+    {
+      "path": "models/assets/chip_recognition/las-vegas-denomination-templates-v1/masks/chip_20_E18CEC49BDB3F4B7E7A12A6B615A1136.png",
+      "bytes": 792,
+      "sha256": "4189a9298dc1c30552460d86b386e2dc8b206882781d2bbb23ef95ae64d4b232",
+      "storage": "git",
+      "git_index_blob_oid": "7ce874119f075c75a48342ce863c9af6a806d21a"
+    },
+    {
+      "path": "models/assets/chip_recognition/las-vegas-denomination-templates-v1/masks/chip_20_FDAC838B6C1457AA3FBA6C68C4578C71.png",
+      "bytes": 640,
+      "sha256": "aa67b454d61fc98512e2918f407a920f5e9513d6edb4f86b1aaf0e2732266a0d",
+      "storage": "git",
+      "git_index_blob_oid": "b82802d8fba5665155d71a4bad5f12e1c1cb229f"
+    },
+    {
+      "path": "models/assets/chip_recognition/las-vegas-denomination-templates-v1/masks/chip_5_1F4F5FCBE7956DA72A1A79654C1F2C7E.png",
+      "bytes": 592,
+      "sha256": "085fa8443a60a5c4b21c26df47e6057c24d5a37bdc736d4b91fd8fee939e6495",
+      "storage": "git",
+      "git_index_blob_oid": "5766b7c2faaaaef5a288c05cb182c04128770d13"
+    },
+    {
+      "path": "models/assets/chip_recognition/las-vegas-denomination-templates-v1/masks/chip_5_4E5BEE5FF85A4B562053270AC56B3CA8.png",
+      "bytes": 596,
+      "sha256": "d20300f6efa82e0b46a2be27b610ec4b05315ee49252764e4cb61e7032e8295e",
+      "storage": "git",
+      "git_index_blob_oid": "dbdc488722198993c70500f0603c17c7b74282bb"
+    },
+    {
+      "path": "models/assets/chip_recognition/las-vegas-denomination-templates-v1/masks/chip_5_790E35833F2C744CB8C48FBE74A0F521.png",
+      "bytes": 534,
+      "sha256": "e3751bceda2aa4f111db016676d6af8fa720a17a89c3c69bbbfe9a3473070c42",
+      "storage": "git",
+      "git_index_blob_oid": "c6a470294a487999ef6300920d5be0e32e2abfd7"
+    },
+    {
+      "path": "models/assets/chip_recognition/las-vegas-denomination-templates-v1/masks/chip_5_BBA8EAEAC23A564AE168D91B22682C4B.png",
+      "bytes": 621,
+      "sha256": "ea38096d99358e7b1db71b02a4a02b8bf84af0ef6830431718dfbbec7cba05c0",
+      "storage": "git",
+      "git_index_blob_oid": "591d33acaae4a582371b4dd3ff14586036d5149a"
+    },
+    {
+      "path": "models/assets/chip_recognition/las-vegas-denomination-templates-v1/masks/chip_5_C869E7AC2F355BD5447C09E2B3E8EBFF.png",
+      "bytes": 621,
+      "sha256": "2de870d7c43d91139852af2e37fb964ef3f5ec8c2bd46852e3eae7a1833ea9c3",
+      "storage": "git",
+      "git_index_blob_oid": "87a98d5a97aa4292d874369619d3cc64a45209a9"
+    },
+    {
+      "path": "models/assets/chip_recognition/rim-colour-binary-10-20-v1/model.json",
+      "bytes": 5206,
+      "sha256": "c0be8c9dcbed5aaca933d5566e0d5275db3fc0a3cf6a81f0206f158ccfda52c2",
+      "storage": "git",
+      "git_index_blob_oid": "4a4e3aa5c39fea6c4611ccfdc5323febca6fcb58"
+    },
+    {
+      "path": "models/assets/chip_recognition/yolo11n-localization-chip-v2-v1-fallback/best.pt",
+      "bytes": 5532435,
+      "sha256": "80998949eb499a1c2f82045439757fdb697739fd9ab54df78fe4118109db5b20",
+      "storage": "git-lfs",
+      "git_index_blob_oid": "f0dec4a0aa0c1e3fab204a738f978a987705d8c8"
+    },
+    {
+      "path": "models/assets/chip_recognition/yolo11n-localization-hard-negative-v3/best.pt",
+      "bytes": 5532115,
+      "sha256": "311748e2ee5eefb332e5f7e1b4167ce399fb5861dc08cbd847292b3105a71d1d",
+      "storage": "git-lfs",
+      "git_index_blob_oid": "22ee4a120da46b813f9a5fa9b1d9dcf0536c252f"
+    },
+    {
+      "path": "models/assets/face_identity/face_detection_yunet_2023mar.onnx",
+      "bytes": 232589,
+      "sha256": "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4",
+      "storage": "git-lfs",
+      "git_index_blob_oid": "2d8804a5986e229f1fde3a1994feacc66c91b58b"
+    },
+    {
+      "path": "models/assets/face_identity/face_recognition_sface_2021dec.onnx",
+      "bytes": 38696353,
+      "sha256": "0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e83484087c34e79",
+      "storage": "git-lfs",
+      "git_index_blob_oid": "5817e559d509b2c1d5069f3c49a388bc45d4395f"
+    },
+    {
+      "path": "models/assets/gesture_recognizer.task",
+      "bytes": 8373440,
+      "sha256": "97952348cf6a6a4915c2ea1496b4b37ebabc50cbbf80571435643c455f2b0482",
+      "storage": "git-lfs",
+      "git_index_blob_oid": "528608f7a39737ac65c5b88b3121d45e59e98449"
+    },
+    {
+      "path": "models/assets/pose_landmarker_lite.task",
+      "bytes": 5777746,
+      "sha256": "59929e1d1ee95287735ddd833b19cf4ac46d29bc7afddbbf6753c459690d574a",
+      "storage": "git-lfs",
+      "git_index_blob_oid": "f3643f03afea2e2e7fc27b08edb527d1ac2e0f40"
+    },
+    {
+      "path": "models/assets/vosk-model-small-en-us-0.15/README",
+      "bytes": 199,
+      "sha256": "c0cf286e4f7783306c5f6469b37db69228fb16803b03cae661edb2d7bba64ebb",
+      "storage": "git-lfs",
+      "git_index_blob_oid": "ca8c45bb5dbf851a8583ee46c1b0809a091f8213"
+    },
+    {
+      "path": "models/assets/vosk-model-small-en-us-0.15/am/final.mdl",
+      "bytes": 15962575,
+      "sha256": "75370a0137f9daf8f469dedd7daa4513ae7a621f03240c6e512e2b50b656a7b6",
+      "storage": "git-lfs",
+      "git_index_blob_oid": "adb5a47f794cfc51d06b209f27336302b770899b"
+    },
+    {
+      "path": "models/assets/vosk-model-small-en-us-0.15/conf/mfcc.conf",
+      "bytes": 131,
+      "sha256": "1e2228006d01d805ad1c267fee9f79709ca87ac51bd82b0e3f5c69ba543f0fc4",
+      "storage": "git-lfs",
+      "git_index_blob_oid": "6dc7a3266615b13d92039defac85bb80b23a86e5"
+    },
+    {
+      "path": "models/assets/vosk-model-small-en-us-0.15/conf/model.conf",
+      "bytes": 290,
+      "sha256": "8f14cb1eeb07c762c371db648c6be688d347236155ca0f64fb13b6567a8ce81f",
+      "storage": "git-lfs",
+      "git_index_blob_oid": "218fe8f38ac6d4443b27980f96abe171d9562c3b"
+    },
+    {
+      "path": "models/assets/vosk-model-small-en-us-0.15/graph/Gr.fst",
+      "bytes": 24013795,
+      "sha256": "023c8b7e30704a9e37765c635c252e608a02f361235bf94abdcf2a5225d85b20",
+      "storage": "git-lfs",
+      "git_index_blob_oid": "70e6b3150dbe696e4caa43f2c52af8bd5f36b30d"
+    },
+    {
+      "path": "models/assets/vosk-model-small-en-us-0.15/graph/HCLr.fst",
+      "bytes": 22416994,
+      "sha256": "5caafba3081e1646545ac6bff0dd7a318e53dcbdc86f237909ce1d2ac1293d34",
+      "storage": "git-lfs",
+      "git_index_blob_oid": "ed93dd8f950a5cf760c6ef89b8829c5b9a7f0319"
+    },
+    {
+      "path": "models/assets/vosk-model-small-en-us-0.15/graph/disambig_tid.int",
+      "bytes": 102,
+      "sha256": "9ad87cc166d0998f08f758f47a6223a120dfffcbee805c4849c3aa5e6bb3c0fc",
+      "storage": "git-lfs",
+      "git_index_blob_oid": "136a52ced513d0280f9d967b849b789d25250d04"
+    },
+    {
+      "path": "models/assets/vosk-model-small-en-us-0.15/graph/phones/word_boundary.int",
+      "bytes": 1761,
+      "sha256": "da199d9c991e0e84681ddbb34627b915b26302d50a8fdaa23c51e2bc3a50b5c3",
+      "storage": "git-lfs",
+      "git_index_blob_oid": "3346ee4518de0e8f78cf2abd4400c230c7a0bb19"
+    },
+    {
+      "path": "models/assets/vosk-model-small-en-us-0.15/ivector/final.dubm",
+      "bytes": 168048,
+      "sha256": "8c5d7dd69d2122313baaf19f61f35dd3fa18b70c62ac0687e311e1c46e6daca7",
+      "storage": "git-lfs",
+      "git_index_blob_oid": "b60893cf1547da3367b82d7fb0dd9223d9c5c2e9"
+    },
+    {
+      "path": "models/assets/vosk-model-small-en-us-0.15/ivector/final.ie",
+      "bytes": 8288887,
+      "sha256": "3f37faf90c375b9e4740b569398b5829ed9cc07d19be6d441f72c3b71d7efcc6",
+      "storage": "git-lfs",
+      "git_index_blob_oid": "9fcfcba96717b8f0fe738be0367eeb1a15b5888b"
+    },
+    {
+      "path": "models/assets/vosk-model-small-en-us-0.15/ivector/final.mat",
+      "bytes": 44975,
+      "sha256": "ddd83586dc5f928cda8738b922c85ffe38fc789cb5f9151a712ca12f37265382",
+      "storage": "git-lfs",
+      "git_index_blob_oid": "34fd71252219e26eea1823a2b9546df27e1a947c"
+    },
+    {
+      "path": "models/assets/vosk-model-small-en-us-0.15/ivector/global_cmvn.stats",
+      "bytes": 1080,
+      "sha256": "33be09afcc80059847a275c3d043b51f1ab954c7c2438ddbbf4745e8ba144ff9",
+      "storage": "git-lfs",
+      "git_index_blob_oid": "99c5c2459a5311a274bec562d5f9abe1182628ec"
+    },
+    {
+      "path": "models/assets/vosk-model-small-en-us-0.15/ivector/online_cmvn.conf",
+      "bytes": 95,
+      "sha256": "a2f3571754b64297cb7efb2e7ca3df61995c5a45fcbb97188f90613552bb2dfe",
+      "storage": "git-lfs",
+      "git_index_blob_oid": "2a217714155ba08a680b8418f5bcc48ceef1579d"
+    },
+    {
+      "path": "models/assets/vosk-model-small-en-us-0.15/ivector/splice.conf",
+      "bytes": 35,
+      "sha256": "9f0c5f7c82d18eaf25d8bce470efa9f7741f88411fe428774bc0a9bb69a24756",
+      "storage": "git-lfs",
+      "git_index_blob_oid": "9b320cae0e8acbcc2d34dcfcb025a29d06b291c6"
+    },
+    {
+      "path": "models/assets/vosk-model-spk-0.4/README.txt",
+      "bytes": 5006,
+      "sha256": "df0a2ab600c337475b65fd4d6f29a1b9b18e09fc0211b5a7a4820dce82d4e23a",
+      "storage": "git-lfs",
+      "git_index_blob_oid": "69b4081b7f7ce9926bca23065525f6d0de9f409e"
+    },
+    {
+      "path": "models/assets/vosk-model-spk-0.4/final.ext.raw",
+      "bytes": 14929171,
+      "sha256": "d30354474ac719b3cfce58186463302b988cf22ce3afee7237a2da862c4a91d1",
+      "storage": "git-lfs",
+      "git_index_blob_oid": "95bf775597260c9987d6ac496fe1c27f5a353611"
+    },
+    {
+      "path": "models/assets/vosk-model-spk-0.4/mean.vec",
+      "bytes": 1199,
+      "sha256": "3bc5dfa9479c3aaacf4f45c155e9bd4772785449112566fac23578c09e93bcd7",
+      "storage": "git-lfs",
+      "git_index_blob_oid": "e9149720854c567357310a24871c01c861262fe0"
+    },
+    {
+      "path": "models/assets/vosk-model-spk-0.4/mfcc.conf",
+      "bytes": 94,
+      "sha256": "86f4df625b950b81b68864fdefabf26aa65079f84ea20f40e7f9e7ccbb9c456c",
+      "storage": "git-lfs",
+      "git_index_blob_oid": "80f1cd59bb3c8c01b56424ecd0f24de0b56cc86c"
+    },
+    {
+      "path": "models/assets/vosk-model-spk-0.4/transform.mat",
+      "bytes": 65551,
+      "sha256": "fab14481fb27c41df0f1825afe18530e4f6d128dbb2c239ee86d8d7096e22c33",
+      "storage": "git-lfs",
+      "git_index_blob_oid": "1429c5a282fd051e674e4926194e92204489d0fc"
+    }
+  ]
+}

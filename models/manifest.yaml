@@ -3,7 +3,7 @@
   "updated_on": "2026-07-25",
   "asset_root": "models/assets",
   "runtime_downloads_allowed": false,
-  "notes": "No Poker Dealer model is admitted for release without the required held-out metrics. The 2026-07-25 chip 20x card-hard-negative update selects the 441-negative development chip-localization checkpoint after live review while retaining chip-v2-v1 as fallback; fixed-design 10/20 denomination remains unchanged. Card, speech, speaker, face and action assets retain their separately recorded states. Physical chip evidence remains Plus-only and never replaces the digital ledger.",
+  "notes": "No Poker Dealer model is admitted for release without the required held-out metrics. The all-tracked-model-assets-20260725 snapshot freezes every Git-tracked file under models/assets without changing runtime selection or admission state. The 2026-07-25 chip 20x card-hard-negative update selects the 441-negative development chip-localization checkpoint after live review while retaining chip-v2-v1 as fallback; fixed-design 10/20 denomination remains unchanged. Card, speech, speaker, face and action assets retain their separately recorded states. Physical chip evidence remains Plus-only and never replaces the digital ledger.",
   "frozen_sets": [
     {
       "freeze_id": "perception-baseline-20260724",
@@ -171,6 +171,31 @@
           "path_note": "The historical directory name is retained so existing runtime paths select the user-approved 441-negative checkpoint."
         }
       ]
+    },
+    {
+      "freeze_id": "all-tracked-model-assets-20260725",
+      "frozen_on": "2026-07-25",
+      "status": "immutable_git_snapshot",
+      "runtime_selection_changed": false,
+      "admission_state_changed": false,
+      "snapshot_manifest": {
+        "path": "models/frozen/all-model-assets-20260725.json",
+        "bytes": 25012,
+        "sha256": "2918e9ecbaab9c32bb45285701f307a273b8d9a3dfc06a689e7b392f589208c4",
+        "storage": "git"
+      },
+      "coverage": {
+        "source_asset_commit": "ad1c7d8bf6540b391498b181ace7b08690a6f18c",
+        "registered_models_with_assets": 14,
+        "registered_models_without_assets": 1,
+        "tracked_files": 67,
+        "git_lfs_files": 32,
+        "git_files": 35,
+        "total_bytes": 304159175,
+        "assetless_entries": [
+          "player-action-landmark-tcn@untrained-v1"
+        ]
+      }
     }
   ],
   "models": [
