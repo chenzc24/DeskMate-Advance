@@ -8,6 +8,7 @@ from typing import Callable, TYPE_CHECKING, TypeVar
 
 from poker_dealer.domain import HandPhase
 from poker_dealer.game import SlotLifecycle
+from poker_dealer.io.camera import CameraRoute
 from poker_dealer.perception.actions import observation_to_dict
 from poker_dealer.perception.attribution import (
     AttributedActionCandidate,
@@ -84,7 +85,8 @@ class HandRuntimeLoop:
         self.steps = 0
         self._camera_epoch = 0
         self._last_frame_read: FrameRead | None = None
-        self._last_frame_observed_at_ns: int | None = None
+        self._last_frame_observed_at_ns: dict[CameraRoute, int] = {}
+        self._active_camera_route = CameraRoute.PLAYER
         self.event_writer.sync_engine(self.runtime.engine.log)
         self._publish_state()
 
@@ -236,7 +238,7 @@ class HandRuntimeLoop:
             return
         if coordinator.phase is not PartBPhase.WAITING_VISUAL_CONFIRMATION:
             raise RuntimeError(f"unsupported Part B phase: {coordinator.phase.value}")
-        frame = self._read_frame(now_ns)
+        frame = self._read_frame(now_ns, CameraRoute.TABLE)
         if self.runtime.phase is HandPhase.PAUSED_RECOVERY:
             return
         step = coordinator.current_step
@@ -300,7 +302,7 @@ class HandRuntimeLoop:
         if coordinator.phase is PartAPhase.WAITING_VISUAL_SETTLE:
             if self.visual_settle_source is None:
                 raise RuntimeError("live Part A requires a visual-settle source")
-            frame = self._read_frame(now_ns)
+            frame = self._read_frame(now_ns, CameraRoute.PLAYER)
             if self.runtime.phase is HandPhase.PAUSED_RECOVERY:
                 return
             context = self.context()
@@ -316,7 +318,7 @@ class HandRuntimeLoop:
                 self.runtime.accept_visual_settle()
             return
         if coordinator.phase is PartAPhase.VERIFYING_IDENTITY:
-            frame = self._read_frame(now_ns)
+            frame = self._read_frame(now_ns, CameraRoute.PLAYER)
             if self.runtime.phase is HandPhase.PAUSED_RECOVERY:
                 return
             context = self.context()
@@ -338,7 +340,7 @@ class HandRuntimeLoop:
             self.runtime.accept_identity(observation)
             return
         if coordinator.phase is PartAPhase.WAITING_PLAYER_ACTION:
-            frame = self._read_frame(now_ns)
+            frame = self._read_frame(now_ns, CameraRoute.PLAYER)
             if self.runtime.phase is HandPhase.PAUSED_RECOVERY:
                 return
             context = self.context()
@@ -418,28 +420,46 @@ class HandRuntimeLoop:
             if handler is not None:
                 handler(controls, context)
 
-    def _read_frame(self, now_ns: int):
+    def _read_frame(self, now_ns: int, camera_route: CameraRoute):
         if self.frame_source is None:
             return None
+        self._active_camera_route = camera_route
+        selector = getattr(self.frame_source, "select_camera_route", None)
+        if selector is None:
+            selector = getattr(self.frame_source, "select_route", None)
+        if selector is not None:
+            selector(camera_route)
         read = self._measure(
             "camera_read_duration",
-            self._diagnostic_context(),
+            {
+                **self._diagnostic_context(),
+                "camera_route": camera_route.value,
+            },
             self.frame_source.read,
         )
         self._last_frame_read = read
         self._camera_epoch = read.camera_epoch
-        if self._last_frame_observed_at_ns is not None and self.diagnostic_sink is not None:
+        previous_observed_at_ns = self._last_frame_observed_at_ns.get(camera_route)
+        if previous_observed_at_ns is not None and self.diagnostic_sink is not None:
             self.diagnostic_sink.metric(
                 "camera_frame_interval",
-                (read.observed_at_ns - self._last_frame_observed_at_ns) / 1_000_000,
-                {**self._diagnostic_context(), "read_state": read.state.value},
+                (read.observed_at_ns - previous_observed_at_ns) / 1_000_000,
+                {
+                    **self._diagnostic_context(),
+                    "camera_route": camera_route.value,
+                    "read_state": read.state.value,
+                },
             )
-        self._last_frame_observed_at_ns = read.observed_at_ns
+        self._last_frame_observed_at_ns[camera_route] = read.observed_at_ns
         if read.state is FrameReadState.DISCONNECTED:
             if self.diagnostic_sink is not None:
                 self.diagnostic_sink.emit(
                     "camera_disconnected",
-                    {**self._diagnostic_context(), "reason": read.reason},
+                    {
+                        **self._diagnostic_context(),
+                        "camera_route": camera_route.value,
+                        "reason": read.reason,
+                    },
                     level="error",
                 )
             self.runtime.engine.pause(
@@ -452,13 +472,21 @@ class HandRuntimeLoop:
             if self.diagnostic_sink is not None:
                 self.diagnostic_sink.emit(
                     "camera_frame_missing",
-                    {**self._diagnostic_context(), "reason": read.reason},
+                    {
+                        **self._diagnostic_context(),
+                        "camera_route": camera_route.value,
+                        "reason": read.reason,
+                    },
                     level="warning",
                 )
             self.event_writer.emit(
                 "camera_read",
                 observed_at_ns=read.observed_at_ns,
-                payload={"state": read.state.value, "reason": read.reason},
+                payload={
+                    "state": read.state.value,
+                    "camera_route": camera_route.value,
+                    "reason": read.reason,
+                },
             )
             return None
         return read.frame
@@ -523,6 +551,7 @@ class HandRuntimeLoop:
             "part_a_phase": part_a_phase,
             "part_b_phase": part_b_phase,
             "camera_epoch": self._camera_epoch,
+            "camera_route": self._active_camera_route.value,
         }
 
 

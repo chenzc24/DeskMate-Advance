@@ -1,0 +1,69 @@
+{
+  "schema_version": "poker_dealer.card_model_comparison.v1",
+  "created_on": "2026-07-25",
+  "dataset": {
+    "path": "data/work/card_corner_v5/dataset/dataset.yaml",
+    "sha256": "afec56f38d7abb1d0a9f249bdce9fbac2cd397288958f4ff118d9e1311affaf0",
+    "validation_images": 450,
+    "validation_instances": 1311,
+    "split_scope": "225 augmentations from held-out local capture session slope2 plus 225 external images; no train/validation source or perceptual-near-duplicate overlap"
+  },
+  "models": {
+    "original_lgd": {
+      "weight_sha256": "3513b77ab418ac2e86d3bf53be6566522666e656cbccb12678ba93feb6201004",
+      "evaluation_sha256": "a798ba17ceeb375785a769f67edd8d82251a815c16f643786807c98fac6f285c",
+      "precision": 0.5700282720373417,
+      "recall": 0.6892709257468342,
+      "map50": 0.5026056563473262,
+      "map50_95": 0.4025357972366625
+    },
+    "poker_dealer_v4": {
+      "weight_sha256": "0204fedbe0e83d887ed370dfc7cd17dfb1da57052d7c30583b127cddd43a2fa1",
+      "evaluation_sha256": "60e369ee2297f95102adf61cd6a9de382ef50365040af60cf7f09406a5fcc496",
+      "precision": 0.943307423416187,
+      "recall": 0.7846328971729276,
+      "map50": 0.8780751252064312,
+      "map50_95": 0.7561321628106048
+    },
+    "poker_dealer_v5": {
+      "weight_sha256": "40a3815f55b06f3138c760be941d05d61048b6d5feb1b782a70a7e665c91fa53",
+      "evaluation_sha256": "aeb80a4f83871a284ea1f2ad03d7c41fb64c12f68811e43f2d60030163768ee7",
+      "precision": 0.9487365820695101,
+      "recall": 0.8107495542850907,
+      "map50": 0.9140854320947993,
+      "map50_95": 0.7689537251548086,
+      "inference_ms_per_image": 9.396074666227731
+    }
+  },
+  "v5_minus_v4_percentage_points": {
+    "precision": 0.5429158653323052,
+    "recall": 2.6116657112163044,
+    "map50": 3.601030688836815,
+    "map50_95": 1.282156234420384
+  },
+  "v5_minus_original_percentage_points": {
+    "precision": 37.87083100321684,
+    "recall": 12.14786285382565,
+    "map50": 41.14797757474731,
+    "map50_95": 36.64179279181461
+  },
+  "v5_weakest_recall_classes": [
+    {"class": "9D", "recall": 0.6190476190476191, "map50_95": 0.6974276315789474},
+    {"class": "4C", "recall": 0.6228070175438597, "map50_95": 0.6714062499999999},
+    {"class": "5D", "recall": 0.6896551724137931, "map50_95": 0.747375},
+    {"class": "5C", "recall": 0.6956521739130435, "map50_95": 0.7804083333333334},
+    {"class": "AD", "recall": 0.7032967032967034, "map50_95": 0.6977666666666666}
+  ],
+  "largest_v5_map50_95_regressions_vs_v4_percentage_points": [
+    {"class": "4H", "delta": -12.073055555555555},
+    {"class": "JH", "delta": -11.883333333333335},
+    {"class": "7C", "delta": -7.327162037037035},
+    {"class": "4S", "delta": -6.498333333333333},
+    {"class": "2D", "delta": -5.307142857142857}
+  ],
+  "decision": {
+    "state": "candidate",
+    "runtime_selected": false,
+    "reason": "V5 improves every aggregate metric over V4 on the same source-isolated validation list, but class regressions and missing live target-camera, rejection, duplicate-card and temporal-stability evidence prevent release admission."
+  }
+}

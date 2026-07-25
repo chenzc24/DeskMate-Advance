@@ -15,10 +15,10 @@
           <h1 id="consoleTitle">Player registration</h1>
         </div>
         <div class="links">
-          <button id="voiceToggle" class="voice-toggle" type="button">Phone voice on</button>
-          <span id="cameraStatus" class="status"><i></i> Camera</span>
-          <span id="micStatus" class="status"><i></i> Mic</span>
-          <span id="linkStatus" class="status warning"><i></i> Connecting</span>
+          <button id="voiceToggle" class="voice-toggle" type="button">Phone voice off</button>
+          <span id="cameraStatus" class="status"><i></i><span>Cam</span></span>
+          <span id="micStatus" class="status"><i></i><span>Mic</span></span>
+          <span id="linkStatus" class="status warning"><i></i><span>Connecting</span></span>
         </div>
       </header>
 
@@ -113,9 +113,10 @@
           <button data-intent="start"><kbd>S</kbd><span id="startLabel">Start</span></button>
           <button data-intent="previous_option"><kbd>P</kbd><span>Previous</span></button>
           <button data-intent="next_option"><kbd>N</kbd><span>Next</span></button>
-          <button data-intent="repeat_prompt"><kbd>R</kbd><span>Replay</span></button>
+          <button data-intent="repeat_prompt" class="utility"><kbd>R</kbd><span>Repeat voice</span></button>
+          <button data-intent="new_session" class="primary"><kbd>↻</kbd><span>New session</span></button>
+          <button data-intent="quit" data-confirm="Stop the mobile UI service?"><kbd>Q</kbd><span>Stop UI</span></button>
           <button data-intent="clear" data-confirm="Apply this destructive clear or void action?"><kbd>X</kbd><span id="clearLabel">Clear / Void</span></button>
-          <button data-intent="quit" data-confirm="Exit the dealer runtime?"><kbd>Q</kbd><span>Exit</span></button>
         </div>
       </section>
     </main>

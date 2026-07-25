@@ -14,6 +14,7 @@ import time
 
 from poker_dealer.runtime.live_hand_app import LiveHandApplication
 from poker_dealer.game import PromotionPolicy
+from poker_dealer.io.camera import CameraRoute
 from poker_dealer.runtime.network import MobileWebEndpoint, NetworkEndpoints
 from poker_dealer.runtime.profile import RuntimeProfile
 from poker_dealer.domain import Seat
@@ -58,6 +59,7 @@ from poker_dealer.runtime.live_perception import (
 
 
 ROOT = Path(__file__).resolve().parents[2]
+_NEW_SESSION_EXIT_CODE = 75
 DEFAULT_ANNOUNCEMENT_CATALOG = ROOT / "configs" / "runtime" / "announcements_en.json"
 DEFAULT_NETWORK_ENDPOINTS = ROOT / "configs" / "runtime" / "network_endpoints.json"
 NAMED_PROFILES = {name: ROOT / "configs" / "runtime" / f"{name}.json" for name in (
@@ -418,7 +420,18 @@ def _run_with_error_boundary(
         if mode == "registration-smoke":
             return _run_registration_smoke(args, profile, app, diagnostics)
         if mode == "live":
-            return _run_live(args, profile, app, diagnostics)
+            base_session_id = args.session_id or f"live-{profile.profile_id.value}"
+            cycle = 1
+            live_args = args
+            while True:
+                result = _run_live(live_args, profile, app, diagnostics)
+                if result != _NEW_SESSION_EXIT_CODE:
+                    return result
+                cycle += 1
+                next_values = vars(args).copy()
+                next_values["session_id"] = f"{base_session_id}-session-{cycle:03d}"
+                live_args = argparse.Namespace(**next_values)
+                app = LiveHandApplication(ROOT, profile)
         try:
             if diagnostics is not None:
                 diagnostics.emit("device_open_started", {"camera": True})
@@ -715,7 +728,11 @@ def _session_log_path(
     if args.log_jsonl is not None:
         return args.log_jsonl.with_name(f"{args.log_jsonl.stem}.session.jsonl")
     if diagnostics is not None:
-        return diagnostics.session_log_path
+        primary = diagnostics.session_log_path
+        if not primary.exists():
+            return primary
+        safe_session_id = re.sub(r"[^A-Za-z0-9_.-]+", "-", session_id)
+        return diagnostics.root / f"session-{safe_session_id}.jsonl"
     return app.session_log_path(session_id=session_id)
 
 
@@ -732,7 +749,11 @@ def _hand_log_path(
     if args.session_log_jsonl is not None:
         return args.session_log_jsonl.parent / f"{hand_id}.jsonl"
     if diagnostics is not None:
-        return diagnostics.hand_log_path(hand_id)
+        primary = diagnostics.hand_log_path(hand_id)
+        if not primary.exists():
+            return primary
+        safe_session_id = re.sub(r"[^A-Za-z0-9_.-]+", "-", session_id)
+        return diagnostics.hand_log_path(f"{safe_session_id}-{hand_id}")
     return app.event_log_path(session_id=session_id, hand_id=hand_id)
 
 
@@ -843,6 +864,7 @@ def _run_registration_smoke(
         display=not args.headless,
         registration_observer=mobile_console,
     )
+    frame_source.select_camera_route(CameraRoute.PLAYER)
     keyboard_controls = LiveKeyboardControlSource(frame_source)
     controls = (
         CompositeControlSource(keyboard_controls, mobile_console)
@@ -1013,6 +1035,7 @@ def _run_live(
         display=not args.headless,
         registration_observer=mobile_console,
     )
+    frame_source.select_camera_route(CameraRoute.PLAYER)
     keyboard_controls = LiveKeyboardControlSource(frame_source)
     controls = (
         CompositeControlSource(keyboard_controls, mobile_console)
@@ -1032,6 +1055,7 @@ def _run_live(
     )
     hand_results: list[dict[str, object]] = []
     game_session: SessionRuntime | None = None
+    new_session_requested = False
     try:
         session.open(session_id)
         writer = _runtime_writer(first_output_path, event_announcer)
@@ -1197,6 +1221,7 @@ def _run_live(
                         )
                     if event_announcer is not None:
                         event_announcer.publish("table_not_clear")
+                    frame_source.select_camera_route(CameraRoute.TABLE)
                     boundary = boundary_ui.wait_for_decision(
                         game_session,
                         controller,
@@ -1220,6 +1245,8 @@ def _run_live(
                     session_writer.sync(game_session.log)
                     if event_announcer is not None:
                         event_announcer.publish("session_completed")
+            if mobile_console is not None:
+                new_session_requested = _wait_for_terminal_request(mobile_console)
         finally:
             writer.close()
     finally:
@@ -1274,7 +1301,21 @@ def _run_live(
         diagnostics.emit(
             "runtime_result", output, level="info" if passed else "error"
         )
+    if passed and new_session_requested:
+        return _NEW_SESSION_EXIT_CODE
     return 0 if passed else 4
+
+
+def _wait_for_terminal_request(mobile_console: MobileWebConsole) -> bool:
+    """Keep the stable URL alive until the operator restarts or stops it."""
+
+    while True:
+        if mobile_console.consume_new_session_request():
+            mobile_console.prepare_new_session()
+            return True
+        if mobile_console.consume_quit_request():
+            return False
+        time.sleep(0.05)
 
 
 def _live_config(

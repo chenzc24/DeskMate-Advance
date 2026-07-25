@@ -24,7 +24,12 @@ from poker_dealer.domain import (
     VisionSlot,
     role_seats,
 )
-from poker_dealer.io.camera import CameraReadStatus, OpenCVCamera
+from poker_dealer.io.camera import (
+    CameraReadStatus,
+    CameraRoute,
+    OpenCVCamera,
+    RoutedOpenCVCamera,
+)
 from poker_dealer.perception.actions import (
     ActionObservationContext,
     GestureFrameEvidence,
@@ -202,7 +207,7 @@ class InteractiveOpenCVFrameSource:
 
     def __init__(
         self,
-        camera: OpenCVCamera,
+        camera: OpenCVCamera | RoutedOpenCVCamera,
         *,
         display: bool = True,
         window_name: str = "Poker Dealer - Unified Live Runtime",
@@ -225,6 +230,11 @@ class InteractiveOpenCVFrameSource:
     def open(self) -> None:
         if not self.camera.is_open:
             self.camera.open()
+
+    def select_camera_route(self, route: CameraRoute | str) -> None:
+        selector = getattr(self.camera, "select_route", None)
+        if selector is not None:
+            selector(route)
 
     def set_status(self, *lines: str) -> None:
         self._status_lines = tuple(line for line in lines if line)

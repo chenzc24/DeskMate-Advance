@@ -141,6 +141,7 @@ class MobileWebConsole:
         self._frame_version = 0
         self._last_encoded_at_ns: int | None = None
         self._quit_requested = False
+        self._new_session_requested = False
         self._runtime_feedback: str | None = None
         self._last_prompt: str | None = None
         self._prompt_callback: Callable[[Mapping[str, object]], None] | None = None
@@ -261,6 +262,8 @@ class MobileWebConsole:
                 if session.ended
                 else "table_clearance"
                 if not session.table_cleared
+                else "ready_session_end"
+                if stop_after_clear
                 else "ready_next_hand"
             ),
             "session_id": session.roster.session_id,
@@ -383,6 +386,48 @@ class MobileWebConsole:
     def request_quit(self) -> None:
         with self._lock:
             self._quit_requested = True
+
+    def request_new_session(self) -> None:
+        with self._lock:
+            self._new_session_requested = True
+
+    def prepare_new_session(self) -> None:
+        """Clear terminal UI/evidence state before a fresh in-memory enrollment."""
+
+        with self._lock:
+            self._new_session_requested = False
+            self._runtime_feedback = None
+            self._last_prompt = None
+            self._face_boxes = ()
+            self._face_status = None
+            self._action_marker = None
+            while True:
+                try:
+                    self._controls.get_nowait()
+                except queue.Empty:
+                    break
+        self._replace_state(
+            {
+                "view": "registration",
+                "phase": "starting",
+                "role": "button",
+                "seat": "",
+                "completed_roles": [],
+                "simulated_roles": [],
+                "face_samples": 0,
+                "face_target": 0,
+                "voice_samples": 0,
+                "voice_target": 0,
+                "voice_active": False,
+                "prompt_playing": False,
+                "speech_enabled": False,
+                "alert_title": None,
+                "alert_detail": None,
+                "microphone_live": False,
+                "microphone_level": 0.0,
+                "microphone_callback_blocks": 0,
+            }
+        )
         self._notify_changed()
 
     def set_prompt_callback(
@@ -407,6 +452,13 @@ class MobileWebConsole:
             if not self._quit_requested:
                 return False
             self._quit_requested = False
+            return True
+
+    def consume_new_session_request(self) -> bool:
+        with self._lock:
+            if not self._new_session_requested:
+                return False
+            self._new_session_requested = False
             return True
 
     def poll_controls(self, observed_at_ns: int) -> tuple[ControlObservation, ...]:
@@ -576,23 +628,37 @@ class MobileWebConsole:
             return ()
         if view == "session_boundary":
             if phase == "recovery":
-                return (
+                intents = [
                     ControlIntent.START,
                     ControlIntent.CLEAR,
-                    ControlIntent.CONFIRM,
-                    ControlIntent.NEXT_OPTION,
-                    ControlIntent.PREVIOUS_OPTION,
-                )
+                ]
+                if self._state.get("selected_slot") is not None:
+                    intents.extend(
+                        (
+                            ControlIntent.CONFIRM,
+                            ControlIntent.NEXT_OPTION,
+                            ControlIntent.PREVIOUS_OPTION,
+                        )
+                    )
+                return tuple(intents)
             if phase == "table_clearance":
                 return (ControlIntent.CONFIRM,)
+            if phase == "ready_session_end":
+                return (ControlIntent.CLEAR,)
             if phase == "ready_next_hand":
-                return (
+                intents = [
                     ControlIntent.START,
                     ControlIntent.CLEAR,
-                    ControlIntent.CONFIRM,
-                    ControlIntent.NEXT_OPTION,
-                    ControlIntent.PREVIOUS_OPTION,
-                )
+                ]
+                if self._state.get("low_stack_seats"):
+                    intents.extend(
+                        (
+                            ControlIntent.CONFIRM,
+                            ControlIntent.NEXT_OPTION,
+                            ControlIntent.PREVIOUS_OPTION,
+                        )
+                    )
+                return tuple(intents)
             return ()
         voice_active = bool(self._state.get("voice_active", False))
         allowed: list[ControlIntent] = []
@@ -817,6 +883,22 @@ class MobileWebConsole:
             )
             if allowed:
                 self._request_prompt()
+            await websocket.send_json(ack)
+            return
+        if intent == "new_session":
+            with self._lock:
+                allowed = (
+                    client_id == self._controller_id
+                    and self._state.get("view") == "session_boundary"
+                    and self._state.get("phase") == "session_ended"
+                )
+            ack = self._command_ack(
+                command_id,
+                "accepted" if allowed else "rejected",
+                "new_session_requested" if allowed else "intent_not_available",
+            )
+            if allowed:
+                self.request_new_session()
             await websocket.send_json(ack)
             return
         if not isinstance(expected, int) or isinstance(expected, bool):

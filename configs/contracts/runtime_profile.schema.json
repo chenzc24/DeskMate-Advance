@@ -5,9 +5,7 @@
   "type": "object",
   "additionalProperties": false,
   "required": ["schema_version", "profile_id", "camera", "dealer", "perception", "controls", "speech", "logging"],
-  "properties": {
-    "schema_version": {"const": "1.0"},
-    "profile_id": {"enum": ["laptop", "robot_camera", "robot_hardware"]},
+  "$defs": {
     "camera": {
       "type": "object",
       "additionalProperties": false,
@@ -48,7 +46,13 @@
           }
         }
       ]
-    },
+    }
+  },
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "profile_id": {"enum": ["laptop", "robot_camera", "robot_hardware"]},
+    "camera": {"$ref": "#/$defs/camera"},
+    "player_camera": {"$ref": "#/$defs/camera"},
     "dealer": {
       "type": "object",
       "additionalProperties": false,

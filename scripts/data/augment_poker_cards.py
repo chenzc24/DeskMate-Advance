@@ -222,50 +222,12 @@ def _sample_rotation(
     return float(center + rng.uniform(-jitter, jitter)), orientation
 
 
-def detect_card_region(
-    image: np.ndarray, boxes: Sequence[YoloBox]
-) -> tuple[np.ndarray, np.ndarray]:
-    """Find the bright card body that encloses both annotated corner glyphs."""
-    height, width = image.shape[:2]
-    centers = [
-        (float(box.x_center * width), float(box.y_center * height)) for box in boxes
-    ]
-    center_x = [point[0] for point in centers]
-    center_y = [point[1] for point in centers]
-    span_x = max(max(center_x) - min(center_x), 24.0)
-    span_y = max(max(center_y) - min(center_y), 32.0)
-    search_x0 = max(0, int(min(center_x) - 0.58 * span_x))
-    search_x1 = min(width, int(max(center_x) + 0.58 * span_x))
-    search_y0 = max(0, int(min(center_y) - 0.44 * span_y))
-    search_y1 = min(height, int(max(center_y) + 0.44 * span_y))
-    if len(boxes) == 1:
-        search_mask = np.full((height, width), 255, dtype=np.uint8)
-    else:
-        search_mask = np.zeros((height, width), dtype=np.uint8)
-        cv2.rectangle(
-            search_mask, (search_x0, search_y0), (search_x1, search_y1), 255, -1
-        )
-    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-    saturation = hsv[:, :, 1]
-    value = hsv[:, :, 2]
-    bright_neutral = np.where((value >= 145) & (saturation <= 165), 255, 0).astype(
-        np.uint8
-    )
-    bright_neutral = cv2.bitwise_and(bright_neutral, search_mask)
-    bright_neutral = cv2.morphologyEx(
-        bright_neutral,
-        cv2.MORPH_CLOSE,
-        cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (13, 13)),
-    )
-    bright_neutral = cv2.morphologyEx(
-        bright_neutral,
-        cv2.MORPH_OPEN,
-        cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)),
-    )
-    contours, _ = cv2.findContours(
-        bright_neutral, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
-    )
-    image_area = float(width * height)
+def _card_contour_candidates(
+    mask: np.ndarray,
+    centers: Sequence[tuple[float, float]],
+    image_area: float,
+) -> list[tuple[float, np.ndarray]]:
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     candidates: list[tuple[float, np.ndarray]] = []
     for contour in contours:
         area = float(cv2.contourArea(contour))
@@ -280,13 +242,72 @@ def detect_card_region(
         rect_width, rect_height = rect[1]
         if min(rect_width, rect_height) < 40.0:
             continue
-        aspect = max(rect_width, rect_height) / max(1.0, min(rect_width, rect_height))
-        # The oblique Raspberry Pi view can foreshorten a physical card until
-        # its image-space minimum rectangle is nearly square.
-        if not 1.0 <= aspect <= 2.50:
+        aspect = max(rect_width, rect_height) / max(
+            1.0, min(rect_width, rect_height)
+        )
+        # Low, oblique target-camera views can stretch the projected minimum
+        # rectangle well beyond the physical card's nominal aspect ratio.
+        if not 1.0 <= aspect <= 3.50:
             continue
-        score = area + 1000.0 * sum(distance >= 0.0 for distance in signed_distances)
+        score = area + 1000.0 * sum(
+            distance >= 0.0 for distance in signed_distances
+        )
         candidates.append((score, contour))
+    return candidates
+
+
+def detect_card_region(
+    image: np.ndarray, boxes: Sequence[YoloBox]
+) -> tuple[np.ndarray, np.ndarray]:
+    """Find the bright card body that encloses both annotated corner glyphs."""
+    height, width = image.shape[:2]
+    centers = [
+        (float(box.x_center * width), float(box.y_center * height)) for box in boxes
+    ]
+    center_x = [point[0] for point in centers]
+    center_y = [point[1] for point in centers]
+    span_x = max(max(center_x) - min(center_x), 24.0)
+    span_y = max(max(center_y) - min(center_y), 32.0)
+    # Keep the complete card contour inside the mask even when perspective
+    # compresses the distance between its two visible corner glyphs. The old
+    # 0.44 vertical margin clipped the lower edge in low, oblique camera views.
+    search_x0 = max(0, int(min(center_x) - 0.85 * span_x))
+    search_x1 = min(width, int(max(center_x) + 0.85 * span_x))
+    search_y0 = max(0, int(min(center_y) - 1.00 * span_y))
+    search_y1 = min(height, int(max(center_y) + 1.00 * span_y))
+    if len(boxes) == 1:
+        search_mask = np.full((height, width), 255, dtype=np.uint8)
+    else:
+        search_mask = np.zeros((height, width), dtype=np.uint8)
+        cv2.rectangle(
+            search_mask, (search_x0, search_y0), (search_x1, search_y1), 255, -1
+        )
+    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    saturation = hsv[:, :, 1]
+    value = hsv[:, :, 2]
+    bright_neutral_full = np.where(
+        (value >= 145) & (saturation <= 165), 255, 0
+    ).astype(np.uint8)
+    bright_neutral_full = cv2.morphologyEx(
+        bright_neutral_full,
+        cv2.MORPH_CLOSE,
+        cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (13, 13)),
+    )
+    bright_neutral_full = cv2.morphologyEx(
+        bright_neutral_full,
+        cv2.MORPH_OPEN,
+        cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)),
+    )
+    image_area = float(width * height)
+    # Prefer the complete full-frame contour. Cropping the colour mask to the
+    # glyph span can truncate the card and leave a card-shaped remnant in the
+    # generated background, visually changing the number of cards.
+    candidates = _card_contour_candidates(
+        bright_neutral_full, centers, image_area
+    )
+    if not candidates and len(boxes) > 1:
+        bright_neutral = cv2.bitwise_and(bright_neutral_full, search_mask)
+        candidates = _card_contour_candidates(bright_neutral, centers, image_area)
     if not candidates:
         raise ValueError(
             "could not locate a card body enclosing the annotated corner glyphs"
@@ -1158,11 +1179,11 @@ def validate_dataset(output_dir: Path) -> dict[str, object]:
     extras = sorted(image_names - expected_images) + sorted(label_names - expected_labels)
     if extras:
         errors.append(f"unexpected artifacts: {extras[:10]}")
-    expected_by_class = {
-        int(source["class_id"]): int(source["variant_count"])
-        * int(source["box_count"])
-        for source in manifest["source"]["sources"]
-    }
+    expected_by_class: Counter[int] = Counter()
+    for source in manifest["source"]["sources"]:
+        expected_by_class[int(source["class_id"])] += int(
+            source["variant_count"]
+        ) * int(source["box_count"])
     unbalanced = {
         class_names[class_id]: class_counts[class_id]
         for class_id in expected_by_class

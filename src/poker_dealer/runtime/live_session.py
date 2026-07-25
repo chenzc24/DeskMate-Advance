@@ -76,16 +76,22 @@ class LiveSessionOperatorUI:
                 outcome = controller.accept(control)
                 last_reason = outcome.reason
                 self._announce_outcome(session, outcome)
-                if outcome.accepted and outcome.reason == "table_cleared" and stop_after_clear:
-                    session.end_session(
-                        operator_id=controller.operator_id,
-                        reason="configured_hand_limit_reached",
-                    )
-                    return LiveSessionBoundaryResult(
-                        SessionOperatorSignal.SESSION_ENDED,
-                        "session_ended_after_table_clear",
-                    )
                 if outcome.accepted and outcome.signal is not SessionOperatorSignal.CONTINUE_WAITING:
+                    if (
+                        outcome.signal is SessionOperatorSignal.SESSION_ENDED
+                        and self.state_observer is not None
+                    ):
+                        publish = getattr(
+                            self.state_observer, "publish_session_state", None
+                        )
+                        if publish is not None:
+                            publish(
+                                session,
+                                last_reason=last_reason,
+                                stop_after_clear=stop_after_clear,
+                                selected_seat=controller.selected_low_stack_seat,
+                                selected_slot=controller.selected_conflict_slot,
+                            )
                     return LiveSessionBoundaryResult(outcome.signal, outcome.reason)
         raise TimeoutError("session operator decision deadline expired")
 
@@ -146,11 +152,9 @@ class LiveSessionOperatorUI:
             )
         low = controller.selected_low_stack_seat
         if not session.table_cleared:
-            instruction = (
-                "Return every card, then C/E/Enter ends session"
-                if stop_after_clear
-                else "Return every card, then C/E/Enter confirms table clear"
-            )
+            instruction = "Return every card, then C/E/Enter confirms table clear"
+        elif stop_after_clear:
+            instruction = "Hand limit reached | X/Backspace ends session"
         elif low is not None:
             instruction = (
                 f"N/P select | C/E rebuy {low.value} to "

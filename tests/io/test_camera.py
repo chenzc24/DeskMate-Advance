@@ -11,7 +11,9 @@ from poker_dealer.io.camera import (
     CameraConfig,
     CameraError,
     CameraReadStatus,
+    CameraRoute,
     OpenCVCamera,
+    RoutedOpenCVCamera,
 )
 
 
@@ -122,6 +124,62 @@ def test_repeated_failures_become_disconnected() -> None:
 
     assert camera.read().status is CameraReadStatus.MISSING
     assert camera.read().status is CameraReadStatus.DISCONNECTED
+
+
+def test_routed_camera_opens_both_sources_and_reads_selected_route() -> None:
+    player_capture = FakeCapture(
+        [(True, np.full((2, 3, 3), 7, dtype=np.uint8))]
+    )
+    table_capture = FakeCapture(
+        [(True, np.full((2, 3, 3), 3, dtype=np.uint8))]
+    )
+    player = OpenCVCamera(
+        CameraConfig(source_id="player", width=None, height=None, fps=None),
+        capture_factory=lambda source, backend: player_capture,
+    )
+    table = OpenCVCamera(
+        CameraConfig(source_id="table", width=None, height=None, fps=None),
+        capture_factory=lambda source, backend: table_capture,
+    )
+    routed = RoutedOpenCVCamera(player_camera=player, table_camera=table)
+
+    routed.open()
+    player_read = routed.read()
+    routed.select_route(CameraRoute.TABLE)
+    table_read = routed.read()
+    routed.close()
+
+    assert player_read.frame is not None
+    assert player_read.frame.source_id == "player"
+    assert player_read.frame.image[0, 0, 0] == 7
+    assert table_read.frame is not None
+    assert table_read.frame.source_id == "table"
+    assert table_read.frame.image[0, 0, 0] == 3
+    assert player_capture.released
+    assert table_capture.released
+
+
+def test_routed_camera_single_source_fallback_opens_and_closes_once() -> None:
+    capture = FakeCapture(
+        [
+            (True, np.zeros((2, 3, 3), dtype=np.uint8)),
+            (True, np.ones((2, 3, 3), dtype=np.uint8)),
+        ]
+    )
+    camera = OpenCVCamera(
+        CameraConfig(width=None, height=None, fps=None),
+        capture_factory=lambda source, backend: capture,
+    )
+    routed = RoutedOpenCVCamera(player_camera=camera, table_camera=camera)
+
+    routed.open()
+    routed.select_route(CameraRoute.TABLE)
+    assert routed.read().status is CameraReadStatus.OK
+    routed.select_route(CameraRoute.PLAYER)
+    assert routed.read().status is CameraReadStatus.OK
+    routed.close()
+
+    assert capture.released
 
 
 def test_unexpected_frame_is_missing_instead_of_crossing_boundary() -> None:

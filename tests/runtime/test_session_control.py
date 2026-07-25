@@ -8,6 +8,9 @@ from poker_dealer.domain import (
 )
 from poker_dealer.game import CoreGameConfig
 from poker_dealer.runtime import (
+    FrameRead,
+    FrameReadState,
+    LiveSessionOperatorUI,
     SessionOperatorController,
     SessionOperatorSignal,
     SessionRuntime,
@@ -70,3 +73,73 @@ def test_paused_hand_can_retry_or_void_through_session_authority() -> None:
     voided = controller.accept(_control(2, ControlIntent.CLEAR))
     assert voided.signal is SessionOperatorSignal.HAND_VOIDED
     assert runtime.phase.value == "voided"
+
+
+def test_hand_limit_requires_explicit_end_after_table_clear() -> None:
+    session = _session()
+    runtime = session.start_hand("hand-1")
+    runtime.void("void-1", "test")
+    session.close_terminal_hand()
+    controller = SessionOperatorController(session, operator_id="operator-a")
+
+    class FrameSource:
+        def __init__(self) -> None:
+            self.sequence = 0
+
+        def set_status(self, *lines: str) -> None:
+            del lines
+
+        def read(self) -> FrameRead:
+            self.sequence += 1
+            return FrameRead(FrameReadState.MISSING, self.sequence, None)
+
+    class Controls:
+        def __init__(self) -> None:
+            self.items = [
+                _control(1, ControlIntent.CONFIRM),
+                _control(2, ControlIntent.CLEAR),
+            ]
+
+        def poll_controls(self, observed_at_ns: int):
+            del observed_at_ns
+            return (self.items.pop(0),) if self.items else ()
+
+    class Observer:
+        def __init__(self) -> None:
+            self.phases: list[str] = []
+
+        def publish_session_state(self, session, **kwargs) -> None:
+            if session.ended:
+                phase = "session_ended"
+            elif not session.table_cleared:
+                phase = "table_clearance"
+            elif kwargs["stop_after_clear"]:
+                phase = "ready_session_end"
+            else:
+                phase = "ready_next_hand"
+            self.phases.append(phase)
+
+    observer = Observer()
+    ui = LiveSessionOperatorUI(
+        FrameSource(),
+        Controls(),
+        state_observer=observer,
+    )
+
+    result = ui.wait_for_decision(
+        session,
+        controller,
+        timeout_seconds=1,
+        stop_after_clear=True,
+    )
+
+    assert result.signal is SessionOperatorSignal.SESSION_ENDED
+    assert observer.phases == [
+        "table_clearance",
+        "ready_session_end",
+        "session_ended",
+    ]
+    assert [event.kind for event in session.events[-2:]] == [
+        "table_cleared",
+        "session_ended",
+    ]

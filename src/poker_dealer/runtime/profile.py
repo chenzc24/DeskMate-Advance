@@ -135,6 +135,7 @@ class RuntimeProfile:
     schema_version: str
     profile_id: RuntimeProfileId
     camera: RuntimeCameraProfile
+    player_camera: RuntimeCameraProfile | None
     dealer: RuntimeDealerProfile
     perception: RuntimePerceptionProfile
     controls: tuple[ControlSource, ...]
@@ -157,6 +158,21 @@ class RuntimeProfile:
             and self.speech_capture_sample_rate_hz <= 0
         ):
             raise ValueError("speech capture sample rate must be positive")
+        if self.player_camera is not None:
+            if self.player_camera.source_id == self.camera.source_id:
+                raise ValueError("player and table camera source IDs must be distinct")
+            if (
+                self.player_camera.kind is RuntimeCameraKind.LOCAL
+                and self.camera.kind is RuntimeCameraKind.LOCAL
+                and self.player_camera.device_index == self.camera.device_index
+            ):
+                raise ValueError("player and table cameras cannot use the same local device")
+            if (
+                self.player_camera.kind is RuntimeCameraKind.MJPEG
+                and self.camera.kind is RuntimeCameraKind.MJPEG
+                and self.player_camera.stream_url == self.camera.stream_url
+            ):
+                raise ValueError("player and table cameras cannot use the same stream")
         if self.profile_id is RuntimeProfileId.LAPTOP:
             if self.camera.kind is not RuntimeCameraKind.LOCAL:
                 raise ValueError("laptop profile requires a local camera")
@@ -183,14 +199,14 @@ class RuntimeProfile:
         value = json.loads(path.read_text(encoding="utf-8"))
         if not isinstance(value, Mapping):
             raise ValueError("runtime profile root must be an object")
-        camera = value.get("camera")
-        endpoint_name = (
+        cameras = (value.get("camera"), value.get("player_camera"))
+        endpoint_names = tuple(
             camera.get("stream_endpoint")
+            for camera in cameras
             if isinstance(camera, Mapping)
-            else None
         )
         endpoints = None
-        if endpoint_name is not None:
+        if any(endpoint is not None for endpoint in endpoint_names):
             endpoint_path = network_endpoints_path or path.with_name(
                 "network_endpoints.json"
             )
@@ -206,10 +222,18 @@ class RuntimeProfile:
     ) -> RuntimeProfile:
         cls._reject_unknown(
             value,
-            {"schema_version", "profile_id", "camera", "dealer", "perception", "controls", "speech", "logging"},
+            {
+                "schema_version", "profile_id", "camera", "player_camera",
+                "dealer", "perception", "controls", "speech", "logging",
+            },
             "runtime profile",
         )
         camera = cls._object(value, "camera")
+        player_camera_value = value.get("player_camera")
+        if player_camera_value is not None and not isinstance(
+            player_camera_value, Mapping
+        ):
+            raise ValueError("player_camera must be an object")
         dealer = cls._object(value, "dealer")
         perception = cls._object(value, "perception")
         speech = cls._object(value, "speech")
@@ -223,6 +247,16 @@ class RuntimeProfile:
             },
             "camera",
         )
+        if isinstance(player_camera_value, Mapping):
+            cls._reject_unknown(
+                player_camera_value,
+                {
+                    "kind", "source_id", "device_index", "stream_url",
+                    "stream_endpoint", "backend", "width", "height", "fps",
+                    "open_timeout_ms", "read_timeout_ms",
+                },
+                "player_camera",
+            )
         cls._reject_unknown(
             dealer,
             {
@@ -251,44 +285,22 @@ class RuntimeProfile:
             isinstance(item, str) for item in controls
         ):
             raise ValueError("controls must be a list of control-source strings")
-        stream_url_value = camera.get("stream_url")
-        stream_endpoint_value = camera.get("stream_endpoint")
-        if stream_url_value is not None and stream_endpoint_value is not None:
-            raise ValueError(
-                "camera stream_url and stream_endpoint are mutually exclusive"
-            )
-        stream_endpoint = (
-            str(stream_endpoint_value)
-            if stream_endpoint_value is not None
-            else None
-        )
-        if stream_endpoint is not None:
-            if network_endpoints is None:
-                raise ValueError(
-                    "camera stream_endpoint requires network endpoints"
-                )
-            stream_url = network_endpoints.camera_stream_url(stream_endpoint)
-        else:
-            stream_url = (
-                str(stream_url_value)
-                if stream_url_value is not None
-                else None
-            )
         return cls(
             schema_version=str(value.get("schema_version", "")),
             profile_id=RuntimeProfileId(str(value.get("profile_id", ""))),
-            camera=RuntimeCameraProfile(
-                kind=RuntimeCameraKind(str(camera.get("kind", ""))),
-                source_id=str(camera.get("source_id", "")),
-                device_index=int(camera.get("device_index", 0)),
-                stream_url=stream_url,
-                stream_endpoint=stream_endpoint,
-                backend=str(camera.get("backend", "auto")),
-                width=cls._optional_int(camera.get("width"), "camera.width"),
-                height=cls._optional_int(camera.get("height"), "camera.height"),
-                fps=cls._optional_float(camera.get("fps"), "camera.fps"),
-                open_timeout_ms=int(camera.get("open_timeout_ms", 5000)),
-                read_timeout_ms=int(camera.get("read_timeout_ms", 2000)),
+            camera=cls._camera_profile(
+                camera,
+                label="camera",
+                network_endpoints=network_endpoints,
+            ),
+            player_camera=(
+                cls._camera_profile(
+                    player_camera_value,
+                    label="player_camera",
+                    network_endpoints=network_endpoints,
+                )
+                if isinstance(player_camera_value, Mapping)
+                else None
             ),
             dealer=RuntimeDealerProfile(
                 adapter=DealerAdapterKind(str(dealer.get("adapter", ""))),
@@ -371,6 +383,51 @@ class RuntimeProfile:
         except ValueError as exc:
             raise ValueError("runtime logs must resolve inside project runs/") from exc
         return resolved
+
+    @classmethod
+    def _camera_profile(
+        cls,
+        value: Mapping[str, Any],
+        *,
+        label: str,
+        network_endpoints: NetworkEndpoints | None,
+    ) -> RuntimeCameraProfile:
+        stream_url_value = value.get("stream_url")
+        stream_endpoint_value = value.get("stream_endpoint")
+        if stream_url_value is not None and stream_endpoint_value is not None:
+            raise ValueError(
+                f"{label} stream_url and stream_endpoint are mutually exclusive"
+            )
+        stream_endpoint = (
+            str(stream_endpoint_value)
+            if stream_endpoint_value is not None
+            else None
+        )
+        if stream_endpoint is not None:
+            if network_endpoints is None:
+                raise ValueError(
+                    f"{label} stream_endpoint requires network endpoints"
+                )
+            stream_url = network_endpoints.camera_stream_url(stream_endpoint)
+        else:
+            stream_url = (
+                str(stream_url_value)
+                if stream_url_value is not None
+                else None
+            )
+        return RuntimeCameraProfile(
+            kind=RuntimeCameraKind(str(value.get("kind", ""))),
+            source_id=str(value.get("source_id", "")),
+            device_index=int(value.get("device_index", 0)),
+            stream_url=stream_url,
+            stream_endpoint=stream_endpoint,
+            backend=str(value.get("backend", "auto")),
+            width=cls._optional_int(value.get("width"), f"{label}.width"),
+            height=cls._optional_int(value.get("height"), f"{label}.height"),
+            fps=cls._optional_float(value.get("fps"), f"{label}.fps"),
+            open_timeout_ms=int(value.get("open_timeout_ms", 5000)),
+            read_timeout_ms=int(value.get("read_timeout_ms", 2000)),
+        )
 
     @staticmethod
     def _object(value: Mapping[str, Any], key: str) -> Mapping[str, Any]:

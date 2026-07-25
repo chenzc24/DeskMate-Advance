@@ -7,11 +7,14 @@ from .adapter import (
     CameraReadStatus,
     OpenCVCamera,
 )
+from .routing import CameraRoute, RoutedOpenCVCamera
 
 __all__ = [
     "CameraConfig",
     "CameraError",
     "CameraRead",
     "CameraReadStatus",
+    "CameraRoute",
     "OpenCVCamera",
+    "RoutedOpenCVCamera",
 ]

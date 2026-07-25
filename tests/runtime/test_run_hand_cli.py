@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -15,6 +16,48 @@ def _load_script():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def test_restarted_session_uses_distinct_diagnostic_log_paths(tmp_path) -> None:
+    module = _load_script()
+    hands = tmp_path / "hands"
+    hands.mkdir()
+
+    class Diagnostics:
+        root = tmp_path
+        session_log_path = tmp_path / "session.jsonl"
+
+        @staticmethod
+        def hand_log_path(hand_id: str) -> Path:
+            return hands / f"{hand_id}.jsonl"
+
+    args = SimpleNamespace(log_jsonl=None, session_log_jsonl=None)
+    first_session = module._session_log_path(
+        args, None, "live-profile", Diagnostics()
+    )
+    first_hand = module._hand_log_path(
+        args,
+        None,
+        session_id="live-profile",
+        hand_id="hand-001",
+        diagnostics=Diagnostics(),
+    )
+    first_session.touch()
+    first_hand.touch()
+
+    second_session = module._session_log_path(
+        args, None, "live-profile-session-002", Diagnostics()
+    )
+    second_hand = module._hand_log_path(
+        args,
+        None,
+        session_id="live-profile-session-002",
+        hand_id="hand-001",
+        diagnostics=Diagnostics(),
+    )
+
+    assert second_session == tmp_path / "session-live-profile-session-002.jsonl"
+    assert second_hand == hands / "live-profile-session-002-hand-001.jsonl"
 
 
 def test_laptop_config_check_succeeds_without_opening_devices(capsys) -> None:

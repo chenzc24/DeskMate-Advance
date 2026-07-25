@@ -31,6 +31,7 @@ DEFAULT_REVIEW = ROOT / "data" / "work" / "poker_big_data_v3" / "label_review"
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png"}
 SUIT_CODES = {"梅花": "C", "方片": "D", "红桃": "H", "黑桃": "S"}
 RANKS = {"A", "K", "Q", "J", "10", "9", "8", "7", "6", "5", "4", "3", "2"}
+TRAILING_FILENAME_PUNCTUATION = "、，,。._- "
 
 
 def sha256_file(path: Path) -> str:
@@ -44,7 +45,9 @@ def sha256_file(path: Path) -> str:
 def card_code_from_stem(stem: str) -> str:
     for suit_name, suit_code in SUIT_CODES.items():
         if stem.startswith(suit_name):
-            rank = stem[len(suit_name) :].upper()
+            rank = stem[len(suit_name) :].upper().rstrip(
+                TRAILING_FILENAME_PUNCTUATION
+            )
             if rank in RANKS:
                 return f"{rank}{suit_code}"
     raise ValueError(f"filename does not identify a supported card: {stem}")

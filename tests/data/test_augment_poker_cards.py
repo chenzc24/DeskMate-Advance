@@ -135,3 +135,42 @@ def test_partial_class_split_validates_without_assuming_all_classes(
     assert result["valid"] is True
     assert result["class_count"] == 3
     assert result["expected_annotations_per_class"] == {"5D": 6, "6D": 4}
+
+
+def test_validation_sums_multiple_sources_for_the_same_class(tmp_path: Path) -> None:
+    source = tmp_path / "two_sources"
+    labels = source / "labels"
+    labels.mkdir(parents=True)
+    boxes = (
+        YoloBox(0, 0.37, 0.22, 0.10, 0.12),
+        YoloBox(0, 0.63, 0.78, 0.10, 0.12),
+    )
+    for index in range(2):
+        image = np.full((240, 320, 3), (70, 105, 70), dtype=np.uint8)
+        cv2.rectangle(image, (100, 35), (220, 215), (245, 245, 245), -1)
+        _write_png(source / f"card_{index}.png", image)
+        (labels / f"card_{index}.txt").write_text(
+            "\n".join(box.to_line() for box in boxes) + "\n",
+            encoding="utf-8",
+        )
+
+    output = tmp_path / "derived"
+    generate_dataset(
+        source,
+        labels,
+        output,
+        ["5D"],
+        AugmentConfig(
+            width=320,
+            height=240,
+            total_variants=4,
+            profile="validation",
+            seed=31,
+            output_jpeg_quality=90,
+        ),
+    )
+
+    result = validate_dataset(output)
+
+    assert result["valid"] is True
+    assert result["expected_annotations_per_class"] == 8

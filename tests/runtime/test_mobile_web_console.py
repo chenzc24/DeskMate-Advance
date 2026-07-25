@@ -7,7 +7,9 @@ from aiohttp import ClientSession
 import numpy as np
 
 from poker_dealer.domain import ControlIntent, ControlSource, Seat
+from poker_dealer.game import CoreGameConfig
 from poker_dealer.runtime import HandRuntime
+from poker_dealer.runtime import SessionRuntime, default_replay_roster
 from poker_dealer.runtime.live_perception import RegistrationUiState
 from poker_dealer.runtime.mobile_web_console import (
     CompositeControlSource,
@@ -142,6 +144,47 @@ def test_hand_action_stage_does_not_offer_e_confirmation() -> None:
     assert rejected["reason"] == "intent_not_available"
 
 
+def test_session_boundary_offers_only_contextual_controls() -> None:
+    session = SessionRuntime(
+        default_replay_roster("mobile-boundary"),
+        CoreGameConfig.from_json("configs/game/core_v1.json"),
+    )
+    runtime = session.start_hand("hand-1")
+    runtime.void("void-1", "test")
+    session.close_terminal_hand()
+    console = MobileWebConsole()
+
+    console.publish_session_state(session, stop_after_clear=True)
+    clearance = console.snapshot()
+    assert clearance["state"]["phase"] == "table_clearance"
+    assert clearance["allowed_intents"] == ["confirm"]
+
+    session.confirm_table_cleared(operator_id="operator-a")
+    console.publish_session_state(session, stop_after_clear=True)
+    limit = console.snapshot()
+    assert limit["state"]["phase"] == "ready_session_end"
+    assert limit["allowed_intents"] == ["clear"]
+
+    console.publish_session_state(session, stop_after_clear=False)
+    between_hands = console.snapshot()
+    assert between_hands["state"]["phase"] == "ready_next_hand"
+    assert between_hands["allowed_intents"] == ["start", "clear"]
+
+    session.end_session(operator_id="operator-a", reason="test_complete")
+    console.publish_session_state(session)
+    terminal = console.snapshot()
+    assert terminal["state"]["phase"] == "session_ended"
+    assert terminal["allowed_intents"] == []
+
+    console.request_new_session()
+    assert console.consume_new_session_request() is True
+    assert console.consume_new_session_request() is False
+    console.prepare_new_session()
+    reset = console.snapshot()
+    assert reset["state"]["view"] == "registration"
+    assert reset["state"]["phase"] == "starting"
+
+
 def test_audio_meter_updates_do_not_invalidate_operator_controls() -> None:
     console = MobileWebConsole()
     first = _state()
@@ -226,7 +269,11 @@ def test_http_and_websocket_console_round_trip() -> None:
                 assert (await response.json())["audio_requested"] is False
             async with client.get(console.url) as response:
                 assert response.status == 200
-                assert "Player registration" in await response.text()
+                page = await response.text()
+                assert "Player registration" in page
+                assert "Repeat voice" in page
+                assert 'data-intent="new_session"' in page
+                assert 'data-intent="quit"' in page
             async with client.get(console.url + "assets/app.js") as response:
                 script = await response.text()
                 assert "createCommandId()" in script
@@ -235,6 +282,10 @@ def test_http_and_websocket_console_round_trip() -> None:
                 assert "VERIFIED · LISTENING" in script
                 assert "Say one legal English action clearly" in script
                 assert "message.action_marker" in script
+                assert "button.hidden = !visible" in script
+                assert "ready_session_end" in script
+                assert "reconnectDelayMs" in script
+                assert "phoneVoiceEnabled = false" in script
             async with client.get(console.url + "assets/styles.css") as response:
                 stylesheet = await response.text()
                 assert response.status == 200
@@ -242,6 +293,7 @@ def test_http_and_websocket_console_round_trip() -> None:
                 assert "grid-template-columns: minmax(0, 56fr)" in stylesheet
                 assert ".face-box.verified" in stylesheet
                 assert ".action-marker" in stylesheet
+                assert "min-height: 44px" in stylesheet
             websocket = await client.ws_connect(console.url + "ws")
             hello = await websocket.receive_json()
             state = await websocket.receive_json()
@@ -261,6 +313,47 @@ def test_http_and_websocket_console_round_trip() -> None:
 
     try:
         asyncio.run(exercise())
+    finally:
+        console.stop()
+
+
+def test_terminal_controller_can_request_a_new_session() -> None:
+    session = SessionRuntime(
+        default_replay_roster("mobile-terminal"),
+        CoreGameConfig.from_json("configs/game/core_v1.json"),
+    )
+    runtime = session.start_hand("hand-1")
+    runtime.void("void-1", "test")
+    session.close_terminal_hand()
+    session.confirm_table_cleared(operator_id="operator-a")
+    session.end_session(operator_id="operator-a", reason="test_complete")
+    console = MobileWebConsole(port=0)
+    console.publish_session_state(session)
+    console.start()
+
+    async def exercise() -> None:
+        async with ClientSession() as client:
+            websocket = await client.ws_connect(console.url + "ws")
+            hello = await websocket.receive_json()
+            state = await websocket.receive_json()
+            assert hello["controller"] is True
+            assert state["state"]["phase"] == "session_ended"
+            await websocket.send_json(
+                {
+                    "type": "command",
+                    "command_id": "new-session",
+                    "intent": "new_session",
+                    "expected_view_version": state["view_version"],
+                }
+            )
+            acknowledgement = await websocket.receive_json()
+            assert acknowledgement["status"] == "accepted"
+            assert acknowledgement["reason"] == "new_session_requested"
+            await websocket.close()
+
+    try:
+        asyncio.run(exercise())
+        assert console.consume_new_session_request() is True
     finally:
         console.stop()
 

@@ -34,6 +34,25 @@ def test_laptop_and_robot_camera_profiles_share_composition_root() -> None:
     )
 
 
+def test_audiorelay_robot_profile_declares_distinct_player_and_table_cameras() -> None:
+    app = LiveHandApplication(
+        ROOT,
+        RuntimeProfile.from_json(
+            ROOT / "configs/runtime/robot_camera_audiorelay.json"
+        ),
+    )
+
+    preflight = app.preflight()
+
+    assert preflight.dual_camera_enabled is True
+    assert preflight.camera_kind == "mjpeg"
+    assert preflight.player_camera_kind == "local"
+    assert preflight.player_camera_source == "1"
+    assert app.player_camera is not app.table_camera
+    assert any(resource == "camera:local:1" for resource in app.resource_ids)
+    assert any(resource.startswith("camera:mjpeg:") for resource in app.resource_ids)
+
+
 def test_composition_root_loads_core_rules_instead_of_engine_defaults(
     tmp_path: Path,
 ) -> None:

@@ -46,6 +46,14 @@ def test_declared_profiles_validate_and_freeze_dependency_combinations(
     assert profile.dealer.adapter is dealer_kind
     assert profile.dealer.enabled is ready
     assert profile.resolved_log_root(ROOT).is_relative_to(ROOT / "runs")
+    if name == "robot_camera_audiorelay":
+        assert profile.player_camera is not None
+        assert profile.player_camera.kind is RuntimeCameraKind.LOCAL
+        assert profile.player_camera.source_id == "droidcam_player_camera"
+        assert profile.player_camera.device_index == 1
+        assert profile.player_camera.backend == "msmf"
+    else:
+        assert profile.player_camera is None
 
 
 def test_runtime_parser_does_not_coerce_string_booleans() -> None:
@@ -59,3 +67,14 @@ def test_profile_rejects_cross_profile_camera_override() -> None:
     profile = RuntimeProfile.from_json(ROOT / "configs/runtime/robot_camera.json")
     with pytest.raises(ValueError, match="only valid for laptop"):
         profile.with_camera_override(device_index=1)
+
+
+def test_profile_rejects_same_local_device_for_both_camera_roles() -> None:
+    raw = json.loads((ROOT / "configs/runtime/laptop.json").read_text(encoding="utf-8"))
+    raw["player_camera"] = {
+        **raw["camera"],
+        "source_id": "duplicate-player-camera",
+    }
+
+    with pytest.raises(ValueError, match="same local device"):
+        RuntimeProfile.from_mapping(raw)

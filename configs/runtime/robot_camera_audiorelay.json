@@ -12,6 +12,17 @@
     "open_timeout_ms": 5000,
     "read_timeout_ms": 2000
   },
+  "player_camera": {
+    "kind": "local",
+    "source_id": "droidcam_player_camera",
+    "device_index": 1,
+    "backend": "msmf",
+    "width": 1280,
+    "height": 720,
+    "fps": 30,
+    "open_timeout_ms": 5000,
+    "read_timeout_ms": 2000
+  },
   "dealer": {
     "adapter": "simulated",
     "device_id": "simulated-robot-camera-dealer",

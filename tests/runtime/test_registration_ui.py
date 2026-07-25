@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
+from poker_dealer.io.camera import CameraRoute
 from poker_dealer.runtime.live_perception import (
     InteractiveOpenCVFrameSource,
     RegistrationUiState,
@@ -10,6 +11,22 @@ from poker_dealer.runtime.live_perception import (
 
 def _source() -> InteractiveOpenCVFrameSource:
     return InteractiveOpenCVFrameSource(object(), display=False)  # type: ignore[arg-type]
+
+
+def test_interactive_source_forwards_camera_route_selection() -> None:
+    class RouteCamera:
+        def __init__(self) -> None:
+            self.route = None
+
+        def select_route(self, route) -> None:
+            self.route = route
+
+    camera = RouteCamera()
+    source = InteractiveOpenCVFrameSource(camera, display=False)  # type: ignore[arg-type]
+
+    source.select_camera_route(CameraRoute.TABLE)
+
+    assert camera.route is CameraRoute.TABLE
 
 
 def test_registration_dashboard_renders_video_inside_fixed_shell() -> None:

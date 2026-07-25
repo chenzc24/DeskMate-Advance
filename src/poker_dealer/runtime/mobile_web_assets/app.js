@@ -6,6 +6,12 @@
     big_blind: "Big blind",
     under_the_gun: "Under the gun",
   };
+  const compactRoleLabels = {
+    button: "BTN",
+    small_blind: "SB",
+    big_blind: "BB",
+    under_the_gun: "UTG",
+  };
   const registrationPhases = {
     starting: ["1", "Starting", "Waiting for registration state."],
     ready_for_face: ["1", "Align one face", "Keep one player in view, then confirm capture."],
@@ -36,7 +42,10 @@
   let latestFaceStatus = "";
   let latestActionMarker = null;
   let commandPending = false;
-  let phoneVoiceEnabled = true;
+  let phoneVoiceEnabled = false;
+  let hasPrompt = false;
+  let awaitingNewSession = false;
+  let reconnectDelayMs = 1200;
 
   function setLink(text, mode = "") {
     $("linkStatus").className = `status ${mode}`.trim();
@@ -46,12 +55,20 @@
   function connect() {
     const scheme = location.protocol === "https:" ? "wss" : "ws";
     socket = new WebSocket(`${scheme}://${location.host}/ws`);
-    socket.addEventListener("open", () => setLink("Connected"));
+    socket.addEventListener("open", () => {
+      reconnectDelayMs = 1200;
+      setLink("Connected");
+    });
     socket.addEventListener("close", () => {
       controller = false;
-      setLink("Reconnecting", "warning");
+      setLink(
+        awaitingNewSession ? "Waiting for new session" : "Reconnecting",
+        "warning",
+      );
       updateButtons();
-      setTimeout(connect, 1200);
+      const delay = reconnectDelayMs;
+      reconnectDelayMs = Math.min(10000, Math.round(reconnectDelayMs * 1.7));
+      setTimeout(connect, delay);
     });
     socket.addEventListener("error", () => setLink("Offline", "offline"));
     socket.addEventListener("message", ({ data }) => {
@@ -66,6 +83,7 @@
         controller = Boolean(message.controller);
         viewVersion = message.view_version;
         allowed = new Set(message.allowed_intents || []);
+        hasPrompt = Boolean(message.last_prompt);
         renderState(message);
       } else if (message.type === "command_ack") {
         const okay = message.status === "queued" || message.status === "accepted";
@@ -81,8 +99,10 @@
           : `Runtime rejected: ${humanize(message.reason)}`;
         updateButtons();
       } else if (message.type === "prompt") {
+        hasPrompt = Boolean(message.text);
         $("feedback").textContent = message.text;
         speakPrompt(message.text);
+        updateButtons();
       }
     });
   }
@@ -90,6 +110,7 @@
   function renderState(message) {
     const state = message.state || {};
     const view = state.view || "registration";
+    awaitingNewSession = view === "session_boundary" && state.phase === "session_ended";
     document.querySelectorAll(".registration-only").forEach((node) => {
       node.hidden = view !== "registration";
     });
@@ -148,7 +169,8 @@
     renderRoster(state.completed_roles || [], state.simulated_roles || []);
     $("confirmLabel").textContent = "Capture";
     $("startLabel").textContent = "Start";
-    $("clearLabel").textContent = "Clear";
+    $("clearLabel").textContent = "Reset";
+    document.querySelector("[data-intent='clear']").dataset.confirm = "Reset this registration roster?";
   }
 
   function renderHand(state) {
@@ -167,6 +189,7 @@
     $("confirmLabel").textContent = "Confirm action";
     $("startLabel").textContent = "Retry";
     $("clearLabel").textContent = "Void hand";
+    document.querySelector("[data-intent='clear']").dataset.confirm = "Void this hand?";
   }
 
   function renderSessionBoundary(state) {
@@ -186,9 +209,16 @@
     renderPlayerLedger(players, {}, null);
     renderLegalActions([]);
     $("legalActionsBlock").hidden = true;
-    $("confirmLabel").textContent = state.phase === "table_clearance" ? "Table clear" : "Confirm";
+    $("confirmLabel").textContent = state.phase === "table_clearance"
+      ? "Table clear"
+      : state.selected_seat
+      ? "Apply rebuy"
+      : "Confirm";
     $("startLabel").textContent = state.phase === "recovery" ? "Retry hand" : "Next hand";
     $("clearLabel").textContent = state.phase === "recovery" ? "Void hand" : "End session";
+    document.querySelector("[data-intent='clear']").dataset.confirm = state.phase === "recovery"
+      ? "Void this hand?"
+      : "End this session?";
   }
 
   function handDetail(state) {
@@ -209,6 +239,9 @@
       return `Paused: ${humanize(state.paused_reason || "unknown")}.${slot} Retry only after state parity is checked.`;
     }
     if (state.phase === "table_clearance") return "Return every card, then confirm that the table is clear.";
+    if (state.phase === "ready_session_end") {
+      return "The table is clear. The configured hand limit is complete; end this session when ready.";
+    }
     if (state.phase === "ready_next_hand") {
       const seat = state.selected_seat ? ` Selected rebuy seat: ${seatLabel(state.selected_seat)}.` : "";
       return `Start the next hand, adjust a selected low stack, or end the session.${seat}`;
@@ -317,7 +350,7 @@
     const simulatedRoles = new Set(simulated);
     $("roster").replaceChildren(...roles.map((role) => {
       const item = document.createElement("span");
-      item.textContent = `${done.has(role) ? "✓" : "○"} ${roleLabels[role]}`;
+      item.textContent = `${done.has(role) ? "✓" : "○"} ${compactRoleLabels[role]}`;
       item.classList.toggle("done", done.has(role));
       if (simulatedRoles.has(role)) item.textContent += " · SIMULATED";
       item.classList.toggle("simulated", simulatedRoles.has(role));
@@ -378,9 +411,18 @@
   function updateButtons() {
     document.querySelectorAll("[data-intent]").forEach((button) => {
       const intent = button.dataset.intent;
+      const visible = allowed.has(intent)
+        || (intent === "repeat_prompt" && hasPrompt)
+        || (intent === "new_session" && awaitingNewSession)
+        || (intent === "quit" && awaitingNewSession);
+      button.hidden = !visible;
       button.disabled = !controller || socket?.readyState !== WebSocket.OPEN ||
         commandPending ||
-        (!["quit", "repeat_prompt"].includes(intent) && !allowed.has(intent));
+        (intent === "repeat_prompt"
+          ? !hasPrompt
+          : intent === "new_session" || intent === "quit"
+          ? !awaitingNewSession
+          : !allowed.has(intent));
     });
   }
 

@@ -17,6 +17,7 @@ from scripts.data.auto_label_card_images import (
         ("方片5", "5D"),
         ("红桃J", "JH"),
         ("黑桃A", "AS"),
+        ("梅花7、", "7C"),
     ],
 )
 def test_card_code_from_chinese_filename(stem: str, expected: str) -> None:

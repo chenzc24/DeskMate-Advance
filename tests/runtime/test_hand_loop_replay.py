@@ -3,9 +3,17 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import numpy as np
 import pytest
 
-from poker_dealer.domain import HandPhase, PlayerActionType, Seat
+from poker_dealer.domain import (
+    ColorSpace,
+    FramePacket,
+    HandPhase,
+    PlayerActionType,
+    Seat,
+)
+from poker_dealer.io.camera import CameraRoute
 from poker_dealer.robotics.dealer import SimulatedDealerAdapter
 from poker_dealer.runtime import HandRuntime
 from poker_dealer.runtime.event_log import (
@@ -30,6 +38,7 @@ def _run_complete_hand(
     session_id: str = "replay-session",
     hand_id: str = "replayed-hand",
     stacks=None,
+    frame_source=None,
 ) -> HandRuntime:
     runtime = HandRuntime.from_roster(
         hand_id=hand_id,
@@ -48,6 +57,7 @@ def _run_complete_hand(
             action_source=sources,
             card_source=sources,
             visual_settle_source=sources,
+            frame_source=frame_source,
             event_writer=writer,
             clock_ns=StepClock(),
         )
@@ -56,6 +66,88 @@ def _run_complete_hand(
     assert result.completed
     assert result.hand_phase is HandPhase.SETTLED
     return runtime
+
+
+class _RouteRecordingFrameSource:
+    def __init__(self) -> None:
+        self.routes: list[CameraRoute] = []
+        self.active_route = CameraRoute.PLAYER
+        self.sequence = 0
+
+    def select_camera_route(self, route: CameraRoute | str) -> None:
+        self.active_route = CameraRoute(route)
+        self.routes.append(self.active_route)
+
+    def read(self) -> FrameRead:
+        self.sequence += 1
+        observed_at_ns = self.sequence * 1_000_000
+        image = np.zeros((2, 3, 3), dtype=np.uint8)
+        return FrameRead(
+            FrameReadState.OK,
+            observed_at_ns,
+            FramePacket(
+                sequence_id=self.sequence,
+                captured_at_ns=observed_at_ns,
+                source_id=f"{self.active_route.value}-camera",
+                device_index=0,
+                width=3,
+                height=2,
+                color_space=ColorSpace.BGR,
+                nominal_fps=30.0,
+                dropped_before=0,
+                image=image,
+            ),
+        )
+
+
+class _RouteCheckingReplaySources(ScriptedReplaySources):
+    def __init__(self) -> None:
+        super().__init__()
+        self.identity_routes: list[str] = []
+        self.action_routes: list[str] = []
+        self.card_routes: list[str] = []
+        self.visual_routes: list[str] = []
+
+    def observe_identity(self, frame, context, observed_at_ns):
+        assert frame is not None
+        self.identity_routes.append(frame.source_id)
+        return super().observe_identity(frame, context, observed_at_ns)
+
+    def observe_action(self, frame, context, observed_at_ns):
+        assert frame is not None
+        self.action_routes.append(frame.source_id)
+        return super().observe_action(frame, context, observed_at_ns)
+
+    def observe_card(self, frame, context, slot, observed_at_ns):
+        assert frame is not None
+        self.card_routes.append(frame.source_id)
+        return super().observe_card(frame, context, slot, observed_at_ns)
+
+    def visual_is_settled(self, frame, context, observed_at_ns):
+        assert frame is not None
+        self.visual_routes.append(frame.source_id)
+        return super().visual_is_settled(frame, context, observed_at_ns)
+
+
+def test_live_hand_loop_routes_player_and_table_perception_frames(tmp_path: Path) -> None:
+    frame_source = _RouteRecordingFrameSource()
+    sources = _RouteCheckingReplaySources()
+
+    _run_complete_hand(
+        tmp_path / "dual-camera.jsonl",
+        sources,
+        hand_id="dual-camera-routing",
+        frame_source=frame_source,
+    )
+
+    assert sources.identity_routes
+    assert sources.action_routes
+    assert sources.card_routes
+    assert sources.visual_routes
+    assert set(sources.identity_routes) == {"player-camera"}
+    assert set(sources.action_routes) == {"player-camera"}
+    assert set(sources.visual_routes) == {"player-camera"}
+    assert set(sources.card_routes) == {"table-camera"}
 
 
 def test_vertical_replay_fold_path_settles_uncontested(tmp_path: Path) -> None:

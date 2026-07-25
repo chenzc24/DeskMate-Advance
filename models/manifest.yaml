@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "updated_on": "2026-07-24",
+  "updated_on": "2026-07-25",
   "asset_root": "models/assets",
   "runtime_downloads_allowed": false,
   "notes": "No Poker Dealer model is admitted for release without the required held-out metrics. The 2026-07-24 perception freeze locks Card V4, chip-v2-v1 localization, fixed-design 10/20 denomination, original English speech/speaker, YuNet/SFace, canned gesture and pose-attribution bytes in Git/Git LFS without changing their admission states or runtime selection. Physical chip evidence remains Plus-only and never replaces the digital ledger.",
@@ -95,6 +95,24 @@
           "bytes": 5777746,
           "sha256": "59929e1d1ee95287735ddd833b19cf4ac46d29bc7afddbbf6753c459690d574a",
           "storage": "git-lfs"
+        }
+      ]
+    },
+    {
+      "freeze_id": "card-v5-candidate-20260725",
+      "frozen_on": "2026-07-25",
+      "status": "local_candidate_snapshot_pending_git_commit",
+      "runtime_selection_changed": false,
+      "admission_state_changed": false,
+      "assets": [
+        {
+          "model_id": "card-identity-lgd-yolo11s-52class",
+          "version": "poker-dealer-v5-20260725",
+          "state": "candidate",
+          "path": "models/assets/card_recognition/poker-dealer-v5/best.pt",
+          "bytes": 19279386,
+          "sha256": "40a3815f55b06f3138c760be941d05d61048b6d5feb1b782a70a7e665c91fa53",
+          "storage": "git-lfs-pending"
         }
       ]
     }
@@ -1086,6 +1104,172 @@
         "the rotation validation view contains one source image for each of only eight held-out classes",
         "4H recall decreased slightly versus V3 even though its mAP50-95 improved",
         "several non-target classes show small mAP50-95 regressions and require live replay review",
+        "unknown and rejection calibration, duplicate-card detection and per-slot temporal stability remain unevaluated",
+        "no validated offline ONNX or OpenVINO export exists",
+        "AGPL-3.0 distribution obligations require review before release"
+      ]
+    },
+    {
+      "model_id": "card-identity-lgd-yolo11s-52class",
+      "version": "poker-dealer-v5-20260725",
+      "state": "candidate",
+      "task": "52-class face-up playing-card corner-glyph detection fine-tuned for low oblique target-camera distance and arbitrary in-plane rotation without mirroring",
+      "source": {
+        "provider": "Poker Dealer project fine-tune",
+        "base_model_version": "lgd-cards-gen3",
+        "base_weight_sha256": "3513b77ab418ac2e86d3bf53be6566522666e656cbccb12678ba93feb6201004",
+        "label_proposal_model_version": "poker-dealer-v4-20260724",
+        "label_proposal_weight_sha256": "0204fedbe0e83d887ed370dfc7cd17dfb1da57052d7c30583b127cddd43a2fa1",
+        "training_entrypoint": "scripts/perception/train_card_detector.py",
+        "data_entrypoint": "scripts/data/build_card_corner_v5.py",
+        "evaluation_entrypoint": "scripts/perception/evaluate_card_detector.py",
+        "trained_on": "2026-07-25",
+        "best_epoch": 7,
+        "stopped_epoch": 13,
+        "early_stopping_patience": 6
+      },
+      "license": {
+        "identifier": "AGPL-3.0",
+        "base_weight_evidence_url": "https://huggingface.co/sroot/lgd-cards-gen3/blob/b2e9e89cc0138a70fc3ac5661922f99b4e3ae135/README.md#license--provenance",
+        "external_dataset_license": "CC0-1.0",
+        "local_data_license": "project-captured internal training data",
+        "admission_note": "V5 inherits AGPL-3.0 from the Ultralytics YOLO11 model lineage. Review distribution obligations and confirm permission for project-captured data before release."
+      },
+      "asset": {
+        "path": "models/assets/card_recognition/poker-dealer-v5/best.pt",
+        "bytes": 19279386,
+        "sha256": "40a3815f55b06f3138c760be941d05d61048b6d5feb1b782a70a7e665c91fa53",
+        "git_tracked": false,
+        "storage": "git-lfs-pending",
+        "runtime_selected": false
+      },
+      "class_mapping": {
+        "path": "models/assets/card_recognition/poker-dealer-v5/model.classes.json",
+        "bytes": 316,
+        "sha256": "8a2d7e9dacf245aca5ef5a402cb404def919e9994e9142644d80c6d6248ee038",
+        "classes": 52,
+        "git_tracked": false,
+        "storage": "git"
+      },
+      "framework": {
+        "name": "Ultralytics YOLO / PyTorch",
+        "ultralytics_version": "8.4.104",
+        "torch_version": "2.13.0+cu130",
+        "format": "optimizer-stripped YOLO11s PyTorch checkpoint",
+        "training_input_size": [
+          960,
+          960
+        ]
+      },
+      "input_contract": "one BGR camera frame or project-owned fixed card-slot crop; letterboxed to the configured detector input size without runtime download",
+      "output_contract": "bounded boxes, one of 52 rank+suit class codes and confidence as CardFrameEvidence only; unknown, ambiguity, duplicate-card, temporal confirmation and game legality remain owned deterministic boundaries",
+      "dataset_manifest_sha256": "d74cb1cf4720044a5e6822b00bcd1ed0a425b5f2511d1b63a255092b76f0d1cc",
+      "view_manifest_sha256": "d74cb1cf4720044a5e6822b00bcd1ed0a425b5f2511d1b63a255092b76f0d1cc",
+      "training_view": {
+        "dataset_yaml_sha256": "afec56f38d7abb1d0a9f249bdce9fbac2cd397288958f4ff118d9e1311affaf0",
+        "train_list_sha256": "9c4f9b226f5a1b4c8fe093a627cd8f9697442a534b39549daab4444eec4374df",
+        "validation_list_sha256": "3b8e8a692444da17b092813dcb81850e22da1eb39b01cd988388f6069e75ca0f",
+        "train_images": 2550,
+        "validation_images": 450,
+        "local_augmented_images": 1500,
+        "external_images": 1500,
+        "split_fraction": "85% train / 15% validation",
+        "local_split_unit": "complete capture session before augmentation; heng and slope1 train, slope2 validation",
+        "external_split_unit": "image plus 64-bit difference-hash near-duplicate exclusion at Hamming distance <= 4",
+        "source_overlap": 0,
+        "external_near_duplicate_candidates_rejected": 2,
+        "external_cross_split_near_duplicates": 0,
+        "orientation_bins": [
+          "upright",
+          "right",
+          "inverted",
+          "left"
+        ],
+        "distance_bins": [
+          "very_far",
+          "far",
+          "medium",
+          "near"
+        ],
+        "mirroring": false,
+        "card_count_change": false
+      },
+      "training": {
+        "optimizer": "AdamW",
+        "epochs_requested": 30,
+        "epochs_completed": 13,
+        "best_epoch": 7,
+        "image_size": 960,
+        "batch": 4,
+        "initial_learning_rate": 0.0003,
+        "cosine_final_factor": 0.05,
+        "warmup_epochs": 0.5,
+        "seed": 20260725,
+        "mixed_precision": false,
+        "additional_geometry_or_colour_augmentation": false,
+        "train_box_loss_at_best": 0.45855,
+        "train_class_loss_at_best": 0.33046,
+        "train_dfl_loss_at_best": 0.80839,
+        "validation_box_loss_at_best": 0.96974,
+        "validation_class_loss_at_best": 0.69883,
+        "validation_dfl_loss_at_best": 1.044,
+        "results_sha256": "77e1df369cd14e20fa8e2701fbfb9ad3039ffedc3ff5551236f4777a77bc7d49"
+      },
+      "metrics": {
+        "session_isolated_corner_external_validation": {
+          "images": 450,
+          "instances": 1311,
+          "precision": 0.9487365820695101,
+          "recall": 0.8107495542850907,
+          "map50": 0.9140854320947993,
+          "map50_95": 0.7689537251548086,
+          "input_size": 960,
+          "scope": "225 local augmentations from held-out capture session slope2 plus 225 external validation images"
+        },
+        "v4_same_validation": {
+          "precision": 0.943307423416187,
+          "recall": 0.7846328971729276,
+          "map50": 0.8780751252064312,
+          "map50_95": 0.7561321628106048
+        },
+        "original_same_validation": {
+          "precision": 0.5700282720373417,
+          "recall": 0.6892709257468342,
+          "map50": 0.5026056563473262,
+          "map50_95": 0.4025357972366625
+        },
+        "v5_minus_v4_percentage_points": {
+          "precision": 0.5429158653323052,
+          "recall": 2.6116657112163044,
+          "map50": 3.601030688836815,
+          "map50_95": 1.282156234420384
+        },
+        "best_checkpoint_validation_latency_ms_per_image": {
+          "preprocess": 1.6084242224072418,
+          "inference": 9.396074666227731,
+          "postprocess": 0.8180715560188724,
+          "device": "NVIDIA GeForce RTX 4070 Laptop GPU"
+        },
+        "detailed_evaluation": {
+          "path": "models/assets/card_recognition/poker-dealer-v5/evaluation.json",
+          "sha256": "aeb80a4f83871a284ea1f2ad03d7c41fb64c12f68811e43f2d60030163768ee7",
+          "contains": "per-class and macro per-rank/per-suit precision, recall, F1, mAP plus the full confusion matrix"
+        },
+        "comparison": {
+          "path": "models/assets/card_recognition/poker-dealer-v5/comparison.json",
+          "sha256": "df8761e620cafed1d2d3528af7424132783c00eea665c21970ad785eead3cd25",
+          "scope": "original LGD, V4 and V5 on the exact same 450-image validation list"
+        }
+      },
+      "offline_export": {
+        "status": "not_created",
+        "runtime_selected": false
+      },
+      "admission_blockers": [
+        "no independent live robot-camera rotation and distance session has been evaluated",
+        "17 of 52 classes have lower mAP50-95 than V4 on this validation list; the largest regressions are 4H, JH, 7C, 4S and 2D",
+        "9D and 4C validation recall remain below 0.63",
+        "the local validation view is augmentation-derived from one held-out capture session and is not a raw replay benchmark",
         "unknown and rejection calibration, duplicate-card detection and per-slot temporal stability remain unevaluated",
         "no validated offline ONNX or OpenVINO export exists",
         "AGPL-3.0 distribution obligations require review before release"
