@@ -125,12 +125,27 @@ def _dealer_target(seat: Seat) -> DealerTargetSlot:
 def hole_deal_targets(
     button: Seat, active_seats: Iterable[Seat] = SEAT_ORDER
 ) -> tuple[DealerTargetSlot, ...]:
-    """Deal two clockwise rounds starting left of Button; Button receives last."""
+    """Return the robot route order: two consecutive cards per physical role.
+
+    The project-specific left-side dispenser visits Button, Small Blind,
+    Big Blind and UTG once each. This is intentionally different from a
+    human dealer's two separate clockwise rounds.
+    """
 
     active = _validated_seats(active_seats)
-    one_round = clockwise_order_after(button, active)
-    targets = tuple(_dealer_target(seat) for seat in one_round)
-    return targets + targets
+    roles = role_seats(button)
+    route_order = (
+        roles[TableRole.BUTTON],
+        roles[TableRole.SMALL_BLIND],
+        roles[TableRole.BIG_BLIND],
+        roles[TableRole.UNDER_THE_GUN],
+    )
+    return tuple(
+        _dealer_target(seat)
+        for seat in route_order
+        if seat in active
+        for _ in range(2)
+    )
 
 
 def first_to_act(

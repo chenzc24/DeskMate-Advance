@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import pytest
+
 from poker_dealer.domain import (
     CardIdentity,
     HandPhase,
     ObservationStatus,
     Rank,
+    RobotPoseNode,
     Seat,
     Suit,
 )
@@ -26,20 +29,25 @@ def test_hole_delivery_ack_defaults_all_eight_slots_to_face_down() -> None:
     dealer = SimulatedDealer()
     dealer.homed = True
 
-    for index in range(8):
-        now = (index + 1) * 10_000_000
+    for index in range(4):
+        now = (index + 1) * 20_000_000
         rotation = coordinator.request_rotation(now)
         rotation_ack = dealer.execute(rotation, now + 1)
         assert coordinator.accept_rotation_ack(rotation_ack)
         assert coordinator.accept_rotation_ack(rotation_ack)  # duplicate is idempotent
-        dispense = coordinator.request_dispense(now + 2)
-        dispense_ack = dealer.execute(dispense, now + 3)
-        delivered_slot = coordinator.current_step.vision_slots[0]  # type: ignore[union-attr]
-        assert coordinator.accept_dispense_ack(dispense_ack)
-        assert (
-            engine.state.slot_states[delivered_slot]
-            is SlotLifecycle.PRESENT_FACE_DOWN
-        )
+        step = coordinator.current_step
+        assert step is not None
+        assert len(step.vision_slots) == 2
+        for card_index, delivered_slot in enumerate(step.vision_slots):
+            dispense = coordinator.request_dispense(now + 2 + card_index * 2)
+            dispense_ack = dealer.execute(dispense, now + 3 + card_index * 2)
+            assert coordinator.accept_dispense_ack(dispense_ack)
+            assert (
+                engine.state.slot_states[delivered_slot]
+                is SlotLifecycle.PRESENT_FACE_DOWN
+            )
+            if card_index == 0:
+                assert coordinator.phase is PartBPhase.WAITING_DISPENSE_ACK
 
     assert coordinator.phase is PartBPhase.COMPLETE
     assert engine.state.phase is HandPhase.AWAITING_ACTION
@@ -83,6 +91,12 @@ def test_board_visual_unknown_holds_and_timeout_pauses_authoritative_hand() -> N
     step = coordinator.current_step
     assert step is not None
     assert len(step.vision_slots) == 3
+    with pytest.raises(ValueError, match="navigation is not expected"):
+        coordinator.request_navigation(
+            last_ack_ns + 1,
+            start_pose=RobotPoseNode.BOARD_TO_END,
+            expected_pose_version=1,
+        )
     unknown = SimulatedCardPerception().emit(
         step.vision_slots[0],
         ObservationStatus.UNKNOWN,
@@ -95,6 +109,72 @@ def test_board_visual_unknown_holds_and_timeout_pauses_authoritative_hand() -> N
     assert coordinator.phase is PartBPhase.RECOVERY_REQUIRED
     assert engine.state.phase is HandPhase.PAUSED_RECOVERY
     assert engine.state.paused_reason == "card_visual_timeout"
+
+
+def test_board_confirmation_waits_one_second_before_betting_navigation_resumes() -> None:
+    engine = HandEngine.start("board-post-delay", Seat.A)
+    from poker_dealer.domain import PlayerActionType
+    from poker_dealer.game import ActionRequest
+
+    for index, action in enumerate(("call", "call", "call", "check")):
+        state = engine.state
+        assert engine.apply_action(
+            ActionRequest(
+                f"action-{index}",
+                state.hand_id,
+                state.state_version,
+                state.acting_seat,  # type: ignore[arg-type]
+                PlayerActionType(action),
+            )
+        ).accepted
+
+    coordinator = SequentialPartBCoordinator(engine, post_board_delay_ms=1000)
+    dealer = SimulatedDealer()
+    dealer.homed = True
+    rotation = coordinator.request_rotation(1)
+    assert coordinator.accept_rotation_ack(dealer.execute(rotation, 2))
+    for index in range(3):
+        dispense = coordinator.request_dispense(3 + index * 2)
+        assert coordinator.accept_dispense_ack(
+            dealer.execute(dispense, 4 + index * 2)
+        )
+
+    step = coordinator.current_step
+    assert step is not None
+    cards = (
+        CardIdentity(Rank.ACE, Suit.SPADES),
+        CardIdentity(Rank.KING, Suit.HEARTS),
+        CardIdentity(Rank.QUEEN, Suit.DIAMONDS),
+    )
+    last_observed_at_ns = 0
+    for index, (slot, card) in enumerate(zip(step.vision_slots, cards)):
+        last_observed_at_ns = 20 + index
+        observation = SimulatedCardPerception().emit(
+            slot,
+            ObservationStatus.CONFIRMED,
+            card=card,
+            confidence=0.99,
+            observed_at_ns=last_observed_at_ns,
+        )
+        assert coordinator.accept_card_observation(observation).accepted
+
+    assert coordinator.phase is PartBPhase.WAITING_POST_BOARD_DELAY
+    assert engine.state.phase is HandPhase.DEALING_BOARD
+    assert coordinator.post_board_delay_remaining_ms(last_observed_at_ns) == 1000
+    assert not coordinator.advance_post_board_delay(
+        last_observed_at_ns + 999_999_999
+    )
+    assert (
+        coordinator.post_board_delay_remaining_ms(
+            last_observed_at_ns + 999_999_999
+        )
+        == 1
+    )
+    assert coordinator.advance_post_board_delay(
+        last_observed_at_ns + 1_000_000_000
+    )
+    assert coordinator.phase is PartBPhase.COMPLETE
+    assert engine.state.phase is HandPhase.AWAITING_ACTION
 
 
 def test_same_slot_card_change_is_a_hard_conflict() -> None:
@@ -173,9 +253,9 @@ def test_restart_after_hole_dispense_ack_advances_without_visual_or_redeal() -> 
         FixedLimitRules(), EventLog.from_jsonl(engine.log.to_jsonl())
     )
     resumed = SequentialPartBCoordinator(recovered)
-    assert resumed.phase is PartBPhase.WAITING_ROTATION_ACK
+    assert resumed.phase is PartBPhase.WAITING_DISPENSE_ACK
     assert resumed.current_step is not None
-    assert resumed.current_step.vision_slots == coordinator.steps[1].vision_slots
+    assert resumed.current_step.vision_slots == coordinator.steps[0].vision_slots
     assert dealer.dispensed_cards == 1
 
 

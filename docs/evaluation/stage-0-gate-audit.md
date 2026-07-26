@@ -10,7 +10,7 @@
 | --- | --- | --- |
 | 四人产品范围 | Master、Stage 0、AGENTS、rules v1.3 | 已迁移 |
 | Button/SB/BB/UTG 分离 | 四座顺时针 domain functions + 每个 Button 测试 | 软件通过 |
-| 8 张 hole deal order | 每个 Button 两轮顺序测试，Button 每轮最后 | 软件通过 |
+| 8 张 hole deal order | 小车按 Button→SB→BB→UTG 单次巡航，每位连续两张 | 软件通过；实体路线待验证 |
 | Pre/post-flop 与 skip | UTG/post-flop first、folded/all-in skip tests | 软件通过 |
 | 多人 main/side pot 语义 | Rules + WT-05/06；Stage 1 builder 尚未实现 | 合同通过、执行开放 |
 | S0-05 | 13 vision slots 与所有 live players showdown | 冻结 |

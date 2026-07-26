@@ -239,6 +239,9 @@ Core 允许把本场、显式同意的人脸注册作为可选核验证据：状
   `homed=true`、`at_target=true`、`deck_present=true`、`exit_pulses=1`、
   interlock closed、E-stop inactive 时才成功；成功 ACK 原子地把当前逻辑底牌槽
   记为 `present_face_down`，不等待 F 键、手机按钮或视觉二次确认。
+- 2026-07-27 的目标桌面路线由人类明确覆盖传统两轮发牌顺序：小车按
+  Button→Small Blind→Big Blind→UTG 只访问四个玩家目标，每个目标连续执行
+  两次独立 `dispense_one`；规则引擎仍逐张维护八个逻辑槽和独立 ACK。
 - 13 个槽是确定性状态机、查重、showdown 和日志使用的逻辑 ID，不等于 13 个
   固定像素框。机器人路线采用 state-directed view cycle：状态机先指定当前
   target，机器人转向，YOLO 在完整画面自动检测。Flop 连续取得三次单张发牌

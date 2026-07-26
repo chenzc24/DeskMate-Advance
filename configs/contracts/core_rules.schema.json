@@ -58,15 +58,15 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "small_blind", "big_blind", "first_hole_card",
-        "button_receives_last_hole_card_each_round", "preflop_first_actor",
+        "small_blind", "big_blind", "hole_deal_route", "preflop_first_actor",
         "postflop_first_actor", "skip_folded_or_all_in_for_action"
       ],
       "properties": {
         "small_blind": {"const": "first_active_seat_left_of_button"},
         "big_blind": {"const": "next_active_seat_left_of_small_blind"},
-        "first_hole_card": {"const": "first_active_seat_left_of_button"},
-        "button_receives_last_hole_card_each_round": {"const": true},
+        "hole_deal_route": {
+          "const": "button_small_blind_big_blind_utg_two_consecutive_each"
+        },
         "preflop_first_actor": {"const": "first_actionable_seat_left_of_big_blind"},
         "postflop_first_actor": {"const": "first_actionable_seat_left_of_button"},
         "skip_folded_or_all_in_for_action": {"const": true}
@@ -198,7 +198,7 @@
       "additionalProperties": false,
       "required": [
         "dealing_profile", "manual_shuffle_and_load_before_each_hand", "hole_cards_per_player",
-        "hole_cards_face_down", "hole_deal_rounds", "burn_before_each_board_street",
+        "hole_cards_face_down", "hole_delivery_mode", "burn_before_each_board_street",
         "flop_cards", "flop_delivery_mode", "turn_cards", "river_cards",
         "turn_and_river_delivery_mode", "board_reveal_mode",
         "manual_card_return_after_hand", "deal_progress_requires_success_ack",
@@ -210,7 +210,9 @@
         "manual_shuffle_and_load_before_each_hand": {"const": true},
         "hole_cards_per_player": {"const": 2},
         "hole_cards_face_down": {"const": true},
-        "hole_deal_rounds": {"const": 2},
+        "hole_delivery_mode": {
+          "const": "two_consecutive_single_dispense_acks_per_player_target"
+        },
         "burn_before_each_board_street": {"const": false},
         "flop_cards": {"const": 3},
         "flop_delivery_mode": {

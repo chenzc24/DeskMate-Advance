@@ -256,6 +256,21 @@ def check_runtime_hand_log(
         }
         if not isinstance(evidence, dict) or not required_evidence.issubset(evidence):
             issues.append(f"dealer_ack_sensor_evidence_missing:{command_id}")
+            continue
+        completion_basis = event.payload.get(
+            "completion_basis", "physical_sensor"
+        )
+        if completion_basis not in {
+            "physical_sensor",
+            "arduino_command_ack_only",
+        }:
+            issues.append(f"dealer_ack_completion_basis_invalid:{command_id}")
+        if completion_basis == "arduino_command_ack_only" and (
+            evidence.get("at_target") is not True
+            or evidence.get("deck_present") is not None
+            or evidence.get("exit_pulses") is not None
+        ):
+            issues.append(f"dealer_ack_command_basis_misrepresented:{command_id}")
     if final.pending_command_id is not None:
         issues.append("pending_dealer_command_at_log_end")
     if final.phase is HandPhase.SETTLED and final.board and final.hole_cards:

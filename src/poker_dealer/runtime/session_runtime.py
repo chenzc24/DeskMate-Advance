@@ -23,12 +23,16 @@ class SessionRuntime:
         stacks: Mapping[Seat, int] | None = None,
         log: SessionEventLog | None = None,
         action_promotion_policy: PromotionPolicy | None = None,
+        require_chip_observation: bool = False,
         visual_settle_timeout_ms: int = 5000,
         command_timeout_ms: int = 5000,
         visual_timeout_ms: int = 5000,
+        post_board_delay_ms: int = 1000,
     ) -> None:
         if len(roster.participants) != 4:
             raise ValueError("session requires four registered participants")
+        if post_board_delay_ms < 0:
+            raise ValueError("post_board_delay_ms must be non-negative")
         if {item.seat for item in roster.participants} != set(SEAT_ORDER):
             raise ValueError("session roster must cover all four seats")
         self.roster = roster
@@ -42,9 +46,11 @@ class SessionRuntime:
         self._hand_ids: set[str] = set()
         self.log = log or SessionEventLog()
         self.action_promotion_policy = action_promotion_policy
+        self.require_chip_observation = require_chip_observation
         self.visual_settle_timeout_ms = visual_settle_timeout_ms
         self.command_timeout_ms = command_timeout_ms
         self.visual_timeout_ms = visual_timeout_ms
+        self.post_board_delay_ms = post_board_delay_ms
         self._ended = False
         self._append(
             "session_started",
@@ -104,9 +110,11 @@ class SessionRuntime:
             stacks=self.stacks,
             rules=self.game_config.rules,
             action_promotion_policy=self.action_promotion_policy,
+            require_chip_observation=self.require_chip_observation,
             visual_settle_timeout_ms=self.visual_settle_timeout_ms,
             command_timeout_ms=self.command_timeout_ms,
             visual_timeout_ms=self.visual_timeout_ms,
+            post_board_delay_ms=self.post_board_delay_ms,
         )
         self.active_hand = runtime
         self._table_cleared = False
@@ -310,6 +318,13 @@ class SessionRuntime:
                 "final_stacks": self._stack_payload(),
             },
         )
+
+    def robot_requirement(self):
+        """Return the typed external-input gate for this session boundary."""
+
+        from .robot_interfaces import session_robot_requirement
+
+        return session_robot_requirement(self)
 
     def _roster_for_button(self, button: Seat) -> FrozenSessionRoster:
         roles_by_seat = {seat: role for role, seat in role_seats(button).items()}

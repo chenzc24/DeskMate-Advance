@@ -23,10 +23,17 @@ def test_four_player_roles_and_hole_deal_order(button: Seat) -> None:
     assert small_blind_seat(button) is clockwise[0]
     assert big_blind_seat(button) is clockwise[1]
     assert next_button(button) is clockwise[0]
-    expected_round = tuple(DealerTargetSlot(seat.value) for seat in clockwise)
-    assert hole_deal_targets(button) == expected_round + expected_round
-    assert hole_deal_targets(button)[3] is DealerTargetSlot(button.value)
-    assert hole_deal_targets(button)[7] is DealerTargetSlot(button.value)
+    physical_order = (button, clockwise[0], clockwise[1], clockwise[2])
+    expected = tuple(
+        DealerTargetSlot(seat.value)
+        for seat in physical_order
+        for _ in range(2)
+    )
+    assert hole_deal_targets(button) == expected
+    assert hole_deal_targets(button)[:2] == (
+        DealerTargetSlot(button.value),
+        DealerTargetSlot(button.value),
+    )
 
 
 @pytest.mark.parametrize("button", list(Seat))

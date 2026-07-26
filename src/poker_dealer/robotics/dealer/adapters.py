@@ -4,7 +4,12 @@ from __future__ import annotations
 
 import time
 
-from poker_dealer.domain import DealerAck, DealerCommand
+from poker_dealer.domain import (
+    DealerAck,
+    DealerCommand,
+    NavigationAck,
+    NavigationAckStatus,
+)
 from poker_dealer.game.simulators import SimulatedDealer
 
 from .port import DealerHealth, DealerUnavailableError
@@ -54,6 +59,20 @@ class SimulatedDealerAdapter:
             physical_motion=False,
         )
 
+    def confirm_navigation_target(self, acknowledgement: NavigationAck) -> None:
+        """Mirror a successful mobile-navigation interlock in the simulator."""
+
+        if not self._opened:
+            raise DealerUnavailableError("simulated dealer is not open")
+        if (
+            acknowledgement.status is not NavigationAckStatus.SUCCEEDED
+            or not acknowledgement.target_aligned
+        ):
+            raise DealerUnavailableError(
+                "dealer target cannot be armed from failed navigation"
+            )
+        self._dealer.at_target = True
+
     def close(self) -> None:
         self._opened = False
 
@@ -88,6 +107,10 @@ class UnavailableDealerAdapter:
             physical_motion=True,
             reason=self._reason,
         )
+
+    def confirm_navigation_target(self, acknowledgement: NavigationAck) -> None:
+        del acknowledgement
+        raise DealerUnavailableError(self._reason)
 
     def close(self) -> None:
         return None

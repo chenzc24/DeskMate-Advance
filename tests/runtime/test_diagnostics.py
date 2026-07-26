@@ -155,10 +155,10 @@ def test_formal_replay_cli_places_audited_logs_in_diagnostics_bundle(
     summary = json.loads((bundle / "summary.json").read_text(encoding="utf-8"))
     assert summary["status"] == "passed"
     assert summary["result"]["session_log_check_passed"] is True
-    # Eight hole-card visual-confirmation steps are absent, and the three-card
-    # Flop shares one rotation and one visual frame while retaining three
-    # sensor-valid dispense ACKs.
-    assert summary["metrics"]["runtime_step_duration"]["count"] == 99
+    # Hole cards share one target acquisition per player (four instead of
+    # eight), while every card keeps its own sensor-valid dispense ACK.
+    # The three-card Flop also shares one target acquisition and visual frame.
+    assert summary["metrics"]["runtime_step_duration"]["count"] == 95
     returned = tmp_path / "returned-bundle"
     shutil.copytree(bundle, returned)
     assert check_diagnostic_bundle(returned).passed

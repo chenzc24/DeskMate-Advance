@@ -41,6 +41,7 @@ def test_one_runtime_drives_a_complete_no_burn_hand() -> None:
         roster=roster,
         require_actor_binding=False,
         require_visual_settle=False,
+        post_board_delay_ms=0,
     )
     dealer = SimulatedDealer()
     dealer.homed = True
@@ -183,7 +184,7 @@ def test_one_runtime_drives_a_complete_no_burn_hand() -> None:
         for event in runtime.engine.log.events
         if event.kind == "dealer_ack_received"
     ]
-    assert len(command_events) == len(ack_events) == 44
+    assert len(command_events) == len(ack_events) == 40
     assert runtime.engine.state.pending_command_id is None
 
 

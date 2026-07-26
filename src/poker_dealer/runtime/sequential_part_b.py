@@ -14,8 +14,12 @@ from poker_dealer.domain import (
     DealerCommandType,
     DealerTargetSlot,
     HandPhase,
+    NavigationAck,
+    NavigationAckStatus,
+    NavigationAction,
+    NavigationCommand,
     ObservationStatus,
-    SEAT_ORDER,
+    RobotPoseNode,
     Seat,
     VisionSlot,
     board_deal_targets,
@@ -39,8 +43,10 @@ class PartBMode(StrEnum):
 
 class PartBPhase(StrEnum):
     WAITING_ROTATION_ACK = "waiting_rotation_ack"
+    WAITING_NAVIGATION_ACK = "waiting_navigation_ack"
     WAITING_DISPENSE_ACK = "waiting_dispense_ack"
     WAITING_VISUAL_CONFIRMATION = "waiting_visual_confirmation"
+    WAITING_POST_BOARD_DELAY = "waiting_post_board_delay"
     COMPLETE = "complete"
     RECOVERY_REQUIRED = "recovery_required"
 
@@ -74,25 +80,36 @@ class SequentialPartBCoordinator:
         self,
         engine: HandEngine,
         *,
+        session_id: str = "runtime-session",
         command_timeout_ms: int = 5000,
         visual_timeout_ms: int = 5000,
+        post_board_delay_ms: int = 1000,
     ) -> None:
         if command_timeout_ms <= 0 or visual_timeout_ms <= 0:
             raise ValueError("Part B timeouts must be positive")
+        if post_board_delay_ms < 0:
+            raise ValueError("post-board delay must be non-negative")
         self.engine = engine
+        if not session_id.strip():
+            raise ValueError("Part B session_id is required")
+        self.session_id = session_id
         self.command_timeout_ms = command_timeout_ms
         self.visual_timeout_ms = visual_timeout_ms
+        self.post_board_delay_ms = post_board_delay_ms
         self.mode, self.steps = self._build_steps()
         if not self.steps:
             raise ValueError("Part B requires at least one delivery or reveal step")
         self.phase = PartBPhase.WAITING_ROTATION_ACK
         self.step_index = 0
         self.pending_command: DealerCommand | None = None
+        self.pending_navigation: NavigationCommand | None = None
         self.visual_window_opened_at_ns: int | None = None
+        self.post_board_resume_not_before_ns: int | None = None
         self.last_reason = "rotation_not_requested"
         self.showdown_ranks: Mapping[Seat, HandRank] | None = None
         self._command_sequence = 0
         self._accepted_ack_ids: set[str] = set()
+        self._accepted_navigation_ack_ids: set[str] = set()
         self._restore_cursor()
 
     @property
@@ -105,14 +122,16 @@ class SequentialPartBCoordinator:
         state = self.engine.state
         if state.phase is HandPhase.DEALING_HOLE:
             targets = hole_deal_targets(state.button)
-            seats_per_round = len(SEAT_ORDER)
+            if len(targets) % 2:
+                raise ValueError("hole route must contain two cards per seat")
             steps = tuple(
                 PartBStep(
-                    target,
-                    (HOLE_SLOTS[Seat(target.value)][index // seats_per_round],),
+                    targets[index],
+                    HOLE_SLOTS[Seat(targets[index].value)],
                     True,
+                    dispense_count=2,
                 )
-                for index, target in enumerate(targets)
+                for index in range(0, len(targets), 2)
             )
             return PartBMode.HOLE_DEAL, steps
         if state.phase is HandPhase.DEALING_BOARD:
@@ -168,6 +187,76 @@ class SequentialPartBCoordinator:
         self.last_reason = "waiting_for_matching_rotation_ack"
         return self.pending_command
 
+    def request_navigation(
+        self,
+        issued_at_ns: int,
+        *,
+        start_pose: RobotPoseNode,
+        expected_pose_version: int,
+        target_pose: RobotPoseNode = RobotPoseNode.UNKNOWN,
+        inter_motion_delay_ms: int = 2500,
+    ) -> NavigationCommand:
+        if self.phase not in {
+            PartBPhase.WAITING_ROTATION_ACK,
+            PartBPhase.WAITING_NAVIGATION_ACK,
+        }:
+            raise ValueError("navigation is not expected in the current Part B phase")
+        if self.pending_navigation is not None:
+            return self.pending_navigation
+        step = self.current_step
+        assert step is not None
+        self._command_sequence += 1
+        self.pending_navigation = NavigationCommand(
+            command_id=(
+                f"part-b:{self.engine.state.hand_id}:{self.engine.state.state_version}:"
+                f"{self.mode.value}:navigate:{self._command_sequence}"
+            ),
+            session_id=self.session_id,
+            hand_id=self.engine.state.hand_id,
+            expected_state_version=self.engine.state.state_version,
+            expected_pose_version=expected_pose_version,
+            issued_at_ns=issued_at_ns,
+            action=NavigationAction.MOVE_AND_ALIGN_TO_TARGET,
+            start_pose=start_pose,
+            target_pose=target_pose,
+            target_slot=step.target,
+            timeout_ms=self.command_timeout_ms,
+            inter_motion_delay_ms=inter_motion_delay_ms,
+        )
+        self.phase = PartBPhase.WAITING_NAVIGATION_ACK
+        self.last_reason = "waiting_for_matching_navigation_ack"
+        return self.pending_navigation
+
+    def accept_navigation_ack(self, ack: NavigationAck) -> bool:
+        if ack.command_id in self._accepted_navigation_ack_ids:
+            return True
+        command = self.pending_navigation
+        if self.phase is not PartBPhase.WAITING_NAVIGATION_ACK or command is None:
+            raise ValueError("no navigation acknowledgement is expected")
+        if (
+            ack.command_id != command.command_id
+            or ack.session_id != command.session_id
+            or ack.hand_id != command.hand_id
+            or ack.expected_state_version != command.expected_state_version
+            or ack.action is not command.action
+            or ack.target_slot is not command.target_slot
+        ):
+            self._enter_recovery("navigation_ack_context_or_target_mismatch")
+            return False
+        if ack.status is not NavigationAckStatus.SUCCEEDED:
+            self._enter_recovery(f"navigation_ack_{ack.status.value}")
+            return False
+        if (
+            not ack.target_aligned
+            or ack.pose_version <= command.expected_pose_version
+        ):
+            self._enter_recovery("navigation_ack_missing_alignment_or_pose_advance")
+            return False
+        self._accepted_navigation_ack_ids.add(ack.command_id)
+        self.pending_navigation = None
+        self._target_confirmed(ack.observed_at_ns, "navigation_confirmed")
+        return True
+
     def request_dispense(self, issued_at_ns: int) -> DealerCommand:
         if self.phase is not PartBPhase.WAITING_DISPENSE_ACK:
             raise ValueError("dispense is not expected in the current Part B phase")
@@ -195,16 +284,19 @@ class SequentialPartBCoordinator:
             raise ValueError("no rotation acknowledgement is expected")
         if not self._accept_matching_ack(ack):
             return False
+        self._target_confirmed(ack.observed_at_ns, "rotation_confirmed")
+        return True
+
+    def _target_confirmed(self, observed_at_ns: int, source: str) -> None:
         step = self.current_step
         assert step is not None
         if step.dispense:
             self.phase = PartBPhase.WAITING_DISPENSE_ACK
-            self.last_reason = "rotation_confirmed_request_dispense"
+            self.last_reason = f"{source}_request_dispense"
         else:
             self.phase = PartBPhase.WAITING_VISUAL_CONFIRMATION
-            self.visual_window_opened_at_ns = ack.observed_at_ns
-            self.last_reason = "rotation_confirmed_wait_reveal"
-        return True
+            self.visual_window_opened_at_ns = observed_at_ns
+            self.last_reason = f"{source}_wait_reveal"
 
     def accept_dispense_ack(self, ack: DealerAck) -> bool:
         if ack.command_id in self._accepted_ack_ids:
@@ -234,7 +326,16 @@ class SequentialPartBCoordinator:
             face_down_by_default=self.mode is PartBMode.HOLE_DEAL,
         )
         if self.mode is PartBMode.HOLE_DEAL:
-            self.last_reason = "dispense_confirmed_face_down_by_default"
+            if any(
+                self.engine.state.slot_states[slot] is SlotLifecycle.EXPECTED_EMPTY
+                for slot in step.vision_slots
+            ):
+                self.phase = PartBPhase.WAITING_DISPENSE_ACK
+                self.last_reason = (
+                    "first_hole_card_dispensed_request_second_same_player"
+                )
+                return True
+            self.last_reason = "two_hole_cards_dispensed_face_down_by_default"
             self._advance_step(ack.observed_at_ns)
             return True
         if any(
@@ -350,10 +451,22 @@ class SequentialPartBCoordinator:
             ):
                 continue
             self.step_index = index
+            states = tuple(
+                self.engine.state.slot_states[slot] for slot in step.vision_slots
+            )
+            if (
+                self.mode is PartBMode.HOLE_DEAL
+                and any(state is expected for state in states)
+                and any(state is SlotLifecycle.EXPECTED_EMPTY for state in states)
+            ):
+                self.phase = PartBPhase.WAITING_DISPENSE_ACK
+                self.last_reason = (
+                    "recovered_same_player_requires_second_hole_card"
+                )
+                return
             visual_pending = {SlotLifecycle.DELIVERY_PENDING}
             if self.mode is PartBMode.BOARD_DEAL:
                 visual_pending.add(SlotLifecycle.FACE_UP_UNCONFIRMED)
-            states = tuple(self.engine.state.slot_states[slot] for slot in step.vision_slots)
             if all(state in visual_pending or state is expected for state in states):
                 self.phase = PartBPhase.WAITING_VISUAL_CONFIRMATION
                 delivery_event = next(
@@ -374,7 +487,28 @@ class SequentialPartBCoordinator:
                 self.phase = PartBPhase.WAITING_DISPENSE_ACK
                 self.last_reason = "recovered_batch_requires_remaining_dispense"
             return
-        self._complete_mode(self.engine.log.events[-1].observed_at_ns)
+        last_event_at_ns = self.engine.log.events[-1].observed_at_ns
+        if self.mode is PartBMode.BOARD_DEAL:
+            relevant_slots = {
+                slot.value for step in self.steps for slot in step.vision_slots
+            }
+            last_confirmation = next(
+                (
+                    event
+                    for event in reversed(self.engine.log.events)
+                    if event.kind == "card_observation_applied"
+                    and event.accepted
+                    and event.payload.get("slot_id") in relevant_slots
+                ),
+                None,
+            )
+            self._begin_post_board_delay(
+                last_confirmation.observed_at_ns
+                if last_confirmation is not None
+                else last_event_at_ns
+            )
+            return
+        self._complete_mode(last_event_at_ns)
 
     def _advance_step(self, observed_at_ns: int) -> None:
         self.visual_window_opened_at_ns = None
@@ -384,7 +518,48 @@ class SequentialPartBCoordinator:
             self.last_reason = "step_complete_rotate_to_next_target"
             return
 
+        if self.mode is PartBMode.BOARD_DEAL:
+            self._begin_post_board_delay(observed_at_ns)
+            return
         self._complete_mode(observed_at_ns)
+
+    def _begin_post_board_delay(self, observed_at_ns: int) -> None:
+        self.visual_window_opened_at_ns = None
+        if self.post_board_delay_ms == 0:
+            self._complete_mode(observed_at_ns)
+            return
+        self.phase = PartBPhase.WAITING_POST_BOARD_DELAY
+        self.post_board_resume_not_before_ns = (
+            observed_at_ns + self.post_board_delay_ms * 1_000_000
+        )
+        self.last_reason = "board_confirmed_wait_before_resume_line_follow"
+
+    def advance_post_board_delay(self, now_ns: int) -> bool:
+        """Complete board dealing only after the configured stationary delay."""
+
+        if now_ns < 0:
+            raise ValueError("delay clock must be non-negative")
+        if self.phase is not PartBPhase.WAITING_POST_BOARD_DELAY:
+            raise ValueError("post-board delay is not active")
+        deadline = self.post_board_resume_not_before_ns
+        if deadline is None:
+            raise RuntimeError("post-board delay is missing its deadline")
+        if now_ns < deadline:
+            return False
+        self.post_board_resume_not_before_ns = None
+        self._complete_mode(now_ns)
+        return True
+
+    def post_board_delay_remaining_ms(self, now_ns: int) -> int:
+        if now_ns < 0:
+            raise ValueError("delay clock must be non-negative")
+        if self.phase is not PartBPhase.WAITING_POST_BOARD_DELAY:
+            return 0
+        deadline = self.post_board_resume_not_before_ns
+        if deadline is None:
+            raise RuntimeError("post-board delay is missing its deadline")
+        remaining_ns = max(0, deadline - now_ns)
+        return (remaining_ns + 999_999) // 1_000_000
 
     def _complete_mode(self, observed_at_ns: int) -> None:
         if self.mode is PartBMode.HOLE_DEAL:
@@ -413,6 +588,14 @@ class SequentialPartBCoordinator:
             if now_ns >= deadline:
                 self._enter_recovery("dealer_command_timeout")
                 return True
+        if self.pending_navigation is not None:
+            deadline = (
+                self.pending_navigation.issued_at_ns
+                + self.pending_navigation.timeout_ms * 1_000_000
+            )
+            if now_ns >= deadline:
+                self._enter_recovery("navigation_command_timeout")
+                return True
         if (
             self.phase is PartBPhase.WAITING_VISUAL_CONFIRMATION
             and self.visual_window_opened_at_ns is not None
@@ -426,7 +609,9 @@ class SequentialPartBCoordinator:
     def _enter_recovery(self, reason: str) -> None:
         self.phase = PartBPhase.RECOVERY_REQUIRED
         self.pending_command = None
+        self.pending_navigation = None
         self.visual_window_opened_at_ns = None
+        self.post_board_resume_not_before_ns = None
         self.last_reason = reason
         if self.engine.state.phase is not HandPhase.PAUSED_RECOVERY:
             self.engine.pause(

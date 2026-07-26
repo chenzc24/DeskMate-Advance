@@ -71,6 +71,7 @@ from poker_dealer.perception.identity import (
     OpenCvFaceIdentityAdapter,
     SessionFaceGallery,
 )
+from poker_dealer.robotics.navigation import FaceCenterSample, NavigationPort
 
 from .announcer import SpeechPlaybackGate
 from .audio_input import AudioInputHealth, StreamingPcm16Resampler
@@ -89,6 +90,7 @@ from .registration import (
     RegistrationPhase,
     RegistrationRuntime,
 )
+from .registration_route import RegistrationNavigationCoordinator
 from .visual_settle import VisualSettleGate, VisualSettleState
 
 try:
@@ -126,6 +128,55 @@ class LivePerceptionConfig:
             and self.speech_capture_sample_rate_hz <= 0
         ):
             raise ValueError("speech capture sample rate must be positive")
+
+
+class LiveFaceCenterProbe:
+    """Use the registered player camera to close cocino_car face-turn pulses."""
+
+    def __init__(
+        self,
+        frame_source: FrameSource,
+        face_model: OpenCvFaceIdentityAdapter,
+        *,
+        center_deadband_normalized: float = 0.08,
+        stable_frames_required: int = 3,
+    ) -> None:
+        if not 0 < center_deadband_normalized < 0.5:
+            raise ValueError("face center deadband must be in (0, 0.5)")
+        if stable_frames_required <= 0:
+            raise ValueError("face stable-frame requirement must be positive")
+        self.frame_source = frame_source
+        self.face_model = face_model
+        self.center_deadband_normalized = center_deadband_normalized
+        self.stable_frames_required = stable_frames_required
+        self._stable_frames = 0
+
+    def reset(self) -> None:
+        self._stable_frames = 0
+
+    def observe_face_center(self) -> FaceCenterSample:
+        selector = getattr(self.frame_source, "select_camera_route", None)
+        if selector is not None:
+            selector(CameraRoute.PLAYER)
+        read = self.frame_source.read()
+        frame = read.frame
+        if read.state is not FrameReadState.OK or frame is None:
+            self._stable_frames = 0
+            return FaceCenterSample(False, False, 0)
+        evidence = self.face_model.analyze(frame)
+        if evidence.detected_face_count != 1 or len(evidence.features) != 1:
+            self._stable_frames = 0
+            return FaceCenterSample(False, False, 0)
+        x, _y, width, _height = evidence.features[0].bbox_xywh
+        error_px = abs((x + width / 2) - frame.width / 2)
+        within = error_px <= frame.width * self.center_deadband_normalized
+        self._stable_frames = self._stable_frames + 1 if within else 0
+        return FaceCenterSample(
+            detected=True,
+            centered=self._stable_frames >= self.stable_frames_required,
+            stable_frames=self._stable_frames,
+            center_error_px=error_px,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -1228,6 +1279,7 @@ class LivePerceptionSession:
         button: Seat,
         deadline_ns: int,
         simulated_seats: Mapping[Seat, str] | None = None,
+        navigation_port: NavigationPort | None = None,
     ) -> FrozenSessionRoster:
         if (
             self.gallery is None
@@ -1236,6 +1288,11 @@ class LivePerceptionSession:
         ):
             raise RuntimeError("live perception session is not open")
         registration = RegistrationRuntime(session_id, button)
+        registration_navigation = (
+            RegistrationNavigationCoordinator(registration, navigation_port)
+            if navigation_port is not None
+            else None
+        )
         simulated_participants = dict(simulated_seats or {})
 
         def restore_simulated_participants(observed_at_ns: int) -> None:
@@ -1328,6 +1385,25 @@ class LivePerceptionSession:
                 self.frame_source.set_face_detections((), status=None)
 
         while time.monotonic_ns() < deadline_ns:
+            if (
+                registration_navigation is not None
+                and registration.phase is not RegistrationPhase.READY_TO_START
+            ):
+                navigation_ack = registration_navigation.align_focus()
+                if navigation_ack is not None:
+                    event_sink.emit(
+                        "registration_navigation_ack",
+                        observed_at_ns=navigation_ack.observed_at_ns,
+                        payload={
+                            "command_id": navigation_ack.command_id,
+                            "status": navigation_ack.status.value,
+                            "role": registration.focus_role.value,
+                            "seat": registration.focus_seat.value,
+                            "actual_pose": navigation_ack.actual_pose.value,
+                            "pose_version": navigation_ack.pose_version,
+                            "target_aligned": navigation_ack.target_aligned,
+                        },
+                    )
             update_registration_ui()
             read = frame_source.read()
             if read.camera_epoch != last_camera_epoch:
@@ -1418,6 +1494,8 @@ class LivePerceptionSession:
                     last_sample_ns = None
                     alert_title = None
                     alert_detail = None
+                    if registration_navigation is not None:
+                        registration_navigation.invalidate_alignment()
                 if control.intent is ControlIntent.CANCEL and outcome.accepted:
                     for sample in samples:
                         embedding = getattr(sample, "embedding", None)
@@ -1435,6 +1513,24 @@ class LivePerceptionSession:
                         (), status="SEARCHING FOR ONE FACE"
                     )
                 if outcome.roster is not None:
+                    if registration_navigation is not None:
+                        navigation_ack = registration_navigation.normalize_to_init(
+                            control.observed_at_ns
+                        )
+                        if navigation_ack is not None:
+                            event_sink.emit(
+                                "registration_navigation_ack",
+                                observed_at_ns=navigation_ack.observed_at_ns,
+                                payload={
+                                    "command_id": navigation_ack.command_id,
+                                    "status": navigation_ack.status.value,
+                                    "role": "normalization",
+                                    "seat": None,
+                                    "actual_pose": navigation_ack.actual_pose.value,
+                                    "pose_version": navigation_ack.pose_version,
+                                    "target_aligned": navigation_ack.target_aligned,
+                                },
+                            )
                     return outcome.roster
             if (
                 registration.phase is RegistrationPhase.READY_FOR_FACE
@@ -2266,6 +2362,7 @@ class LivePerceptionSession:
 
 __all__ = [
     "InteractiveOpenCVFrameSource",
+    "LiveFaceCenterProbe",
     "LiveKeyboardControlSource",
     "LivePerceptionConfig",
     "LivePerceptionSession",

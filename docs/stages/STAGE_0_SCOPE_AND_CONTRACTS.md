@@ -47,7 +47,7 @@ Button=`seat_a`：
 ```text
 Button A | SB B | BB C | UTG D
 
-Deal:      B -> C -> D -> A，重复两轮
+Robot deal: A -> A -> B -> B -> C -> C -> D -> D
 Pre-flop:  D -> A -> B -> C
 Post-flop: B -> C -> D -> A
 Next hand Button: B

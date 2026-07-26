@@ -10,6 +10,7 @@ from poker_dealer.domain import (
     ColorSpace,
     DealerAck,
     DealerAckStatus,
+    DealerCompletionBasis,
     DealerCommand,
     DealerCommandType,
     DealerDeviceState,
@@ -183,3 +184,20 @@ def test_successful_dispense_requires_physical_sensor_evidence() -> None:
         DealerSensorEvidence(True, True, True, 1, True, False),
     )
     assert ack.status is DealerAckStatus.SUCCEEDED
+
+
+def test_command_ack_dispense_is_explicit_and_does_not_fake_sensors() -> None:
+    ack = DealerAck(
+        "cmd-command-ack",
+        DealerCommandType.DISPENSE_ONE,
+        None,
+        DealerAckStatus.SUCCEEDED,
+        20,
+        DealerDeviceState.READY,
+        4,
+        DealerSensorEvidence(None, True, None, None, None, None),
+        completion_basis=DealerCompletionBasis.ARDUINO_COMMAND_ACK_ONLY,
+    )
+    assert ack.status is DealerAckStatus.SUCCEEDED
+    assert ack.sensor_evidence.deck_present is None
+    assert ack.sensor_evidence.exit_pulses is None

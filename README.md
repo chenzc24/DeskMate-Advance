@@ -27,6 +27,9 @@ remaining card/geometry gates are documented in
 The development-only physical-chip localization and fixed-design denomination
 pilot is documented in
 [the chip-recognition usage guide](docs/evaluation/chip-recognition-development-pilot.md).
+The mobile-robot command/ACK fields, state-machine input order, 2.5-second
+inter-motion delay and Raspberry Pi adapter requirements are documented in
+[the navigation integration README](src/poker_dealer/robotics/navigation/README.md).
 
 The single profile entry can be checked without opening any device:
 

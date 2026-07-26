@@ -7,13 +7,23 @@ from enum import StrEnum
 from typing import Mapping
 
 from poker_dealer.domain import (
+    ActionEvidenceState,
+    ChipAmountScope,
+    ChipObservation,
+    ChipObservationStatus,
     DealerAck,
     DealerAckStatus,
     DealerCommand,
     DealerCommandType,
     DealerTargetSlot,
     HandPhase,
+    NavigationAck,
+    NavigationAckStatus,
+    NavigationAction,
+    NavigationCommand,
     PlayerActionObservation,
+    PlayerActionType,
+    RobotPoseNode,
     Seat,
 )
 from poker_dealer.game import ActionResult, HandEngine
@@ -23,9 +33,11 @@ from poker_dealer.perception.attribution import ActorBinding, AttributedActionCa
 
 class PartAPhase(StrEnum):
     WAITING_ROTATION_ACK = "waiting_rotation_ack"
+    WAITING_NAVIGATION_ACK = "waiting_navigation_ack"
     WAITING_VISUAL_SETTLE = "waiting_visual_settle"
     VERIFYING_IDENTITY = "verifying_identity"
     WAITING_PLAYER_ACTION = "waiting_player_action"
+    WAITING_CHIP_OBSERVATION = "waiting_chip_observation"
     ROUND_COMPLETE = "round_complete"
     RECOVERY_REQUIRED = "recovery_required"
 
@@ -48,6 +60,7 @@ class SequentialPartACoordinator:
         *,
         require_actor_binding: bool = True,
         require_visual_settle: bool = True,
+        require_chip_observation: bool = False,
         visual_settle_timeout_ms: int = 5000,
         expected_player_by_seat: Mapping[Seat, str] | None = None,
         minimum_attribution_confidence: float = 0.35,
@@ -67,11 +80,14 @@ class SequentialPartACoordinator:
         self.session_id = session_id
         self.require_actor_binding = require_actor_binding
         self.require_visual_settle = require_visual_settle
+        self.require_chip_observation = require_chip_observation
         self.visual_settle_timeout_ms = visual_settle_timeout_ms
         self.expected_player_by_seat = dict(expected_player_by_seat or {})
         self.minimum_attribution_confidence = minimum_attribution_confidence
         self.phase = PartAPhase.WAITING_ROTATION_ACK
         self.pending_rotation: DealerCommand | None = None
+        self.pending_navigation: NavigationCommand | None = None
+        self.pending_action_observation: PlayerActionObservation | None = None
         self.verified_player_id: str | None = None
         self.active_actor_binding: ActorBinding | None = None
         self.last_reason = "rotation_not_requested"
@@ -80,6 +96,7 @@ class SequentialPartACoordinator:
         self._visual_settle_opened_at_ns: int | None = None
         self._attention_window_opened_at_ns: int | None = None
         self._accepted_rotation_ack_ids: set[str] = set()
+        self._accepted_navigation_ack_ids: set[str] = set()
 
     @property
     def focus_seat(self) -> Seat | None:
@@ -108,6 +125,79 @@ class SequentialPartACoordinator:
         self.last_reason = "waiting_for_matching_rotation_ack"
         return command
 
+    def request_navigation(
+        self,
+        issued_at_ns: int,
+        *,
+        start_pose: RobotPoseNode,
+        expected_pose_version: int,
+        target_pose: RobotPoseNode = RobotPoseNode.UNKNOWN,
+        inter_motion_delay_ms: int = 2500,
+    ) -> NavigationCommand:
+        """Request mobile navigation instead of the legacy fixed-base rotation."""
+
+        if self.phase not in {
+            PartAPhase.WAITING_ROTATION_ACK,
+            PartAPhase.WAITING_NAVIGATION_ACK,
+        }:
+            raise ValueError("navigation can only be requested at a turn boundary")
+        if self.pending_navigation is not None:
+            return self.pending_navigation
+        seat = self.focus_seat
+        if seat is None:
+            raise ValueError("cannot navigate without an acting seat")
+        self._command_sequence += 1
+        command = NavigationCommand(
+            command_id=(
+                f"part-a:{self.engine.state.hand_id}:{self.engine.state.state_version}:"
+                f"navigate:{self._command_sequence}"
+            ),
+            session_id=self.session_id,
+            hand_id=self.engine.state.hand_id,
+            expected_state_version=self.engine.state.state_version,
+            expected_pose_version=expected_pose_version,
+            issued_at_ns=issued_at_ns,
+            action=NavigationAction.MOVE_AND_ALIGN_TO_TARGET,
+            start_pose=start_pose,
+            target_pose=target_pose,
+            target_slot=DealerTargetSlot(seat.value),
+            inter_motion_delay_ms=inter_motion_delay_ms,
+        )
+        self.pending_navigation = command
+        self.phase = PartAPhase.WAITING_NAVIGATION_ACK
+        self.last_reason = "waiting_for_matching_navigation_ack"
+        return command
+
+    def accept_navigation_ack(self, ack: NavigationAck) -> bool:
+        if ack.command_id in self._accepted_navigation_ack_ids:
+            return True
+        command = self.pending_navigation
+        if self.phase is not PartAPhase.WAITING_NAVIGATION_ACK or command is None:
+            raise ValueError("no navigation acknowledgement is expected")
+        if (
+            ack.command_id != command.command_id
+            or ack.session_id != command.session_id
+            or ack.hand_id != command.hand_id
+            or ack.expected_state_version != command.expected_state_version
+            or ack.action is not command.action
+            or ack.target_slot is not command.target_slot
+        ):
+            self._enter_recovery("navigation_ack_context_or_target_mismatch")
+            return False
+        if ack.status is not NavigationAckStatus.SUCCEEDED:
+            self._enter_recovery(f"navigation_ack_{ack.status.value}")
+            return False
+        if (
+            not ack.target_aligned
+            or ack.pose_version <= command.expected_pose_version
+        ):
+            self._enter_recovery("navigation_ack_missing_alignment_or_pose_advance")
+            return False
+        self._accepted_navigation_ack_ids.add(ack.command_id)
+        self.pending_navigation = None
+        self._target_confirmed(ack.observed_at_ns, "navigation_confirmed")
+        return True
+
     def accept_rotation_ack(self, ack: DealerAck) -> bool:
         if ack.command_id in self._accepted_rotation_ack_ids:
             return True
@@ -135,15 +225,18 @@ class SequentialPartACoordinator:
             return False
         self._accepted_rotation_ack_ids.add(ack.command_id)
         self.pending_rotation = None
-        self._attention_window_opened_at_ns = ack.observed_at_ns
+        self._target_confirmed(ack.observed_at_ns, "rotation_confirmed")
+        return True
+
+    def _target_confirmed(self, observed_at_ns: int, source: str) -> None:
+        self._attention_window_opened_at_ns = observed_at_ns
         if self.require_visual_settle:
-            self._visual_settle_opened_at_ns = ack.observed_at_ns
+            self._visual_settle_opened_at_ns = observed_at_ns
             self.phase = PartAPhase.WAITING_VISUAL_SETTLE
-            self.last_reason = "rotation_confirmed_wait_visual_settle"
+            self.last_reason = f"{source}_wait_visual_settle"
         else:
             self.phase = PartAPhase.VERIFYING_IDENTITY
-            self.last_reason = "rotation_confirmed_verify_identity"
-        return True
+            self.last_reason = f"{source}_verify_identity"
 
     def accept_visual_settle(self) -> None:
         if self.phase is not PartAPhase.WAITING_VISUAL_SETTLE:
@@ -245,6 +338,111 @@ class SequentialPartACoordinator:
             return CoordinatorActionOutcome(
                 False, "identity_not_verified", None, self.focus_seat
             )
+        if (
+            self.require_chip_observation
+            and observation.evidence_state is ActionEvidenceState.CANDIDATE
+            and observation.candidate_action
+            in {PlayerActionType.BET, PlayerActionType.RAISE}
+        ):
+            reason = self._chip_gate_candidate_reason(observation)
+            if reason is not None:
+                self.last_reason = f"action_rejected:{reason}"
+                return CoordinatorActionOutcome(
+                    False, reason, None, self.focus_seat
+                )
+            self.pending_action_observation = observation
+            self.phase = PartAPhase.WAITING_CHIP_OBSERVATION
+            self.last_reason = "bet_or_raise_waiting_chip_observation"
+            return CoordinatorActionOutcome(
+                False,
+                "chip_observation_required",
+                None,
+                self.focus_seat,
+            )
+        return self._commit_action(observation)
+
+    def _chip_gate_candidate_reason(
+        self, observation: PlayerActionObservation
+    ) -> str | None:
+        state = self.engine.state
+        policy = self.engine.promoter.policy
+        if observation.hand_id != state.hand_id:
+            return "wrong_hand"
+        if observation.expected_state_version != state.state_version:
+            return "stale_state_version"
+        if observation.focus_seat is not state.acting_seat:
+            return "non_current_seat"
+        if observation.candidate_action not in state.legal_actions:
+            return "illegal_action"
+        if observation.confidence is None or observation.confidence < policy.minimum_confidence:
+            return "low_confidence"
+        if observation.stable_frames < policy.minimum_stable_frames:
+            return "insufficient_stable_frames"
+        if observation.stable_duration_ms < policy.minimum_stable_duration_ms:
+            return "insufficient_stable_duration"
+        return None
+
+    def accept_chip_observation(
+        self, observation: ChipObservation
+    ) -> CoordinatorActionOutcome:
+        if self.phase is not PartAPhase.WAITING_CHIP_OBSERVATION:
+            return CoordinatorActionOutcome(
+                False, "chip_window_not_open", None, self.focus_seat
+            )
+        pending = self.pending_action_observation
+        if pending is None:
+            self._enter_recovery("chip_window_without_pending_action")
+            return CoordinatorActionOutcome(
+                False, "chip_window_without_pending_action", None, self.focus_seat
+            )
+        if (
+            observation.hand_id != self.engine.state.hand_id
+            or observation.expected_state_version != self.engine.state.state_version
+            or observation.focus_seat is not self.focus_seat
+            or observation.observed_at_ns < pending.observed_at_ns
+        ):
+            self.last_reason = "stale_or_wrong_chip_context"
+            return CoordinatorActionOutcome(
+                False, "stale_or_wrong_chip_context", None, self.focus_seat
+            )
+        if observation.status is not ChipObservationStatus.CONFIRMED:
+            self.last_reason = f"chip_{observation.status.value}"
+            return CoordinatorActionOutcome(
+                False, self.last_reason, None, self.focus_seat
+            )
+        expected = self._expected_chip_units(observation.amount_scope)
+        if observation.total_units != expected:
+            self.last_reason = (
+                f"chip_amount_mismatch:expected={expected}:"
+                f"observed={observation.total_units}"
+            )
+            return CoordinatorActionOutcome(
+                False, "chip_amount_mismatch", None, self.focus_seat
+            )
+        self.pending_action_observation = None
+        self.phase = PartAPhase.WAITING_PLAYER_ACTION
+        self.last_reason = "chip_observation_confirmed_commit_action"
+        return self._commit_action(pending)
+
+    def _expected_chip_units(self, scope: ChipAmountScope) -> int:
+        observation = self.pending_action_observation
+        assert observation is not None and observation.candidate_action is not None
+        state = self.engine.state
+        seat = observation.focus_seat
+        player = state.players[seat]
+        bet_size = self.engine.rules.bet_size(state.street)  # type: ignore[arg-type]
+        target = (
+            bet_size
+            if observation.candidate_action is PlayerActionType.BET
+            else state.current_bet_units + bet_size
+        )
+        if scope is ChipAmountScope.STREET_TOTAL:
+            return target
+        return target - player.street_commit_units
+
+    def _commit_action(
+        self, observation: PlayerActionObservation
+    ) -> CoordinatorActionOutcome:
         result = self.engine.apply_observation(observation)
         if not result.accepted:
             self.last_reason = f"action_rejected:{result.reason}"
@@ -257,6 +455,8 @@ class SequentialPartACoordinator:
         self._action_window_opened_at_ns = None
         self._attention_window_opened_at_ns = None
         self.pending_rotation = None
+        self.pending_navigation = None
+        self.pending_action_observation = None
         if (
             self.engine.state.phase is HandPhase.AWAITING_ACTION
             and self.engine.state.acting_seat is not None
@@ -288,6 +488,8 @@ class SequentialPartACoordinator:
         if not reason.strip():
             raise ValueError("pilot completion reason is required")
         self.pending_rotation = None
+        self.pending_navigation = None
+        self.pending_action_observation = None
         self.verified_player_id = None
         self.active_actor_binding = None
         self._action_window_opened_at_ns = None
@@ -308,6 +510,14 @@ class SequentialPartACoordinator:
             if now_ns >= deadline:
                 self._enter_recovery("rotation_ack_timeout")
                 return True
+        if self.pending_navigation is not None:
+            deadline = (
+                self.pending_navigation.issued_at_ns
+                + self.pending_navigation.timeout_ms * 1_000_000
+            )
+            if now_ns >= deadline:
+                self._enter_recovery("navigation_ack_timeout")
+                return True
         if (
             self.phase is PartAPhase.WAITING_VISUAL_SETTLE
             and self._visual_settle_opened_at_ns is not None
@@ -322,6 +532,7 @@ class SequentialPartACoordinator:
             in {
                 PartAPhase.VERIFYING_IDENTITY,
                 PartAPhase.WAITING_PLAYER_ACTION,
+                PartAPhase.WAITING_CHIP_OBSERVATION,
             }
             and self._action_window_opened_at_ns is not None
             and now_ns
@@ -350,6 +561,8 @@ class SequentialPartACoordinator:
     def _enter_recovery(self, reason: str) -> None:
         self.phase = PartAPhase.RECOVERY_REQUIRED
         self.pending_rotation = None
+        self.pending_navigation = None
+        self.pending_action_observation = None
         self.verified_player_id = None
         self.active_actor_binding = None
         self._action_window_opened_at_ns = None

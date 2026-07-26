@@ -19,6 +19,7 @@ from poker_dealer.runtime.network import MobileWebEndpoint, NetworkEndpoints
 from poker_dealer.runtime.profile import RuntimeProfile
 from poker_dealer.domain import Seat
 from poker_dealer.robotics.dealer import SimulatedDealerAdapter
+from poker_dealer.robotics.navigation import CocinoCarNavigationAdapter
 from poker_dealer.runtime import (
     AnnouncementCatalog,
     AnnouncementPolicy,
@@ -51,6 +52,7 @@ from poker_dealer.runtime import (
 )
 from poker_dealer.runtime.live_perception import (
     InteractiveOpenCVFrameSource,
+    LiveFaceCenterProbe,
     LiveKeyboardControlSource,
     LivePerceptionConfig,
     LivePerceptionSession,
@@ -560,7 +562,12 @@ def _run_replay(
         hand_id = source_state.hand_id
         button = source_state.button
     roster = default_replay_roster(session_id, button)
-    game_session = SessionRuntime(roster, app.game_config)
+    game_session = SessionRuntime(
+        roster,
+        app.game_config,
+        # Recorded/simulated time does not represent a physical stationary car.
+        post_board_delay_ms=0,
+    )
     session_path = _session_log_path(args, app, session_id, diagnostics)
     if diagnostics is not None:
         diagnostics.register_artifact("session_log", session_path)
@@ -910,6 +917,11 @@ def _run_registration_smoke(
     writer: RuntimeEventWriter | None = None
     try:
         session.open(session_id)
+        if isinstance(app.navigation, CocinoCarNavigationAdapter):
+            assert session.face_model is not None
+            app.navigation.face_probe = LiveFaceCenterProbe(
+                frame_source, session.face_model
+            )
         writer = _runtime_writer(log_path, event_announcer)
         event_sink = (
             CompositeRuntimeEventSink(writer, mobile_console)
@@ -927,6 +939,7 @@ def _run_registration_smoke(
             button=Seat(args.button),
             deadline_ns=time.monotonic_ns()
             + int(args.registration_timeout_seconds * 1_000_000_000),
+            navigation_port=app.navigation,
         )
         if event_announcer is not None:
             event_announcer.publish("roster_ready")
@@ -1058,6 +1071,11 @@ def _run_live(
     new_session_requested = False
     try:
         session.open(session_id)
+        if isinstance(app.navigation, CocinoCarNavigationAdapter):
+            assert session.face_model is not None
+            app.navigation.face_probe = LiveFaceCenterProbe(
+                frame_source, session.face_model
+            )
         writer = _runtime_writer(first_output_path, event_announcer)
         event_sink = (
             CompositeRuntimeEventSink(writer, mobile_console)
@@ -1085,6 +1103,7 @@ def _run_live(
                 deadline_ns=time.monotonic_ns()
                 + int(args.registration_timeout_seconds * 1_000_000_000),
                 simulated_seats=simulated_players,
+                navigation_port=app.navigation,
             )
             if event_announcer is not None:
                 event_announcer.publish("roster_ready")
@@ -1165,6 +1184,7 @@ def _run_live(
                             identity_source=player_action_source,
                             action_source=player_action_source,
                             card_source=session,
+                            navigation_port=app.navigation,
                             visual_settle_source=session,
                             control_source=controls,
                             frame_source=frame_source,

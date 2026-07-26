@@ -6,10 +6,14 @@ from typing import Mapping
 
 from poker_dealer.domain import (
     CardObservation,
+    ChipObservation,
     DealerAck,
     DealerCommand,
     HandPhase,
+    NavigationAck,
+    NavigationCommand,
     PlayerActionObservation,
+    RobotPoseNode,
     Seat,
     VisionSlot,
 )
@@ -22,9 +26,10 @@ from poker_dealer.game import (
 )
 from poker_dealer.perception.attribution import ActorBinding, AttributedActionCandidate
 from poker_dealer.perception.identity import FaceIdentityObservation
+from poker_dealer.robotics.navigation import hole_deal_pose, player_pose
 
 from .sequential_part_a import CoordinatorActionOutcome, PartAPhase, SequentialPartACoordinator
-from .sequential_part_b import PartBPhase, SequentialPartBCoordinator
+from .sequential_part_b import PartBMode, PartBPhase, SequentialPartBCoordinator
 from .registration import FrozenSessionRoster
 
 
@@ -42,21 +47,27 @@ class HandRuntime:
         *,
         require_actor_binding: bool = True,
         require_visual_settle: bool = True,
+        require_chip_observation: bool = False,
         visual_settle_timeout_ms: int = 5000,
         command_timeout_ms: int = 5000,
         visual_timeout_ms: int = 5000,
+        post_board_delay_ms: int = 1000,
         expected_player_by_seat: Mapping[Seat, str] | None = None,
         minimum_attribution_confidence: float = 0.35,
     ) -> None:
         if not session_id.strip():
             raise ValueError("session_id is required")
+        if post_board_delay_ms < 0:
+            raise ValueError("post_board_delay_ms must be non-negative")
         self.engine = engine
         self.session_id = session_id
         self.require_actor_binding = require_actor_binding
         self.require_visual_settle = require_visual_settle
+        self.require_chip_observation = require_chip_observation
         self.visual_settle_timeout_ms = visual_settle_timeout_ms
         self.command_timeout_ms = command_timeout_ms
         self.visual_timeout_ms = visual_timeout_ms
+        self.post_board_delay_ms = post_board_delay_ms
         self.expected_player_by_seat = dict(expected_player_by_seat or {})
         self.minimum_attribution_confidence = minimum_attribution_confidence
         self.part_a: SequentialPartACoordinator | None = None
@@ -88,9 +99,11 @@ class HandRuntime:
         rules: FixedLimitRules | None = None,
         require_actor_binding: bool = True,
         require_visual_settle: bool = True,
+        require_chip_observation: bool = False,
         visual_settle_timeout_ms: int = 5000,
         command_timeout_ms: int = 5000,
         visual_timeout_ms: int = 5000,
+        post_board_delay_ms: int = 1000,
         expected_player_by_seat: Mapping[Seat, str] | None = None,
         minimum_attribution_confidence: float = 0.35,
         action_promotion_policy: PromotionPolicy | None = None,
@@ -108,9 +121,11 @@ class HandRuntime:
             session_id,
             require_actor_binding=require_actor_binding,
             require_visual_settle=require_visual_settle,
+            require_chip_observation=require_chip_observation,
             visual_settle_timeout_ms=visual_settle_timeout_ms,
             command_timeout_ms=command_timeout_ms,
             visual_timeout_ms=visual_timeout_ms,
+            post_board_delay_ms=post_board_delay_ms,
             expected_player_by_seat=expected_player_by_seat,
             minimum_attribution_confidence=minimum_attribution_confidence,
         )
@@ -125,9 +140,11 @@ class HandRuntime:
         rules: FixedLimitRules | None = None,
         require_actor_binding: bool = True,
         require_visual_settle: bool = True,
+        require_chip_observation: bool = False,
         visual_settle_timeout_ms: int = 5000,
         command_timeout_ms: int = 5000,
         visual_timeout_ms: int = 5000,
+        post_board_delay_ms: int = 1000,
         minimum_attribution_confidence: float = 0.35,
         action_promotion_policy: PromotionPolicy | None = None,
     ) -> HandRuntime:
@@ -149,9 +166,11 @@ class HandRuntime:
             rules=rules,
             require_actor_binding=require_actor_binding,
             require_visual_settle=require_visual_settle,
+            require_chip_observation=require_chip_observation,
             visual_settle_timeout_ms=visual_settle_timeout_ms,
             command_timeout_ms=command_timeout_ms,
             visual_timeout_ms=visual_timeout_ms,
+            post_board_delay_ms=post_board_delay_ms,
             expected_player_by_seat=players,
             minimum_attribution_confidence=minimum_attribution_confidence,
             action_promotion_policy=action_promotion_policy,
@@ -176,6 +195,7 @@ class HandRuntime:
                     self.session_id,
                     require_actor_binding=self.require_actor_binding,
                     require_visual_settle=self.require_visual_settle,
+                    require_chip_observation=self.require_chip_observation,
                     visual_settle_timeout_ms=self.visual_settle_timeout_ms,
                     expected_player_by_seat=self.expected_player_by_seat,
                     minimum_attribution_confidence=self.minimum_attribution_confidence,
@@ -193,8 +213,10 @@ class HandRuntime:
             }:
                 self.part_b = SequentialPartBCoordinator(
                     self.engine,
+                    session_id=self.session_id,
                     command_timeout_ms=self.command_timeout_ms,
                     visual_timeout_ms=self.visual_timeout_ms,
+                    post_board_delay_ms=self.post_board_delay_ms,
                 )
                 if (
                     self.part_b.phase is PartBPhase.COMPLETE
@@ -219,6 +241,64 @@ class HandRuntime:
             accepted = self.part_b.accept_rotation_ack(ack)
         else:
             raise ValueError("the current hand phase does not accept rotation ACKs")
+        self.sync()
+        return accepted
+
+    def request_navigation(
+        self,
+        issued_at_ns: int,
+        *,
+        start_pose: RobotPoseNode,
+        expected_pose_version: int,
+        target_pose: RobotPoseNode = RobotPoseNode.UNKNOWN,
+        inter_motion_delay_ms: int = 2500,
+    ) -> NavigationCommand:
+        if target_pose is RobotPoseNode.UNKNOWN:
+            target_pose = self._resolved_navigation_target_pose()
+        if self.part_a is not None:
+            return self.part_a.request_navigation(
+                issued_at_ns,
+                start_pose=start_pose,
+                expected_pose_version=expected_pose_version,
+                target_pose=target_pose,
+                inter_motion_delay_ms=inter_motion_delay_ms,
+            )
+        if self.part_b is not None:
+            return self.part_b.request_navigation(
+                issued_at_ns,
+                start_pose=start_pose,
+                expected_pose_version=expected_pose_version,
+                target_pose=target_pose,
+                inter_motion_delay_ms=inter_motion_delay_ms,
+            )
+        raise ValueError("the current hand phase does not request navigation")
+
+    def _resolved_navigation_target_pose(self) -> RobotPoseNode:
+        """Resolve the current state-machine target onto the physical table graph."""
+
+        button = self.engine.state.button
+        if self.part_a is not None:
+            seat = self.part_a.focus_seat
+            if seat is None:
+                raise ValueError("Part A navigation requires a focused seat")
+            return player_pose(button, seat)
+        if self.part_b is None or self.part_b.current_step is None:
+            raise ValueError("Part B navigation requires a current step")
+        step = self.part_b.current_step
+        if self.part_b.mode is PartBMode.BOARD_DEAL:
+            return RobotPoseNode.BOARD_TO_END
+        seat = Seat(step.target.value)
+        if self.part_b.mode is PartBMode.HOLE_DEAL:
+            return hole_deal_pose(button, seat)
+        return player_pose(button, seat)
+
+    def accept_navigation_ack(self, ack: NavigationAck) -> bool:
+        if self.part_a is not None:
+            accepted = self.part_a.accept_navigation_ack(ack)
+        elif self.part_b is not None:
+            accepted = self.part_b.accept_navigation_ack(ack)
+        else:
+            raise ValueError("the current hand phase does not accept navigation ACKs")
         self.sync()
         return accepted
 
@@ -247,6 +327,13 @@ class HandRuntime:
             self.last_showdown_ranks = coordinator.showdown_ranks
         self.sync()
         return result
+
+    def advance_post_board_delay(self, now_ns: int) -> bool:
+        if self.part_b is None:
+            raise ValueError("post-board delay is only available in Part B")
+        advanced = self.part_b.advance_post_board_delay(now_ns)
+        self.sync()
+        return advanced
 
     def accept_visual_settle(self) -> None:
         if self.part_a is None:
@@ -280,6 +367,22 @@ class HandRuntime:
         outcome = self.part_a.accept_action(observation)
         self.sync()
         return outcome
+
+    def accept_chip_observation(
+        self, observation: ChipObservation
+    ) -> CoordinatorActionOutcome:
+        if self.part_a is None:
+            raise ValueError("chip observation is only available in Part A")
+        outcome = self.part_a.accept_chip_observation(observation)
+        self.sync()
+        return outcome
+
+    def robot_requirement(self):
+        """Return the inspectable robot-facing input node for this hand."""
+
+        from .robot_interfaces import hand_robot_requirement
+
+        return hand_robot_requirement(self)
 
     def check_timeout(self, now_ns: int) -> bool:
         if self.part_a is not None:

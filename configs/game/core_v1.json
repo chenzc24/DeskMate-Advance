@@ -26,8 +26,7 @@
   "position_order": {
     "small_blind": "first_active_seat_left_of_button",
     "big_blind": "next_active_seat_left_of_small_blind",
-    "first_hole_card": "first_active_seat_left_of_button",
-    "button_receives_last_hole_card_each_round": true,
+    "hole_deal_route": "button_small_blind_big_blind_utg_two_consecutive_each",
     "preflop_first_actor": "first_actionable_seat_left_of_big_blind",
     "postflop_first_actor": "first_actionable_seat_left_of_button",
     "skip_folded_or_all_in_for_action": true
@@ -106,7 +105,7 @@
     "manual_shuffle_and_load_before_each_hand": true,
     "hole_cards_per_player": 2,
     "hole_cards_face_down": true,
-    "hole_deal_rounds": 2,
+    "hole_delivery_mode": "two_consecutive_single_dispense_acks_per_player_target",
     "burn_before_each_board_street": false,
     "flop_cards": 3,
     "flop_delivery_mode": "three_consecutive_single_dispense_acks_then_batch_visual_confirmation",

@@ -8,6 +8,8 @@ from enum import StrEnum
 from poker_dealer.domain import (
     ControlIntent,
     ControlObservation,
+    FaceEnrollmentObservation,
+    FaceEnrollmentStatus,
     SEAT_ORDER,
     Seat,
     TableRole,
@@ -82,6 +84,10 @@ class RegistrationRuntime:
     @property
     def registered_seats(self) -> frozenset[Seat]:
         return frozenset(self._participants)
+
+    @property
+    def roster_version(self) -> int:
+        return self._roster_version
 
     @property
     def participants(self) -> tuple[RegisteredParticipant, ...]:
@@ -170,6 +176,28 @@ class RegistrationRuntime:
         )
         return participant
 
+    def accept_face_enrollment(
+        self,
+        observation: FaceEnrollmentObservation,
+    ) -> RegistrationOutcome:
+        """Accept a typed capture result at the active registration node."""
+
+        if self.phase is not RegistrationPhase.CAPTURING_FACE:
+            return RegistrationOutcome(False, "face_enrollment_not_expected")
+        if observation.session_id != self.session_id:
+            return RegistrationOutcome(False, "face_enrollment_session_mismatch")
+        if observation.expected_roster_version != self._roster_version:
+            return RegistrationOutcome(False, "face_enrollment_version_mismatch")
+        if observation.focus_seat is not self.focus_seat:
+            return RegistrationOutcome(False, "face_enrollment_seat_mismatch")
+        if observation.status is not FaceEnrollmentStatus.CONFIRMED:
+            return RegistrationOutcome(
+                False,
+                f"face_enrollment_{observation.status.value}",
+            )
+        self.complete_face_enrollment(observation.sample_count)
+        return RegistrationOutcome(True, "face_enrollment_completed")
+
     def add_simulated_participant(
         self,
         *,
@@ -229,3 +257,10 @@ class RegistrationRuntime:
             True,
             participant.simulated,
         )
+
+    def robot_requirement(self):
+        """Return the typed external-input gate for the registration node."""
+
+        from .robot_interfaces import registration_robot_requirement
+
+        return registration_robot_requirement(self)

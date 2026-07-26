@@ -16,6 +16,7 @@ from poker_dealer.domain import (
 )
 from poker_dealer.io.camera import CameraRoute
 from poker_dealer.robotics.dealer import SimulatedDealerAdapter
+from poker_dealer.robotics.navigation import SimulatedNavigationAdapter
 from poker_dealer.runtime import HandRuntime
 from poker_dealer.runtime.event_log import (
     RuntimeEventLog,
@@ -47,6 +48,7 @@ def _run_complete_hand(
         roster=default_replay_roster(session_id, Seat.A),
         require_actor_binding=True,
         require_visual_settle=True,
+        post_board_delay_ms=0,
         stacks=stacks,
     )
     dealer = SimulatedDealerAdapter(f"sim:{hand_id}")
@@ -255,6 +257,44 @@ def test_complete_hand_is_logged_checked_and_replayed_exactly(tmp_path: Path) ->
     assert second.engine.state.awards == first.engine.state.awards
     assert second.engine.state.confirmed_cards == first.engine.state.confirmed_cards
     assert check_runtime_hand_log(RuntimeEventLog.from_path(second_path)).passed
+
+
+def test_complete_hand_runs_through_typed_navigation_interface(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "navigation.jsonl"
+    runtime = HandRuntime.from_roster(
+        hand_id="navigation-complete-hand",
+        roster=default_replay_roster("navigation-session", Seat.A),
+        require_actor_binding=True,
+        require_visual_settle=True,
+        post_board_delay_ms=0,
+    )
+    dealer = SimulatedDealerAdapter("sim:navigation-complete-hand")
+    navigation = SimulatedNavigationAdapter()
+    dealer.open()
+    navigation.open()
+    sources = ScriptedReplaySources()
+    with RuntimeEventWriter(path) as writer:
+        result = HandRuntimeLoop(
+            runtime,
+            dealer,
+            identity_source=sources,
+            action_source=sources,
+            card_source=sources,
+            visual_settle_source=sources,
+            navigation_port=navigation,
+            event_writer=writer,
+            clock_ns=StepClock(),
+        ).run(max_steps=500)
+    navigation.close()
+    dealer.close()
+
+    assert result.completed
+    assert runtime.phase is HandPhase.SETTLED
+    records = RuntimeEventLog.from_path(path).records
+    assert any(record.kind == "navigation_command" for record in records)
+    assert any(record.kind == "navigation_ack" for record in records)
 
 
 def test_runtime_log_tampering_is_detected(tmp_path: Path) -> None:

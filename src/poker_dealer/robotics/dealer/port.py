@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
 
-from poker_dealer.domain import DealerAck, DealerCommand
+from poker_dealer.domain import DealerAck, DealerCommand, NavigationAck
 
 
 class DealerUnavailableError(RuntimeError):
@@ -35,6 +35,8 @@ class DealerPort(Protocol):
     def execute(
         self, command: DealerCommand, observed_at_ns: int | None = None
     ) -> DealerAck: ...
+
+    def confirm_navigation_target(self, acknowledgement: NavigationAck) -> None: ...
 
     def health(self) -> DealerHealth: ...
 

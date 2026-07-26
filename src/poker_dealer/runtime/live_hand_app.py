@@ -23,6 +23,11 @@ from poker_dealer.robotics.dealer import (
     SimulatedDealerAdapter,
     UnavailableDealerAdapter,
 )
+from poker_dealer.robotics.navigation import (
+    NavigationPort,
+    SimulatedNavigationAdapter,
+    UnavailableNavigationAdapter,
+)
 
 from .hand_runtime import HandRuntime
 from .profile import DealerAdapterKind, RuntimeCameraKind, RuntimeProfile
@@ -51,6 +56,9 @@ class RuntimePreflight:
     player_camera_kind: str | None = None
     player_camera_source: str | None = None
     dual_camera_enabled: bool = False
+    navigation_adapter: str = "unavailable"
+    navigation_available: bool = False
+    navigation_pose: str = "unknown"
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -78,7 +86,13 @@ class CameraSmokeResult:
 class LiveHandApplication:
     """Own live dependencies while leaving game authority in ``HandRuntime``."""
 
-    def __init__(self, project_root: Path, profile: RuntimeProfile) -> None:
+    def __init__(
+        self,
+        project_root: Path,
+        profile: RuntimeProfile,
+        *,
+        navigation: NavigationPort | None = None,
+    ) -> None:
         self.project_root = project_root.resolve()
         self.profile = profile
         self.game_config = CoreGameConfig.from_json(
@@ -95,6 +109,7 @@ class LiveHandApplication:
             table_camera=self.table_camera,
         )
         self.dealer = self._build_dealer(profile)
+        self.navigation = navigation or self._build_navigation(profile)
         self._locks = RuntimeResourceLocks(
             self.project_root / "runs" / "runtime" / "locks",
             self.resource_ids,
@@ -117,6 +132,8 @@ class LiveHandApplication:
             resources.append(f"microphone:{'default' if device is None else device}")
         if self.profile.dealer.physical_motion:
             resources.append(f"dealer:{self.profile.dealer.device_id}")
+        if self.navigation.physical_motion:
+            resources.append(f"navigation:{self.navigation.device_id}")
         return tuple(resources)
 
     @staticmethod
@@ -135,12 +152,19 @@ class LiveHandApplication:
 
     def preflight(self) -> RuntimePreflight:
         health = self.dealer.health()
+        navigation_health = self.navigation.health()
         reason = None
-        ready = self.profile.dealer.enabled and health.available
+        ready = (
+            self.profile.dealer.enabled
+            and health.available
+            and navigation_health.available
+        )
         if not self.profile.dealer.enabled:
             reason = self.profile.dealer.unavailable_reason
         elif not health.available:
             reason = health.reason
+        elif not navigation_health.available:
+            reason = navigation_health.reason
         player_camera = self.profile.player_camera or self.profile.camera
         return RuntimePreflight(
             profile_id=self.profile.profile_id.value,
@@ -164,6 +188,9 @@ class LiveHandApplication:
             player_camera_kind=player_camera.kind.value,
             player_camera_source=self._camera_source(player_camera),
             dual_camera_enabled=self.profile.player_camera is not None,
+            navigation_adapter=type(self.navigation).__name__,
+            navigation_available=navigation_health.available,
+            navigation_pose=navigation_health.pose.value,
         )
 
     def event_log_path(self, *, session_id: str, hand_id: str) -> Path:
@@ -211,11 +238,13 @@ class LiveHandApplication:
         self._locks.acquire()
         try:
             self.dealer.open()
+            self.navigation.open()
             if open_camera:
                 self.camera.open()
                 self._camera_opened = True
             self._opened = True
         except Exception:
+            self.navigation.close()
             self.dealer.close()
             self._locks.release()
             raise
@@ -306,6 +335,7 @@ class LiveHandApplication:
             self.camera.close()
             self._camera_opened = False
         self.dealer.close()
+        self.navigation.close()
         self._locks.release()
         self._opened = False
 
@@ -323,6 +353,18 @@ class LiveHandApplication:
         return UnavailableDealerAdapter(
             dealer.device_id,
             dealer.unavailable_reason or "real dealer adapter is not integrated",
+        )
+
+    @staticmethod
+    def _build_navigation(profile: RuntimeProfile) -> NavigationPort:
+        if profile.dealer.adapter is DealerAdapterKind.SIMULATED:
+            return SimulatedNavigationAdapter(
+                f"navigation:{profile.profile_id.value}"
+            )
+        return UnavailableNavigationAdapter(
+            f"navigation:{profile.profile_id.value}",
+            "cocino_car navigation requires an explicit HTTP adapter, "
+            "operator-confirmed initial pose and PC face-center probe",
         )
 
 

@@ -8,11 +8,15 @@ from typing import Mapping, Protocol
 
 from poker_dealer.domain import (
     CardObservation,
+    ChipObservation,
     ControlObservation,
     FramePacket,
     HandPhase,
     PlayerActionObservation,
     PlayerActionType,
+    RobotInputKind,
+    RobotPoseNode,
+    RobotWorkflowNode,
     Seat,
     VisionSlot,
 )
@@ -55,6 +59,16 @@ class RuntimeObservationContext:
     legal_actions: tuple[PlayerActionType, ...]
     required_card_slots: tuple[VisionSlot, ...]
     camera_epoch: int = 0
+    robot_node: RobotWorkflowNode = RobotWorkflowNode.GAME_INTERNAL
+    expected_robot_inputs: tuple[RobotInputKind, ...] = ()
+    robot_pose: RobotPoseNode = RobotPoseNode.UNKNOWN
+    robot_pose_version: int = 0
+
+    def __post_init__(self) -> None:
+        if self.state_version < 0 or self.camera_epoch < 0:
+            raise ValueError("runtime context versions must be non-negative")
+        if self.robot_pose_version < 0:
+            raise ValueError("robot_pose_version must be non-negative")
 
 
 @dataclass(frozen=True, slots=True)
@@ -132,6 +146,15 @@ class CardSource(Protocol):
     ) -> CardObservation | None: ...
 
 
+class ChipSource(Protocol):
+    def observe_chips(
+        self,
+        frame: FramePacket | None,
+        context: RuntimeObservationContext,
+        observed_at_ns: int,
+    ) -> ChipObservation | None: ...
+
+
 class VisualSettleSource(Protocol):
     def reset_visual_settle(self, context: RuntimeObservationContext) -> None: ...
 
@@ -178,6 +201,7 @@ __all__ = [
     "ActionEvidence",
     "ActionSource",
     "CardSource",
+    "ChipSource",
     "ControlSource",
     "FrameRead",
     "FrameReadState",

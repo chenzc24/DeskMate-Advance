@@ -55,6 +55,11 @@ class DealerAckStatus(StrEnum):
     TIMED_OUT = "timed_out"
 
 
+class DealerCompletionBasis(StrEnum):
+    PHYSICAL_SENSOR = "physical_sensor"
+    ARDUINO_COMMAND_ACK_ONLY = "arduino_command_ack_only"
+
+
 class DealerDeviceState(StrEnum):
     BOOTING = "booting"
     NOT_HOMED = "not_homed"
@@ -104,6 +109,9 @@ class DealerAck:
     sensor_evidence: DealerSensorEvidence
     error_code: DealerErrorCode | None = None
     reason: str | None = None
+    completion_basis: DealerCompletionBasis = (
+        DealerCompletionBasis.PHYSICAL_SENSOR
+    )
 
     def __post_init__(self) -> None:
         if not self.command_id.strip():
@@ -124,8 +132,27 @@ class DealerAck:
             elif self.command is DealerCommandType.ROTATE_TO:
                 self._require_safe_evidence(homed=True, at_target=True)
             elif self.command is DealerCommandType.DISPENSE_ONE:
-                self._require_safe_evidence(
-                    homed=True, at_target=True, deck_present=True, exit_pulses=1
+                if (
+                    self.completion_basis
+                    is DealerCompletionBasis.ARDUINO_COMMAND_ACK_ONLY
+                ):
+                    if self.sensor_evidence.at_target is not True:
+                        raise ValueError(
+                            "command-ACK dispense requires a confirmed target"
+                        )
+                else:
+                    self._require_safe_evidence(
+                        homed=True,
+                        at_target=True,
+                        deck_present=True,
+                        exit_pulses=1,
+                    )
+            elif (
+                self.completion_basis
+                is DealerCompletionBasis.ARDUINO_COMMAND_ACK_ONLY
+            ):
+                raise ValueError(
+                    "Arduino command-ACK basis is only valid for dispense_one"
                 )
         elif self.error_code is None or not self.reason:
             raise ValueError(

@@ -73,9 +73,16 @@ from .profile import (
 from .resource_lock import ResourceBusyError, ResourceLock, RuntimeResourceLocks
 from .ports import (
     ActionEvidence,
+    ChipSource,
     FrameRead,
     FrameReadState,
     RuntimeObservationContext,
+)
+from .robot_interfaces import (
+    RobotInterfaceRequirement,
+    hand_robot_requirement,
+    registration_robot_requirement,
+    session_robot_requirement,
 )
 from .replay import (
     RecordedReplaySources,
@@ -90,6 +97,7 @@ from .registration import (
     RegistrationPhase,
     RegistrationRuntime,
 )
+from .registration_route import RegistrationNavigationCoordinator
 from .two_human_test import TwoHumanAutoFoldSource
 from .sequential_part_b import (
     PartBMode,
@@ -115,6 +123,7 @@ __all__ = [
     "AnnouncingRuntimeEventWriter",
     "AnnouncerPort",
     "CameraSmokeResult",
+    "ChipSource",
     "ConsoleAnnouncer",
     "CompositeControlSource",
     "CompositeRuntimeEventSink",
@@ -157,12 +166,14 @@ __all__ = [
     "RegistrationOutcome",
     "RegistrationPhase",
     "RegistrationRuntime",
+    "RegistrationNavigationCoordinator",
     "ResourceBusyError",
     "ResourceLock",
     "RuntimeEventLog",
     "RuntimeEventWriter",
     "RuntimeLogRecord",
     "RuntimeObservationContext",
+    "RobotInterfaceRequirement",
     "RuntimeCameraKind",
     "RuntimeCameraProfile",
     "RuntimeDealerProfile",
@@ -188,4 +199,7 @@ __all__ = [
     "check_runtime_hand_log",
     "check_diagnostic_bundle",
     "default_replay_roster",
+    "hand_robot_requirement",
+    "registration_robot_requirement",
+    "session_robot_requirement",
 ]

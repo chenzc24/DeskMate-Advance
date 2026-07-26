@@ -6,7 +6,13 @@ from dataclasses import dataclass
 import time
 from typing import Callable, TYPE_CHECKING, TypeVar
 
-from poker_dealer.domain import HandPhase
+from poker_dealer.domain import (
+    ChipObservation,
+    HandPhase,
+    NavigationAck,
+    NavigationCommand,
+    RobotPoseNode,
+)
 from poker_dealer.game import SlotLifecycle
 from poker_dealer.io.camera import CameraRoute
 from poker_dealer.perception.actions import observation_to_dict
@@ -17,12 +23,18 @@ from poker_dealer.perception.attribution import (
 from poker_dealer.perception.cards import card_observation_to_dict
 from poker_dealer.perception.identity import identity_observation_to_dict
 from poker_dealer.robotics.dealer import DealerPort
+from poker_dealer.robotics.navigation import (
+    DEFAULT_INTER_MOTION_DELAY_MS,
+    NavigationPort,
+    NavigationTimingGate,
+)
 
 from .event_log import RuntimeEventWriter
 from .hand_runtime import HandRuntime
 from .ports import (
     ActionSource,
     CardSource,
+    ChipSource,
     ControlSource,
     FrameRead,
     FrameReadState,
@@ -63,18 +75,26 @@ class HandRuntimeLoop:
         action_source: ActionSource,
         card_source: CardSource,
         event_writer: RuntimeEventWriter,
+        chip_source: ChipSource | None = None,
+        navigation_port: NavigationPort | None = None,
         frame_source: FrameSource | None = None,
         visual_settle_source: VisualSettleSource | None = None,
         control_source: ControlSource | None = None,
         clock_ns: Clock = time.monotonic_ns,
         diagnostic_sink: DiagnosticSink | None = None,
         state_observer: object | None = None,
+        inter_motion_delay_ms: int = DEFAULT_INTER_MOTION_DELAY_MS,
+        cooldown_poll_interval_ms: int = 50,
     ) -> None:
+        if cooldown_poll_interval_ms <= 0:
+            raise ValueError("cooldown poll interval must be positive")
         self.runtime = runtime
         self.dealer = dealer
         self.identity_source = identity_source
         self.action_source = action_source
         self.card_source = card_source
+        self.chip_source = chip_source
+        self.navigation_port = navigation_port
         self.event_writer = event_writer
         self.frame_source = frame_source
         self.visual_settle_source = visual_settle_source
@@ -82,6 +102,8 @@ class HandRuntimeLoop:
         self.clock_ns = clock_ns
         self.diagnostic_sink = diagnostic_sink
         self.state_observer = state_observer
+        self._navigation_timing = NavigationTimingGate(inter_motion_delay_ms)
+        self._cooldown_poll_interval_ms = cooldown_poll_interval_ms
         self.steps = 0
         self._camera_epoch = 0
         self._last_frame_read: FrameRead | None = None
@@ -96,6 +118,13 @@ class HandRuntimeLoop:
             step = self.runtime.part_b.current_step
             required_slots = step.vision_slots if step is not None else ()
         state = self.runtime.engine.state
+        requirement = self.runtime.robot_requirement()
+        robot_pose = RobotPoseNode.UNKNOWN
+        robot_pose_version = 0
+        if self.navigation_port is not None:
+            health = self.navigation_port.health()
+            robot_pose = health.pose
+            robot_pose_version = health.pose_version
         return RuntimeObservationContext(
             session_id=self.runtime.session_id,
             hand_id=state.hand_id,
@@ -105,6 +134,10 @@ class HandRuntimeLoop:
             legal_actions=state.legal_actions,
             required_card_slots=required_slots,
             camera_epoch=self._camera_epoch,
+            robot_node=requirement.node,
+            expected_robot_inputs=requirement.accepted_inputs,
+            robot_pose=robot_pose,
+            robot_pose_version=robot_pose_version,
         )
 
     def run(self, *, max_steps: int = 10_000) -> HandLoopResult:
@@ -123,6 +156,23 @@ class HandRuntimeLoop:
                 return self._diagnostic_result(False, phase.value)
             try:
                 self.step()
+                remaining_ms = self.navigation_cooldown_remaining_ms()
+                if remaining_ms > 0 and self._navigation_is_pending():
+                    time.sleep(
+                        min(remaining_ms, self._cooldown_poll_interval_ms) / 1000
+                    )
+                elif (
+                    self.runtime.part_b is not None
+                    and self.runtime.part_b.phase
+                    is PartBPhase.WAITING_POST_BOARD_DELAY
+                ):
+                    delay_ms = self.runtime.part_b.post_board_delay_remaining_ms(
+                        self.clock_ns()
+                    )
+                    if delay_ms > 0:
+                        time.sleep(
+                            min(delay_ms, self._cooldown_poll_interval_ms) / 1000
+                        )
             except Exception as exc:
                 if self.runtime.phase not in {
                     HandPhase.PAUSED_RECOVERY,
@@ -157,6 +207,28 @@ class HandRuntimeLoop:
             )
             self.runtime.sync()
         return self._diagnostic_result(False, "max_steps_reached")
+
+    def navigation_cooldown_remaining_ms(self, now_ns: int | None = None) -> int:
+        """Return the physical-navigation delay without blocking the caller."""
+
+        port = self.navigation_port
+        if port is None or not port.physical_motion:
+            return 0
+        observed_at_ns = self.clock_ns() if now_ns is None else now_ns
+        return self._navigation_timing.remaining_ms(observed_at_ns)
+
+    def _navigation_is_pending(self) -> bool:
+        if self.runtime.part_a is not None:
+            return self.runtime.part_a.phase in {
+                PartAPhase.WAITING_ROTATION_ACK,
+                PartAPhase.WAITING_NAVIGATION_ACK,
+            }
+        if self.runtime.part_b is not None:
+            return self.runtime.part_b.phase in {
+                PartBPhase.WAITING_ROTATION_ACK,
+                PartBPhase.WAITING_NAVIGATION_ACK,
+            }
+        return False
 
     def step(self) -> None:
         started_ns = time.monotonic_ns()
@@ -200,6 +272,12 @@ class HandRuntimeLoop:
     def _step_part_b(self, now_ns: int) -> None:
         coordinator = self.runtime.part_b
         assert coordinator is not None
+        if coordinator.phase in {
+            PartBPhase.WAITING_ROTATION_ACK,
+            PartBPhase.WAITING_NAVIGATION_ACK,
+        } and self.navigation_port is not None:
+            self._execute_navigation(now_ns)
+            return
         if coordinator.phase is PartBPhase.WAITING_ROTATION_ACK:
             command = self.runtime.request_rotation(now_ns)
             self.event_writer.sync_engine(self.runtime.engine.log)
@@ -235,6 +313,9 @@ class HandRuntimeLoop:
                 ),
             )
             self.runtime.accept_dispense_ack(ack)
+            return
+        if coordinator.phase is PartBPhase.WAITING_POST_BOARD_DELAY:
+            self.runtime.advance_post_board_delay(now_ns)
             return
         if coordinator.phase is not PartBPhase.WAITING_VISUAL_CONFIRMATION:
             raise RuntimeError(f"unsupported Part B phase: {coordinator.phase.value}")
@@ -272,6 +353,20 @@ class HandRuntimeLoop:
     def _step_part_a(self, now_ns: int) -> None:
         coordinator = self.runtime.part_a
         assert coordinator is not None
+        if coordinator.phase in {
+            PartAPhase.WAITING_ROTATION_ACK,
+            PartAPhase.WAITING_NAVIGATION_ACK,
+        } and self.navigation_port is not None:
+            accepted = self._execute_navigation(now_ns)
+            if (
+                accepted
+                and self.runtime.part_a is not None
+                and self.runtime.part_a.phase is PartAPhase.WAITING_VISUAL_SETTLE
+            ):
+                if self.visual_settle_source is None:
+                    raise RuntimeError("live Part A requires a visual-settle source")
+                self.visual_settle_source.reset_visual_settle(self.context())
+            return
         if coordinator.phase is PartAPhase.WAITING_ROTATION_ACK:
             command = self.runtime.request_rotation(now_ns)
             self.event_writer.sync_engine(self.runtime.engine.log)
@@ -406,7 +501,89 @@ class HandRuntimeLoop:
                 )
             )
             return
+        if coordinator.phase is PartAPhase.WAITING_CHIP_OBSERVATION:
+            if self.chip_source is None:
+                raise RuntimeError(
+                    "chip-gated bet/raise requires a ChipSource implementation"
+                )
+            frame = self._read_frame(now_ns, CameraRoute.PLAYER)
+            if self.runtime.phase is HandPhase.PAUSED_RECOVERY:
+                return
+            context = self.context()
+            self._dispatch_controls(now_ns, context)
+            observation = self._measure(
+                "chip_observation_duration",
+                self._diagnostic_context(),
+                lambda: self.chip_source.observe_chips(frame, context, now_ns),
+            )
+            if observation is None:
+                return
+            self.event_writer.emit(
+                "chip_observation",
+                observed_at_ns=observation.observed_at_ns,
+                payload=_chip_observation_to_dict(observation),
+            )
+            self.runtime.accept_chip_observation(observation)
+            return
         raise RuntimeError(f"unsupported Part A phase: {coordinator.phase.value}")
+
+    def _execute_navigation(self, now_ns: int) -> bool:
+        port = self.navigation_port
+        if port is None:
+            raise RuntimeError("navigation interface is not configured")
+        if port.physical_motion and not self._navigation_timing.can_start(now_ns):
+            return False
+        health = port.health()
+        if not health.available or not health.opened:
+            raise RuntimeError(health.reason or "navigation interface is not open")
+        if health.pose is RobotPoseNode.UNKNOWN:
+            raise RuntimeError("navigation interface reported an unknown robot pose")
+        command = self.runtime.request_navigation(
+            now_ns,
+            start_pose=health.pose,
+            expected_pose_version=health.pose_version,
+            inter_motion_delay_ms=self._navigation_timing.inter_motion_delay_ms,
+        )
+        self.event_writer.emit(
+            "navigation_command",
+            observed_at_ns=command.issued_at_ns,
+            payload=_navigation_command_to_dict(command),
+        )
+        ack = self._measure(
+            "navigation_command_duration",
+            {
+                **self._diagnostic_context(),
+                "command_id": command.command_id,
+                "target_slot": (
+                    command.target_slot.value if command.target_slot else None
+                ),
+            },
+            lambda: port.execute(command, observed_at_ns=self.clock_ns()),
+        )
+        self.event_writer.emit(
+            "navigation_ack",
+            observed_at_ns=ack.observed_at_ns,
+            payload=_navigation_ack_to_dict(ack),
+        )
+        accepted = self.runtime.accept_navigation_ack(ack)
+        if accepted:
+            if port.physical_motion:
+                self._navigation_timing.record_success(ack.observed_at_ns)
+                self.event_writer.emit(
+                    "navigation_inter_motion_delay_started",
+                    observed_at_ns=ack.observed_at_ns,
+                    payload={
+                        "command_id": command.command_id,
+                        "inter_motion_delay_ms": (
+                            command.inter_motion_delay_ms
+                        ),
+                        "next_motion_not_before_ns": (
+                            self._navigation_timing.next_motion_not_before_ns
+                        ),
+                    },
+                )
+            self.dealer.confirm_navigation_target(ack)
+        return accepted
 
     def _dispatch_controls(
         self, observed_at_ns: int, context: RuntimeObservationContext
@@ -571,6 +748,71 @@ class HandRuntimeLoop:
             "camera_epoch": self._camera_epoch,
             "camera_route": self._active_camera_route.value,
         }
+
+
+def _navigation_command_to_dict(command: NavigationCommand) -> dict[str, object]:
+    return {
+        "command_id": command.command_id,
+        "session_id": command.session_id,
+        "hand_id": command.hand_id,
+        "expected_state_version": command.expected_state_version,
+        "expected_pose_version": command.expected_pose_version,
+        "issued_at_ns": command.issued_at_ns,
+        "action": command.action.value,
+        "start_pose": command.start_pose.value,
+        "target_pose": command.target_pose.value,
+        "target_slot": command.target_slot.value if command.target_slot else None,
+        "timeout_ms": command.timeout_ms,
+        "inter_motion_delay_ms": command.inter_motion_delay_ms,
+    }
+
+
+def _navigation_ack_to_dict(ack: NavigationAck) -> dict[str, object]:
+    return {
+        "command_id": ack.command_id,
+        "session_id": ack.session_id,
+        "hand_id": ack.hand_id,
+        "expected_state_version": ack.expected_state_version,
+        "action": ack.action.value,
+        "target_slot": ack.target_slot.value if ack.target_slot else None,
+        "status": ack.status.value,
+        "observed_at_ns": ack.observed_at_ns,
+        "actual_pose": ack.actual_pose.value,
+        "pose_version": ack.pose_version,
+        "pose_confidence": ack.pose_confidence,
+        "line_locked": ack.line_locked,
+        "endpoint_confirmed": ack.endpoint_confirmed,
+        "target_aligned": ack.target_aligned,
+        "stable_frames": ack.stable_frames,
+        "face_center_error_px": ack.face_center_error_px,
+        "error_code": ack.error_code.value if ack.error_code else None,
+        "reason": ack.reason,
+    }
+
+
+def _chip_observation_to_dict(observation: ChipObservation) -> dict[str, object]:
+    return {
+        "observation_id": observation.observation_id,
+        "hand_id": observation.hand_id,
+        "expected_state_version": observation.expected_state_version,
+        "focus_seat": observation.focus_seat.value,
+        "observed_at_ns": observation.observed_at_ns,
+        "status": observation.status.value,
+        "amount_scope": observation.amount_scope.value,
+        "chip_counts": [
+            {
+                "denomination_units": item.denomination_units,
+                "count": item.count,
+            }
+            for item in observation.chip_counts
+        ],
+        "total_units": observation.total_units,
+        "confidence": observation.confidence,
+        "stable_frames": observation.stable_frames,
+        "model_version": observation.model_version,
+        "calibration_version": observation.calibration_version,
+        "quality_flags": list(observation.quality_flags),
+    }
 
 
 __all__ = ["HandLoopResult", "HandRuntimeLoop"]
